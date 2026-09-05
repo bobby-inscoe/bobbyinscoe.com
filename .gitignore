@@ -13,6 +13,7 @@
 /dist
 
 # misc
+/skills-backup
 .DS_Store
 .notes/
 .env.local
