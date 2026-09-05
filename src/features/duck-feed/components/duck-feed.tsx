@@ -1,12 +1,13 @@
+import type React from 'react';
 import { useEffect, useState } from 'react';
 
-import '@/components/DuckFeed/duck-feed.css';
+import '@/features/duck-feed/components/duck-feed.css';
 
 interface DuckFeedProps {
   className?: string;
 }
 
-export function DuckFeed({ className }: DuckFeedProps): JSX.Element {
+export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
   const [count, setCount] = useState(0);
   const [timer, setTimer] = useState(0);
   const [gameOver, setGameOver] = useState(false);
@@ -35,8 +36,6 @@ export function DuckFeed({ className }: DuckFeedProps): JSX.Element {
     }
   };
 
-  // timer stuff
-
   const resetGame = () => {
     setTimer(5);
     setCount(0);
@@ -45,43 +44,40 @@ export function DuckFeed({ className }: DuckFeedProps): JSX.Element {
     moveFeed();
   };
 
-  // prevent interval overlapping when reset is clicked
   const startTimer = () => {
-    let gameTimer = setInterval(() => {
+    const gameTimer = setInterval(() => {
       setTimer((timer) => {
         let updatedTime = timer;
         if (timer > 0) {
           updatedTime--;
-        }
-        else {
+        } else {
           setGameOver(true);
-          clearInterval(gameTimer)
+          clearInterval(gameTimer);
         }
         return updatedTime;
       });
     }, 1000);
   };
 
-
-
-  const GameStats = (): JSX.Element => {
+  const GameStats = (): React.JSX.Element => {
     return (
       <div className="GameStats">
         <h3>Current Score: {count}</h3>
         <h3>Timer: {timer} </h3>
-        <button onClick={resetGame}>Restart</button>
+        <button type="button" onClick={resetGame}>
+          Restart
+        </button>
       </div>
     );
   };
 
-  // redo this
-  const HighScore = (): JSX.Element => {
+  const HighScore = (): React.JSX.Element => {
     return (
       <div className="HighScore">
         <h2>High Scores:</h2>
         <ul className="scores">
           {scores.map((record, idx) => (
-            <li key={`high-score-${idx}`}>
+            <li key={record}>
               <div>{idx + 1}</div>
               <div>{record}</div>
             </li>
@@ -91,36 +87,30 @@ export function DuckFeed({ className }: DuckFeedProps): JSX.Element {
     );
   };
 
-  // convert scores to be list of objects with initials and score
+  // The game-over transition must run once per round, not once per score update.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: score state is intentionally captured at game over.
   useEffect(() => {
     if (gameOver) {
-      alert("Game Over");
+      alert('Game Over');
       if (gameOver && scores.length < 3) {
-        let oldScores = [...scores];
+        const oldScores = [...scores];
         oldScores.push(count);
         oldScores.sort((a, b) => b - a);
 
         setScores(oldScores);
-      }
-
-      else {
+      } else {
         for (let i = 0; i < scores.length; i++) {
           if (count > scores[i]) {
             let oldScores = [...scores];
             oldScores.splice(i, 1, count);
             oldScores = oldScores.sort((a, b) => b - a);
             setScores(oldScores);
-          }
-          else {
+          } else {
             console.log('score not high enough');
           }
         }
       }
-
-      // change this to something else to prompt game over screen. maybe modal?
     }
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameOver]);
 
   return (
@@ -128,11 +118,14 @@ export function DuckFeed({ className }: DuckFeedProps): JSX.Element {
       <h1>Feed the Duck!</h1>
       <HighScore />
       <GameStats />
-      <div className={`${className || ""} DuckFeed`}>
-        <div
+      <div className={`${className || ''} DuckFeed`}>
+        <button
+          type="button"
+          aria-label="Feed the duck"
           className="cereal shake"
           style={coords}
           onMouseOver={() => moveFeed()}
+          onFocus={() => moveFeed()}
         />
       </div>
     </div>

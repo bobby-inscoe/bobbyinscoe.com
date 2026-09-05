@@ -9,13 +9,16 @@ a human and an agent making the same decisions.
 
 ## For agents: read this first
 
-**Always load** [`instructions/workflow.md`](instructions/workflow.md) and
-[`instructions/engineering.md`](instructions/engineering.md) before changing
-anything. They override your defaults. Everything else loads on demand.
+**Always load** [`instructions/workflow.md`](instructions/workflow.md),
+[`instructions/engineering.md`](instructions/engineering.md), and
+[`skills/unslop/SKILL.md`](skills/unslop/SKILL.md) before changing anything.
+They override your defaults. Everything else loads on demand.
 
 `workflow.md` is always in force. `engineering.md` is in force to the extent it
 has been filled in, and its unfilled parts are questions for the developer rather
-than permission to improvise.
+than permission to improvise. `unslop` is always in force for any prose you
+write — it is a style rule, not a task route, so it does not wait for the table
+below.
 
 Route the current request by what it needs first:
 
@@ -62,7 +65,9 @@ you.
 
 **Skills are the verbs.** Loaded on demand, portable across every project. They
 encode *how* to do a kind of work well. They are project-agnostic on purpose, so
-you can copy them into a new repository untouched.
+you can copy them into a new repository untouched. `unslop` is the one exception:
+it is a style rule rather than a task route, so it is always loaded alongside
+the instructions instead of waiting for a request to trigger it.
 
 **Docs are the memory.** They answer questions that the code cannot: why this
 shape, why not the obvious alternative. They exist because agents confidently
