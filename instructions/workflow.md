@@ -26,11 +26,6 @@ questions you can answer by reading the code or running a command are yours to
 resolve. Product decisions, priorities, and anything irreversible are the
 developer's.
 
-If `engineering.md` still contains `FILL IN` markers, the system has not been
-adapted to this project. Ask for the values your task depends on rather than
-inferring them. A guessed test command that silently does nothing is worse than
-no command.
-
 If the developer is unavailable and you must proceed, you may read the project's
 own configuration to infer commands, since a package manifest or CI workflow is
 evidence rather than a guess. Say which values you inferred and from where, and

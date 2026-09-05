@@ -47,14 +47,17 @@ trigger down is what makes that happen.
 ---
 
 <!-- Add new entries directly below this line, newest first. -->
-<!-- The entry below is a formatting sample, not a decision. Replace it with your first real one. -->
 
-## 0000-00-00 Sample, replace with your first decision
-**Decision.** Store timestamps as UTC everywhere, converting only for display.
-**Why.** Mixed timezones in storage caused duplicated records across a DST
-boundary, and the bug took a day to find.
-**Instead of.** Local time with an offset column, which keeps the ambiguity we
-were trying to remove.
-**Costs.** Every display path needs an explicit conversion. Easy to forget.
-**Revisit if.** We need to preserve the wall-clock time an event was scheduled
-in, which UTC alone cannot express.
+## 2026-09-05 Recursive feature route-tree composition
+**Decision.** Supersedes the entry below. Every routed feature exports a `routes/route-tree.ts` composed from its own route plus the route trees of its *immediate* child features only; `src/app/router.ts` composes just the top-level features. Route factories take the parent as a generic `<TParent extends AnyRoute>`.
+**Why.** The feature layout is recursive, so route composition must be too, or a subfeature and a top-level feature look identical on disk and behave differently. Recursion keeps "deleting a feature is deleting a directory" true, keeps a subfeature's exposure switch next to the subfeature, and makes any subtree independently mountable for tests. The generic parent is not cosmetic: with a bare `AnyRoute` parameter, `<Link to="/definitely-not-a-route" />` typechecks clean — verified both directions before adopting this.
+**Instead of.** Consolidating all of a feature's descendant routes in the root feature's route tree, which reads the whole URL surface of a feature in one file. It lost because it makes the root file's knowledge O(descendants) rather than O(children), deep-imports through two encapsulation boundaries, and reintroduces internally the coupling the feature rules forbid externally. Its discoverability advantage is recoverable in the chosen design via devtools and a routesById snapshot; the reverse is not recoverable.
+**Costs.** One extra `route-tree.ts` per routed feature even when it has a single route, and no single file states the application's full URL surface. Nested generics compound, so deep trees carry a TypeScript inference cost.
+**Revisit if.** The project adopts TanStack file-based routing or route codegen; `npm run typecheck` slows materially and profiling blames route-tree inference; feature nesting routinely passes four levels; or subfeature URLs routinely need hoisting because they do not nest under their parent, which would mean the feature tree and the URL tree have diverged.
+
+## 2026-09-05 TanStack Router route ownership
+**Decision.** Use TanStack Router's code-based route tree, with route modules owned by features and composed by a thin application-level route tree.
+**Why.** Feature ownership keeps navigation next to the page it exposes without scattering route composition or creating a global feature-agnostic routes directory.
+**Instead of.** Centralized file-based routing would make route discovery simpler but would separate routes from their features; a centralized code-based tree would preserve type safety but make the application layer own feature details.
+**Costs.** The application route tree must import and compose each feature route module, and new features need an explicit composition step.
+**Revisit if.** The number of routes makes manual composition materially harder to maintain or the project adopts TanStack's file-based routing tooling.

@@ -1,0 +1,445 @@
+/* --------------------------------- */
+/* Styles for Feed the Duck           */
+/* --------------------------------- */
+
+.DuckFeed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.Button {
+  padding: 0.5rem 1.25rem;
+  border: 1px solid var(--secondary);
+  border-radius: 8px;
+  background-color: var(--secondary-dark);
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.Button:hover:not(:disabled) {
+  background-color: var(--secondary);
+}
+
+.Button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.Button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.Button--secondary {
+  background-color: transparent;
+  border-color: var(--secondary-dark);
+  color: var(--secondary);
+}
+
+.Button--secondary:hover:not(:disabled) {
+  background-color: var(--secondary-dark);
+  color: var(--primary);
+}
+
+/* --------------------------------- */
+/* HUD                                */
+/* --------------------------------- */
+
+.GameHud {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 720px;
+}
+
+.GameHud-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.GameHud-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.GameHud-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--secondary);
+}
+
+.GameHud-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.GameHud-combo .GameHud-value {
+  color: #f4c96b;
+}
+
+.GameHud-timer--warning .GameHud-value {
+  color: #f4c96b;
+}
+
+.GameHud-timer--critical .GameHud-value {
+  color: #e8635f;
+  animation: pulse 0.6s ease-in-out infinite;
+}
+
+.GameHud-timer--paused {
+  opacity: 0.5;
+}
+
+.GameHud-bonus .GameHud-value {
+  color: #e879f9;
+}
+
+.GameHud-bonusBar {
+  width: 100%;
+  max-width: 300px;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--secondary-dark);
+  overflow: hidden;
+}
+
+.GameHud-bonusBar-fill {
+  height: 100%;
+  background-color: #e879f9;
+  transition: width 0.1s linear;
+}
+
+/* --------------------------------- */
+/* Board                              */
+/* --------------------------------- */
+
+.DuckFeed-boardFrame {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  height: 480px;
+}
+
+.GameBoard {
+  position: absolute;
+  inset: 0;
+  background-color: var(--primary-dark);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: background-image 0.3s ease;
+}
+
+.GameBoard--custom-cursor {
+  cursor: none;
+}
+
+.CursorAvatar {
+  position: absolute;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  display: flex;
+}
+
+.GameBoard--bonus-phase {
+  background-image: radial-gradient(
+    circle at center,
+    rgba(244, 201, 107, 0.12),
+    transparent 70%
+  );
+}
+
+.FeedItem {
+  border: 0;
+  padding: 0;
+  position: absolute;
+  transition:
+    left 0.2s cubic-bezier(0, 0.65, 0.03, 1.2),
+    top 0.2s cubic-bezier(0, 0.65, 0.03, 1.2),
+    opacity 0.2s ease;
+}
+
+.FeedItem--bonus-pickup {
+  filter: hue-rotate(200deg) saturate(1.6) brightness(1.2);
+}
+
+.FeedItem--crumb {
+  filter: hue-rotate(280deg) saturate(1.8);
+  animation: crumb-spawn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.FeedItem--muted {
+  opacity: 0.3;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+
+.FeedItem--icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.CatchPopup {
+  position: absolute;
+  pointer-events: none;
+  font-size: 1.1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  animation: popup-float 0.7s ease-out forwards;
+}
+
+.CatchPopup--catch {
+  color: #e8635f;
+}
+
+.CatchPopup--time-bonus {
+  color: #e879f9;
+}
+
+/* --------------------------------- */
+/* Start / game-over overlays         */
+/* --------------------------------- */
+
+.StartScreen,
+.GameOverScreen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  text-align: center;
+  background-color: var(--primary-dark);
+  border-radius: 12px;
+  overflow: auto;
+}
+
+.AvatarArt {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--primary);
+}
+
+.StartScreen-field {
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.StartScreen-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.StartScreen-info {
+  display: inline-flex;
+  align-items: center;
+  color: var(--secondary);
+  cursor: help;
+}
+
+.StartScreen-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.StartScreen-avatarIcon {
+  flex-shrink: 0;
+}
+
+.DuckFeed-highScores {
+  width: 100%;
+  max-width: 260px;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  background-color: var(--secondary-dark);
+}
+
+.GameOverScreen-score {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.GameOverScreen-badge {
+  color: #f4c96b;
+  font-weight: 600;
+}
+
+.GameOverScreen-stats {
+  display: flex;
+  flex-direction: row;
+  gap: 1.5rem;
+}
+
+.GameOverScreen-stats > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.GameOverScreen-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 0.75rem;
+}
+
+/* --------------------------------- */
+/* High scores                        */
+/* --------------------------------- */
+
+.HighScoreList {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.HighScoreList h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--secondary);
+}
+
+.HighScoreList-empty {
+  font-size: 0.85rem;
+  color: var(--secondary);
+}
+
+.HighScoreList-items {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+}
+
+.HighScoreList-items li {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+/* --------------------------------- */
+/* Animations                         */
+/* --------------------------------- */
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes shake {
+  0% {
+    translate: 0 0;
+    rotate: 0deg;
+  }
+  1% {
+    translate: -1px -2px;
+    rotate: -10deg;
+  }
+  2% {
+    translate: -3px 0;
+    rotate: 30deg;
+  }
+  3% {
+    translate: 0 2px;
+    rotate: 0deg;
+  }
+  4% {
+    translate: 1px -1px;
+    rotate: 30deg;
+  }
+  5% {
+    translate: -1px 2px;
+    rotate: -10deg;
+  }
+  6% {
+    translate: -3px 1px;
+    rotate: 0deg;
+  }
+  7% {
+    translate: 2px 1px;
+    rotate: -10deg;
+  }
+  8% {
+    translate: -1px -1px;
+    rotate: 10deg;
+  }
+  9% {
+    translate: 2px 2px;
+    rotate: 0deg;
+  }
+  10%,
+  100% {
+    translate: 0 0;
+    rotate: 0deg;
+  }
+}
+
+.shake {
+  animation-name: shake;
+  animation-duration: 5s;
+  transform-origin: 50% 50%;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+}
+
+/* Uses the standalone `scale` property (not `transform`) so it composes
+   cleanly alongside `.shake`'s translate/rotate keyframes on other kinds;
+   crumbs skip `.shake` entirely so this is their only motion. */
+@keyframes crumb-spawn {
+  from {
+    scale: 0;
+  }
+  60% {
+    scale: 0.85;
+  }
+  to {
+    scale: 0.7;
+  }
+}
+
+@keyframes popup-float {
+  0% {
+    opacity: 0;
+    translate: -50% -100%;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: -50% calc(-100% - 28px);
+  }
+}

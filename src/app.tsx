@@ -1,11 +1,8 @@
-import { DuckFeed } from '@/components/DuckFeed/duck-feed';
+import { RouterProvider } from '@tanstack/react-router';
+import type React from 'react';
 
-export function App(): JSX.Element {
-  return (
-    <div className="App">
-      <div className="content">
-        <DuckFeed />
-      </div>
-    </div>
-  );
+import { router } from '@/app/router';
+
+export function App(): React.JSX.Element {
+  return <RouterProvider router={router} />;
 }

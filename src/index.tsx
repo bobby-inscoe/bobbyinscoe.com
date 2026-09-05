@@ -1,5 +1,5 @@
 import React from 'react';
-import ReactDOM from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import '@/index.css';
 import { App } from '@/app';
 
@@ -9,9 +9,8 @@ if (!root) {
   throw new Error('Root element was not found');
 }
 
-ReactDOM.render(
+createRoot(root).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,
-  root
 );

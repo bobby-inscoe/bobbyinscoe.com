@@ -1,34 +1,28 @@
 # Engineering standards
 
-Always loaded. Authoritative once filled in. This file is the one you edit per
-project. Replace every `FILL IN` before relying on this system. Delete rules that
-do not apply rather than leaving them aspirational, because a rule nobody enforces
-teaches agents that rules are optional.
-
-**While `FILL IN` markers remain, this file is not authoritative, it is a
-questionnaire.** An agent that finds them should ask the developer for the values
-its current task needs instead of inventing them. The generic rules below still
-apply. The blanks are the parts only the developer can answer.
+Always loaded and authoritative. This file is the one you edit per project.
+Delete rules that do not apply rather than leaving them aspirational, because a
+rule nobody enforces teaches agents that rules are optional.
 
 ## Stack
 
 - Language and version: TypeScript
 - Framework and bundler: React, bundled with Vite
-- Runtime and version: `FILL IN`
-- Package manager: `FILL IN`
-- Test runner: `FILL IN`
-- Formatter: Prettier — single quotes, two-space indentation, trailing commas
-  where supported.
-- Linter: `ESLint`
+- Runtime and version: Node.js `>=20.19.0`
+- Package manager: npm
+- Test runner: None configured yet
+- Formatter and linter: Biome
 
 Version constraints that agents keep getting wrong belong here. If a library is
 installed but must not be used, or a major version changed the API an agent was
 trained on, say so explicitly:
 
 - All source imports use the `@/*` path alias, mapped to `./src/*` in
-  `tsconfig.app.json` and `vite.config.ts`. Never use relative imports
+  `tsconfig.json` and `vite.config.ts`. Never use relative imports
   (`../../`) or a bare `src/` import.
-- `FILL IN, for example: react-router v5 is installed. Use useHistory and Switch, not v6 patterns.`
+- React 19 is installed.
+- TanStack Router v1 is installed. Use its code-based route tree; route modules
+  are owned by their features and composed by the application route tree.
 
 ## Commands
 
@@ -37,19 +31,19 @@ costs more than a missing one.
 
 ```bash
 # install
-FILL IN
+npm install
 # run locally
-FILL IN
+npm run dev
 # test (whole suite)
-FILL IN
+# No test runner is configured yet.
 # test (single file)
-FILL IN
+# Not available until a test runner is configured.
 # lint and format
-FILL IN
+npm run check
 # typecheck
-FILL IN
+npm run typecheck
 # build
-FILL IN
+npm run build
 ```
 
 Prefer the narrowest command that covers the change. Run the full suite before
@@ -62,10 +56,21 @@ access, types, and tests, so that deleting a feature is deleting a directory.
 
 ```
 src/
+  app/                 application shell and top-level route-tree composition
   features/
-    <feature>/        everything for one feature, self-contained
-  shared/             used by two or more features
-  lib/                third-party wrappers and adapters
+    <feature>/
+      api/             API calls for the feature
+      assets/          assets used by the feature
+      components/      components used by the feature or its sub-features
+      context/         contexts used by the feature
+      features/        sub-features using this same structure
+      hooks/           hooks used by the feature
+      mock/            mock data used by the feature
+      routes/          route modules and route-tree owned by the feature
+      types/           types used by the feature or its sub-features
+      utils/           utility functions used by the feature
+  shared/              used by two or more features
+  lib/                 third-party wrappers and adapters
 ```
 
 Dependencies point one way. Features may use `shared` and `lib`. Nothing in
@@ -78,7 +83,75 @@ part moves to `shared` or A and B are one feature.
 
 Project-specific boundaries go here:
 
-- `FILL IN, for example: components never call the network directly, they call hooks, hooks call the API layer.`
+- Feature-owned routes live in each feature's `routes/` directory, composed
+  recursively. See Routing below; it is the rule most likely to drift.
+- Components do not call network APIs directly. They use feature hooks or API
+  modules, and remote data/cache state belongs to the owning feature.
+- Features must not import another feature directly. Move shared code to
+  `shared/` instead.
+
+## Routing
+
+TanStack Router v1, code-based tree. Every routed feature owns its routes and
+composes only its immediate children, identically at every depth. `docs/decisions.md`
+has the reasoning; do not re-litigate it, and do not centralize composition.
+
+- A routed feature has one `routes/<name>-route.ts` per route and exactly one
+  `routes/route-tree.ts` — including when it has a single route. The tree file is
+  what keeps a parent's import stable when the second route arrives.
+- `route-tree.ts` composes the feature's own route with the `route-tree` of each
+  immediate child feature. Never import a descendant's route module or a
+  grandchild's tree. A parent knows its children, not its descendants.
+- A feature with no URL of its own has no `routes/` directory. Do not add an
+  empty one for symmetry.
+- `src/app/router.ts` imports top-level feature route trees and nothing else.
+- Everything under `routes/` is `.ts`, never `.tsx`. Route files reference
+  components; they do not contain JSX. Needing JSX in a route file means that
+  component belongs in the feature's `components/`.
+
+Factories take the parent route as a **generic parameter**, never as a bare
+`AnyRoute`:
+
+```ts
+export function createThingRoute<TParent extends AnyRoute>(parentRoute: TParent) {
+```
+
+`AnyRoute` in the parameter position compiles, typechecks, and lints clean while
+silently erasing the literal path union that `Link to` and `router.navigate`
+autocomplete depend on. Nothing fails; you just lose the safety. `AnyRoute` is
+correct only as the generic's constraint, and it is a real library type rather
+than an `any` escape hatch — leave it there.
+
+Factories exist so the dependency points parent to child. Do not switch to the
+TanStack docs' `getParentRoute: () => importedParentRoute` form, which makes
+every feature import the app layer and risks a cycle with `router.ts`.
+
+A leaf feature is live in `src/features/duck-feed/routes/`. The composing case:
+
+```ts
+// src/features/orders/routes/route-tree.ts
+export function createOrdersRouteTree<TParent extends AnyRoute>(
+  parentRoute: TParent,
+) {
+  const ordersRoute = createOrdersRoute(parentRoute);
+
+  return ordersRoute.addChildren([
+    createOrderHistoryRouteTree(ordersRoute),
+    createReportingRouteTree(ordersRoute),
+  ]);
+}
+```
+
+Child `path` values are relative kebab-case segments with no leading slash; the
+parent's path is always a prefix. For layout nesting without a URL segment, use a
+pathless route (`id` set, `path` omitted). A subfeature whose URL must not nest
+under its parent is composed by whichever feature owns that URL prefix instead.
+
+Removing a parent's import of a child tree is the build-time switch that takes a
+subfeature out of the application. Runtime or per-user gating belongs in the
+route's `beforeLoad` as a `redirect`. Never compose routes conditionally: that
+makes the tree's type depend on a runtime value, so the valid path union differs
+between builds.
 
 ## Naming
 
@@ -132,12 +205,20 @@ agent with no context at all.
 
 ## Types
 
-- `FILL IN: is the strict mode of your language enabled? Say so here.`
-- Import types the same way as values, via normal named imports; do not use
-  `import type`.
-- Never use an escape hatch (`any`, `unknown` casts, `@ts-ignore`, reflection) to
-  silence an error you have not understood. If one is genuinely required, it needs
-  a comment explaining why, on the line above.
+- TypeScript strict mode is enabled, including unused locals, unused parameters,
+  and no fallthrough cases in switches.
+- Use `import type` for imports that are only used as types.
+- `any` is banned and Biome fails the build on it, as does `@ts-ignore`. Every
+  value gets a real type.
+- `unknown` is not the way around that ban. It is a boundary type, acceptable
+  only where data genuinely enters the system untyped, and it must be narrowed by
+  a type guard or validator before anything reads it. `unknown` that survives
+  into application logic is `any` wearing a hat.
+- `as unknown as X` defeats the checker and no linter catches it. Needing one
+  means a type is wrong upstream. Fix that instead.
+- A generic parameter is a real type. When a library exposes a wide catch-all
+  type, prefer `<T extends Wide>(x: T)` over `(x: Wide)`. The wide type usually
+  erases inference silently, with no error anywhere to tell you it happened.
 - Derive types from a single source of truth rather than duplicating a shape in
   two places that can drift apart.
 
@@ -158,7 +239,9 @@ executed, not behavior checked.
 
 What must be tested in this project:
 
-- `FILL IN, for example: anything touching money, auth, or persisted data.`
+- There is no automated test runner yet. When tests are introduced, cover
+  user-visible behavior and route transitions, including loading, empty, error,
+  and not-found states.
 
 ## Dependencies
 
