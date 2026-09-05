@@ -73,11 +73,19 @@ Agents may spawn sub-agents when doing so materially improves the result.
 
 Portable workflow skills live in [`skills/`](skills/). They are Markdown playbooks, not a promise that every agent host supports the same slash commands, sub-agent APIs, or model orchestration.
 
+- Start non-trivial feature, bug-fix, and chore requests with `plan-first`. It classifies the request, grounds the work in the repository, surfaces ambiguity, and waits for confirmation before implementation.
+- `plan-first` must explore related code and existing patterns before classifying or proposing a solution. Treat the project's established React and TypeScript structure as the default constraint; extend or correct existing patterns before inventing new abstractions or folder structures.
+- When `plan-first` finds a material ambiguity, use the host's structured question tool. In VS Code, use Ask Questions or its equivalent structured question UI instead of hiding the decision in prose.
+- Use `spec` when an approved plan should be written as a temporary implementation contract for another agent or later conversation.
+- Use `handoff` when work already started needs to be transferred to another agent or conversation.
+- Store generated specs and handoffs directly in the ignored repository-root `.notes/` directory. Name them with a descriptive subject and the `-spec.md` or `-handoff.md` suffix. Do not commit files from `.notes/`.
 - Use `arena` for genuinely non-trivial design or artifact decisions where independent candidates add signal.
 - Use `interrogate` for adversarial review and blind-spot analysis.
 - Use `architect` for significant module or system design.
 - Use `blast-radius` before shipping changes with non-obvious downstream effects.
 - Use `figure-it-out` for large or ambiguous work with no narrower workflow.
+- Use `document` to explain why complex or non-obvious code exists without restating what it does.
+- Use `refactor` for behavior-preserving simplification and alignment with established project standards.
 - Apply `unslop` to every agent-authored natural-language response, conversation, explanation, documentation change, and PR text. Do not apply it to source code, identifiers, API names, commands, or required technical syntax.
 
 If the current host cannot spawn sub-agents or select multiple models, perform the same phases sequentially and state that limitation. Never claim that parallel or multi-model work happened when it did not.

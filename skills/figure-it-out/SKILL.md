@@ -17,4 +17,6 @@ Use this skill for large migrations, multi-part changes, or work that needs an a
 8. Record decisions, evidence, failed attempts, and unresolved questions.
 9. Verify the whole result against the original predicate.
 
+After the workflow is designed and approved, invoke `spec` to write the playbook and implementation contract to `.notes/<subject>-spec.md`. Use the spec as the implementation contract for the current or next agent. The artifact is local planning state, not a project document, and must not be committed.
+
 Return the playbook, rigor level, decision trail, verification evidence, and open risks.
