@@ -1,6 +1,6 @@
 ## Bobby Inscoe Site
 
-Repository for the site at bobbyinscoe.com
+Repository for the site at bobbyinscoe.com, built with React, TypeScript, and Vite.
 
 ## Local development
 
@@ -19,6 +19,7 @@ Other useful commands:
 npm run build    # Create a production build in dist/
 npm run preview  # Serve the production build at http://localhost:4173
 npm run start    # Alias for npm run dev
+npm run typecheck # Check TypeScript types
 ```
 
 GitHub Pages hosts the deployed production build; it is not used for local development.

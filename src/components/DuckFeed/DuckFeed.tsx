@@ -2,14 +2,18 @@ import { useEffect, useState } from "react";
 
 import "./DuckFeed.css";
 
-const DuckFeed = ({ className }) => {
+interface DuckFeedProps {
+  className?: string;
+}
+
+const DuckFeed = ({ className }: DuckFeedProps): JSX.Element => {
   const [count, setCount] = useState(0);
   const [timer, setTimer] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [x, setX] = useState(Math.random() * 550);
   const [y, setY] = useState(Math.random() * 350);
 
-  const [scores, setScores] = useState([]);
+  const [scores, setScores] = useState<number[]>([]);
 
   const [coords, setCoords] = useState({
     left: x,
@@ -18,15 +22,14 @@ const DuckFeed = ({ className }) => {
 
   const moveFeed = () => {
     if (!gameOver && timer > 0) {
-      setX(Math.random() * 550, []);
-      setY(Math.random() * 350, []);
-      setCoords(
-        {
-          top: y,
-          left: x,
-        },
-        []
-      );
+      const nextX = Math.random() * 550;
+      const nextY = Math.random() * 350;
+      setX(nextX);
+      setY(nextY);
+      setCoords({
+        top: nextY,
+        left: nextX,
+      });
 
       setCount(count + 1);
     }
@@ -61,7 +64,7 @@ const DuckFeed = ({ className }) => {
 
 
 
-  const GameStats = () => {
+  const GameStats = (): JSX.Element => {
     return (
       <div className="GameStats">
         <h3>Current Score: {count}</h3>
@@ -72,21 +75,17 @@ const DuckFeed = ({ className }) => {
   };
 
   // redo this
-  const HighScore = () => {
+  const HighScore = (): JSX.Element => {
     return (
       <div className="HighScore">
         <h2>High Scores:</h2>
         <ul className="scores">
-          {scores && scores.map((record, idx) =>
+          {scores.map((record, idx) => (
             <li key={`high-score-${idx}`}>
-              <div>
-                {idx + 1}
-              </div>
-              <div>
-                {record}
-              </div>
+              <div>{idx + 1}</div>
+              <div>{record}</div>
             </li>
-          )}
+          ))}
         </ul>
       </div>
     );
@@ -99,18 +98,17 @@ const DuckFeed = ({ className }) => {
       if (gameOver && scores.length < 3) {
         let oldScores = [...scores];
         oldScores.push(count);
-        oldScores.sort((a, b) => (b - a));
+        oldScores.sort((a, b) => b - a);
 
         setScores(oldScores);
       }
 
       else {
         for (let i = 0; i < scores.length; i++) {
-          if (count > scores[i].score) {
+          if (count > scores[i]) {
             let oldScores = [...scores];
-            oldScores.pop(i)
-            oldScores[i] = count;
-            oldScores = oldScores.sort((a, b) => (b - a));
+            oldScores.splice(i, 1, count);
+            oldScores = oldScores.sort((a, b) => b - a);
             setScores(oldScores);
           }
           else {
@@ -123,7 +121,7 @@ const DuckFeed = ({ className }) => {
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameOver])
+  }, [gameOver]);
 
   return (
     <div>
