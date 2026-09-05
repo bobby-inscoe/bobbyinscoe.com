@@ -1,9 +1,0 @@
-.Home{
-    text-align: center;
-}
-
-.Home > h1,
-.Home > h2,
-.Home > h3 {
-    color: var(--color-primary-1)
-}

@@ -82,13 +82,13 @@ const DuckFeed = ({ className }) => {
           High Scores:
         </Header>
         <ul className="scores">
-          {scores && scores.map((score, idx) =>
-            <li key={`high-score${score}`}>
+          {scores && scores.map((record, idx) =>
+            <li key={`high-score-${idx}`}>
               <div>
-                {idx + 1}:
+                {idx + 1}
               </div>
               <div>
-                {score}
+                {record}
               </div>
             </li>
           )}
@@ -97,13 +97,13 @@ const DuckFeed = ({ className }) => {
     );
   };
 
+  // convert scores to be list of objects with initials and score
   useEffect(() => {
     if (gameOver) {
+      alert("Game Over");
       if (gameOver && scores.length < 3) {
-        console.log('added new count: ', count);
         let oldScores = [...scores];
         oldScores.push(count);
-
         oldScores.sort((a, b) => (b - a));
 
         setScores(oldScores);
@@ -111,9 +111,9 @@ const DuckFeed = ({ className }) => {
 
       else {
         for (let i = 0; i < scores.length; i++) {
-          if (count > scores[i]) {
-            console.log('new score higher than index ', scores.indexOf(i), '. Updating with new score: ', count);
+          if (count > scores[i].score) {
             let oldScores = [...scores];
+            oldScores.pop(i)
             oldScores[i] = count;
             oldScores = oldScores.sort((a, b) => (b - a));
             setScores(oldScores);
@@ -124,10 +124,10 @@ const DuckFeed = ({ className }) => {
         }
       }
 
-      alert('Game over.')
+      // change this to something else to prompt game over screen. maybe modal?
     }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameOver])
 
   return (
