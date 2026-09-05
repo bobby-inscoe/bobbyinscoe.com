@@ -1,6 +1,6 @@
-import DuckFeed from "./components/DuckFeed/DuckFeed";
+import { DuckFeed } from '@/components/DuckFeed/duck-feed';
 
-function App(): JSX.Element {
+export function App(): JSX.Element {
   return (
     <div className="App">
       <div className="content">
@@ -9,5 +9,3 @@ function App(): JSX.Element {
     </div>
   );
 }
-
-export default App;
