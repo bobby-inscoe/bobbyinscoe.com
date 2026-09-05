@@ -1,12 +1,10 @@
-import Home from "./components/NavBar/Home/Home";
-import NavBar from "./components/NavBar/NavBar";
+import DuckFeed from "./components/DuckFeed/DuckFeed";
 
 function App() {
   return (
     <div className="App">
-      <NavBar />
       <div className="content">
-        <Home />
+        <DuckFeed />
       </div>
     </div>
   );

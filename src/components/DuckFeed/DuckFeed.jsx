@@ -1,7 +1,4 @@
 import { useEffect, useState } from "react";
-import classNames from "classnames";
-import Header from "../Header/Header";
-import Button from "../Button/Button";
 
 import "./DuckFeed.css";
 
@@ -69,7 +66,7 @@ const DuckFeed = ({ className }) => {
       <div className="GameStats">
         <h3>Current Score: {count}</h3>
         <h3>Timer: {timer} </h3>
-        <Button onClick={resetGame}>Restart</Button>
+        <button onClick={resetGame}>Restart</button>
       </div>
     );
   };
@@ -78,9 +75,7 @@ const DuckFeed = ({ className }) => {
   const HighScore = () => {
     return (
       <div className="HighScore">
-        <Header>
-          High Scores:
-        </Header>
+        <h2>High Scores:</h2>
         <ul className="scores">
           {scores && scores.map((record, idx) =>
             <li key={`high-score-${idx}`}>
@@ -132,10 +127,10 @@ const DuckFeed = ({ className }) => {
 
   return (
     <div>
-      <Header>Feed the Duck!</Header>
+      <h1>Feed the Duck!</h1>
       <HighScore />
       <GameStats />
-      <div className={classNames(className, "DuckFeed")}>
+      <div className={`${className || ""} DuckFeed`}>
         <div
           className="cereal shake"
           style={coords}
