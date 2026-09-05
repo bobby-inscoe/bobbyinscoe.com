@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 
-import "./DuckFeed.css";
+import '@/components/DuckFeed/duck-feed.css';
 
 interface DuckFeedProps {
   className?: string;
 }
 
-const DuckFeed = ({ className }: DuckFeedProps): JSX.Element => {
+export function DuckFeed({ className }: DuckFeedProps): JSX.Element {
   const [count, setCount] = useState(0);
   const [timer, setTimer] = useState(0);
   const [gameOver, setGameOver] = useState(false);
@@ -137,6 +137,4 @@ const DuckFeed = ({ className }: DuckFeedProps): JSX.Element => {
       </div>
     </div>
   );
-};
-
-export default DuckFeed;
+}
