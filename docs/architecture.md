@@ -109,9 +109,12 @@ UI primitives.
 
 - The first feature has been moved under `src/features/duck-feed/` to establish
   the intended feature layout.
-- Duck Feed is an early prototype with timer and score state held directly in the
-  component. Changes to its timing or scoring need extra care around interval
-  cleanup and stale React state.
+- Duck Feed's game state machine (`hooks/use-duck-feed-game.ts`), timestamp-based
+  round countdown (`hooks/use-countdown.ts`), and geometry/difficulty/scoring
+  logic (`utils/`) are the reference example of keeping a feature's component
+  light and its behavior in hooks/utils. It persists its top-5 high scores in
+  `localStorage` under the key `duck-feed:high-scores`, owned solely by
+  `hooks/use-high-scores.ts`.
 - The repository has no test runner configured yet. Use the existing typecheck
   and production build as the verification floor until behavior tests are added.
 
@@ -120,6 +123,5 @@ every imperfection belongs in the issue tracker, not here.
 
 | Area | Problem | Care needed |
 |---|---|---|
-| Duck Feed state | Timer, movement, and scores are prototype-level component state | Preserve the game loop behavior and verify timer resets do not leave overlapping intervals |
 | Feature placement | The first experiment established the feature convention | Keep feature assets, routes, and behavior inside the owning feature |
 | Static hosting | GitHub Pages serves the built SPA and needs the repository's 404 handling | Keep route behavior compatible with the deployment workflow when adding TanStack Router |

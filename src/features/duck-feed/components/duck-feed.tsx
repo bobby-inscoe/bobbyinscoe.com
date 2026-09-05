@@ -1,132 +1,81 @@
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import '@/features/duck-feed/components/duck-feed.css';
+
+import { GameBoard } from '@/features/duck-feed/components/game-board';
+import { GameHud } from '@/features/duck-feed/components/game-hud';
+import { GameOverScreen } from '@/features/duck-feed/components/game-over-screen';
+import { StartScreen } from '@/features/duck-feed/components/start-screen';
+import { useDuckFeedGame } from '@/features/duck-feed/hooks/use-duck-feed-game';
+import { useElementSize } from '@/features/duck-feed/hooks/use-element-size';
+import { useHighScores } from '@/features/duck-feed/hooks/use-high-scores';
+import type { Difficulty } from '@/features/duck-feed/types/game';
+import type { RoundDurationSeconds } from '@/features/duck-feed/utils/difficulty';
 
 interface DuckFeedProps {
   className?: string;
 }
 
+const DEFAULT_ROUND_DURATION_SECONDS: RoundDurationSeconds = 30;
+
 export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
-  const [count, setCount] = useState(0);
-  const [timer, setTimer] = useState(0);
-  const [gameOver, setGameOver] = useState(false);
-  const [x, setX] = useState(Math.random() * 550);
-  const [y, setY] = useState(Math.random() * 350);
+  const { ref: boardRef, size: boardSize } = useElementSize<HTMLDivElement>();
+  const highScores = useHighScores();
+  const [difficulty, setDifficulty] = useState<Difficulty>('normal');
+  const [durationSeconds, setDurationSeconds] = useState<RoundDurationSeconds>(
+    DEFAULT_ROUND_DURATION_SECONDS,
+  );
 
-  const [scores, setScores] = useState<number[]>([]);
-
-  const [coords, setCoords] = useState({
-    left: x,
-    top: y,
+  const game = useDuckFeedGame({
+    boardSize,
+    difficulty,
+    durationSeconds,
+    recordScore: highScores.recordScore,
   });
 
-  const moveFeed = () => {
-    if (!gameOver && timer > 0) {
-      const nextX = Math.random() * 550;
-      const nextY = Math.random() * 350;
-      setX(nextX);
-      setY(nextY);
-      setCoords({
-        top: nextY,
-        left: nextX,
-      });
-
-      setCount(count + 1);
-    }
-  };
-
-  const resetGame = () => {
-    setTimer(5);
-    setCount(0);
-    setGameOver(false);
-    startTimer();
-    moveFeed();
-  };
-
-  const startTimer = () => {
-    const gameTimer = setInterval(() => {
-      setTimer((timer) => {
-        let updatedTime = timer;
-        if (timer > 0) {
-          updatedTime--;
-        } else {
-          setGameOver(true);
-          clearInterval(gameTimer);
-        }
-        return updatedTime;
-      });
-    }, 1000);
-  };
-
-  const GameStats = (): React.JSX.Element => {
-    return (
-      <div className="GameStats">
-        <h3>Current Score: {count}</h3>
-        <h3>Timer: {timer} </h3>
-        <button type="button" onClick={resetGame}>
-          Restart
-        </button>
-      </div>
-    );
-  };
-
-  const HighScore = (): React.JSX.Element => {
-    return (
-      <div className="HighScore">
-        <h2>High Scores:</h2>
-        <ul className="scores">
-          {scores.map((record, idx) => (
-            <li key={record}>
-              <div>{idx + 1}</div>
-              <div>{record}</div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  };
-
-  // The game-over transition must run once per round, not once per score update.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: score state is intentionally captured at game over.
-  useEffect(() => {
-    if (gameOver) {
-      alert('Game Over');
-      if (gameOver && scores.length < 3) {
-        const oldScores = [...scores];
-        oldScores.push(count);
-        oldScores.sort((a, b) => b - a);
-
-        setScores(oldScores);
-      } else {
-        for (let i = 0; i < scores.length; i++) {
-          if (count > scores[i]) {
-            let oldScores = [...scores];
-            oldScores.splice(i, 1, count);
-            oldScores = oldScores.sort((a, b) => b - a);
-            setScores(oldScores);
-          } else {
-            console.log('score not high enough');
-          }
-        }
-      }
-    }
-  }, [gameOver]);
-
   return (
-    <div>
+    <div className={`${className ?? ''} DuckFeed`}>
       <h1>Feed the Duck!</h1>
-      <HighScore />
-      <GameStats />
-      <div className={`${className || ''} DuckFeed`}>
-        <button
-          type="button"
-          aria-label="Feed the duck"
-          className="cereal shake"
-          style={coords}
-          onMouseOver={() => moveFeed()}
-          onFocus={() => moveFeed()}
+      {game.status !== 'idle' && (
+        <GameHud
+          score={game.score}
+          comboCount={game.comboCount}
+          remainingMs={game.remainingMs}
+          durationMs={game.durationMs}
+          isBonusPhase={game.status === 'bonus-phase'}
+          bonusPhaseEndsAt={game.bonusPhaseEndsAt}
+          bonusPhaseDurationMs={game.bonusPhaseDurationMs}
+          bestScore={highScores.scores[0] ?? null}
         />
+      )}
+      <div className="DuckFeed-boardFrame">
+        <GameBoard
+          ref={boardRef}
+          feedItems={game.feedItems}
+          popups={game.popups}
+          isBonusPhase={game.status === 'bonus-phase'}
+          onPointerMove={game.handlePointerMove}
+          onItemActivate={game.handleItemActivate}
+        />
+        {game.status === 'idle' && (
+          <StartScreen
+            difficulty={difficulty}
+            onDifficultyChange={setDifficulty}
+            durationSeconds={durationSeconds}
+            onDurationChange={setDurationSeconds}
+            highScores={highScores.scores}
+            canStart={boardSize.width > 0}
+            onStart={game.start}
+          />
+        )}
+        {game.status === 'game-over' && game.lastResult && (
+          <GameOverScreen
+            result={game.lastResult}
+            onPlayAgain={game.start}
+            onChangeSettings={game.returnToMenu}
+          />
+        )}
       </div>
     </div>
   );
