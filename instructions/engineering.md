@@ -12,16 +12,22 @@ apply. The blanks are the parts only the developer can answer.
 
 ## Stack
 
-- Language and version: `FILL IN`
+- Language and version: TypeScript
+- Framework and bundler: React, bundled with Vite
 - Runtime and version: `FILL IN`
 - Package manager: `FILL IN`
 - Test runner: `FILL IN`
-- Formatter and linter: `FILL IN`
+- Formatter: Prettier — single quotes, two-space indentation, trailing commas
+  where supported.
+- Linter: `ESLint`
 
 Version constraints that agents keep getting wrong belong here. If a library is
 installed but must not be used, or a major version changed the API an agent was
 trained on, say so explicitly:
 
+- All source imports use the `@/*` path alias, mapped to `./src/*` in
+  `tsconfig.app.json` and `vite.config.ts`. Never use relative imports
+  (`../../`) or a bare `src/` import.
 - `FILL IN, for example: react-router v5 is installed. Use useHistory and Switch, not v6 patterns.`
 
 ## Commands
@@ -76,11 +82,12 @@ Project-specific boundaries go here:
 
 ## Naming
 
-- Files and directories: `FILL IN, for example: kebab-case`
-- Types and components: `FILL IN, for example: PascalCase`
-- Functions and variables: `FILL IN, for example: camelCase`
-- Constants: `FILL IN`
-- Tests: `FILL IN, for example: <name>.test.<ext> beside the file it tests`
+- Files and directories: kebab-case
+- Types and components: PascalCase
+- Functions and variables: camelCase
+- Custom hooks: file `use-thing.ts`, exporting `useThing`
+- Constants: CONSTANT_VALUE
+- Tests: `name.test.ext` beside the file it tests
 
 Say it in one line and be consistent. Consistency matters more than which
 convention you picked, and agents match surrounding code well when the
@@ -106,10 +113,28 @@ agent with no context at all.
   case that does not exist yet.
 - Comment why, never what. If a comment restates the code, delete it. If the code
   needs a comment to be understood, first try to make the code clearer.
+- Mark a deliberate corner cut with a known ceiling (a global lock, an O(n²)
+  scan, a naive heuristic) with a `ponytail:` comment naming the ceiling and the
+  upgrade path. A silent shortcut is worse than a named one.
+- React components are named function declarations (`export function UserCard()
+  {}`), not arrow-function consts, and are not default exports. Prefer named
+  exports for components, hooks, and utilities generally.
+
+## Frontend
+
+- Use semantic HTML, keyboard-accessible controls, visible focus states,
+  labels, and meaningful alt text.
+- Keep state close to where it is used. Handle loading, empty, and error
+  states explicitly — do not let a component silently render nothing for any
+  of them.
+- Prefer flexbox and `gap` for layout. Do not use CSS `margin`; use parent
+  layout, `gap`, and padding instead.
 
 ## Types
 
 - `FILL IN: is the strict mode of your language enabled? Say so here.`
+- Import types the same way as values, via normal named imports; do not use
+  `import type`.
 - Never use an escape hatch (`any`, `unknown` casts, `@ts-ignore`, reflection) to
   silence an error you have not understood. If one is genuinely required, it needs
   a comment explaining why, on the line above.
