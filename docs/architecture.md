@@ -86,6 +86,7 @@ UI primitives.
 | GitHub Pages | Hosting the static production build | The deployed site is unavailable; local development remains independent |
 | Google Fonts | Optional Quicksand typography | Fall back to the browser's available font stack |
 | TanStack Router | Page and experiment navigation | Navigation work is incomplete; do not duplicate ad hoc routing |
+| lucide-react | Icon set for in-experiment UI (e.g. Duck Feed's info tooltip and avatar picker) | Bundled at build time, no runtime network call; a feature may fall back to text/emoji until an icon is added |
 | shadcn (planned) | Shared shell and UI primitives | A feature may use plain local styling until the primitive exists |
 
 ## Boundaries

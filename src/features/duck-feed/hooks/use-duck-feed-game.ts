@@ -27,11 +27,11 @@ import {
   BONUS_PICKUP_MAX_DELAY_MS,
   BONUS_PICKUP_MIN_DELAY_MS,
   BONUS_PICKUP_RADIUS_PX,
-  CRUMB_LIFESPAN_MS,
   CRUMB_MIN_SEPARATION_PX,
   CRUMB_PICKUP_RADIUS_PX,
   CRUMB_TIME_BONUS_MS,
   comboAward,
+  FLURRY_CRUMB_COUNT,
   POPUP_LIFETIME_MS,
   randomDelayMs,
 } from '@/features/duck-feed/utils/scoring';
@@ -44,7 +44,7 @@ interface GameState {
   bonusTimeGainedMs: number;
   feed: FeedItem | null;
   bonusPickup: FeedItem | null;
-  crumb: FeedItem | null;
+  crumbs: FeedItem[];
   bonusPhaseEndsAt: number | null;
   popups: Popup[];
   lastResult: RoundResult | null;
@@ -58,11 +58,20 @@ const initialState: GameState = {
   bonusTimeGainedMs: 0,
   feed: null,
   bonusPickup: null,
-  crumb: null,
+  crumbs: [],
   bonusPhaseEndsAt: null,
   popups: [],
   lastResult: null,
 };
+
+function spawnCrumb(board: BoardSize, avoid: Position, now: number): FeedItem {
+  return {
+    id: crypto.randomUUID(),
+    kind: 'crumb',
+    position: randomPositionAwayFrom(board, avoid, CRUMB_MIN_SEPARATION_PX),
+    lastMovedAt: now,
+  };
+}
 
 type Action =
   | { type: 'start'; feed: FeedItem }
@@ -77,11 +86,10 @@ type Action =
   | { type: 'spawn-bonus-pickup'; item: FeedItem }
   | {
       type: 'collect-bonus-pickup';
-      crumb: FeedItem;
+      crumbs: FeedItem[];
       bonusPhaseEndsAt: number;
     }
-  | { type: 'relocate-crumb'; item: FeedItem }
-  | { type: 'collect-crumb'; item: FeedItem }
+  | { type: 'collect-crumbs'; caughtIds: string[]; replacements: FeedItem[] }
   | { type: 'end-bonus-phase' }
   | { type: 'add-popup'; popup: Popup }
   | { type: 'prune-popups'; now: number }
@@ -115,22 +123,25 @@ function gameReducer(state: GameState, action: Action): GameState {
         ...state,
         status: 'bonus-phase',
         bonusPickup: null,
-        crumb: action.crumb,
+        crumbs: action.crumbs,
         bonusPhaseEndsAt: action.bonusPhaseEndsAt,
       };
-    case 'relocate-crumb':
-      return { ...state, crumb: action.item };
-    case 'collect-crumb':
+    case 'collect-crumbs':
       return {
         ...state,
-        crumb: action.item,
-        bonusTimeGainedMs: state.bonusTimeGainedMs + CRUMB_TIME_BONUS_MS,
+        crumbs: [
+          ...state.crumbs.filter((c) => !action.caughtIds.includes(c.id)),
+          ...action.replacements,
+        ],
+        bonusTimeGainedMs:
+          state.bonusTimeGainedMs +
+          CRUMB_TIME_BONUS_MS * action.caughtIds.length,
       };
     case 'end-bonus-phase':
       return {
         ...state,
         status: 'playing',
-        crumb: null,
+        crumbs: [],
         bonusPhaseEndsAt: null,
       };
     case 'add-popup':
@@ -207,7 +218,6 @@ export function useDuckFeedGame(
 
   const lastFleeAtRef = useRef(0);
   const nextBonusPickupAtRef = useRef(0);
-  const crumbExpiresAtRef = useRef(0);
 
   const handleRoundComplete = useCallback(() => {
     const isNewHighScore = recordScoreRef.current(stateRef.current.score);
@@ -293,51 +303,43 @@ export function useDuckFeedGame(
         distance(pointer, itemCenter(current.bonusPickup.position)) <=
           BONUS_PICKUP_RADIUS_PX
       ) {
-        const crumb: FeedItem = {
-          id: crypto.randomUUID(),
-          kind: 'crumb',
-          position: randomPositionAwayFrom(
-            boardSizeRef.current,
-            pointer,
-            CRUMB_MIN_SEPARATION_PX,
-          ),
-          lastMovedAt: now,
-        };
-        crumbExpiresAtRef.current = now + CRUMB_LIFESPAN_MS;
+        const crumbs = Array.from({ length: FLURRY_CRUMB_COUNT }, () =>
+          spawnCrumb(boardSizeRef.current, pointer, now),
+        );
         countdownRef.current.pause();
         dispatch({
           type: 'collect-bonus-pickup',
-          crumb,
+          crumbs,
           bonusPhaseEndsAt: now + BONUS_PHASE_DURATION_MS,
         });
       }
       return;
     }
 
-    if (current.status === 'bonus-phase' && current.crumb) {
-      if (
-        distance(pointer, itemCenter(current.crumb.position)) <=
-        CRUMB_PICKUP_RADIUS_PX
-      ) {
-        const item: FeedItem = {
-          id: crypto.randomUUID(),
-          kind: 'crumb',
-          position: randomPositionAwayFrom(
-            boardSizeRef.current,
-            pointer,
-            CRUMB_MIN_SEPARATION_PX,
-          ),
-          lastMovedAt: now,
-        };
-        crumbExpiresAtRef.current = now + CRUMB_LIFESPAN_MS;
-        countdownRef.current.addTime(CRUMB_TIME_BONUS_MS);
-        dispatch({ type: 'collect-crumb', item });
+    if (current.status === 'bonus-phase' && current.crumbs.length > 0) {
+      const caught = current.crumbs.filter(
+        (crumb) =>
+          distance(pointer, itemCenter(crumb.position)) <=
+          CRUMB_PICKUP_RADIUS_PX,
+      );
+      if (caught.length === 0) return;
+
+      const replacements = caught.map(() =>
+        spawnCrumb(boardSizeRef.current, pointer, now),
+      );
+      countdownRef.current.addTime(CRUMB_TIME_BONUS_MS * caught.length);
+      dispatch({
+        type: 'collect-crumbs',
+        caughtIds: caught.map((crumb) => crumb.id),
+        replacements,
+      });
+      for (const crumb of caught) {
         dispatch({
           type: 'add-popup',
           popup: {
             id: crypto.randomUUID(),
             kind: 'time-bonus',
-            position: pointer,
+            position: itemCenter(crumb.position),
             createdAt: now,
           },
         });
@@ -348,7 +350,7 @@ export function useDuckFeedGame(
   const handleItemActivate = useCallback(
     (id: string) => {
       const current = stateRef.current;
-      const candidates = [current.feed, current.bonusPickup, current.crumb];
+      const candidates = [current.feed, current.bonusPickup, ...current.crumbs];
       const item = candidates.find((candidate) => candidate?.id === id);
       if (item) evaluateProximity(itemCenter(item.position));
     },
@@ -356,8 +358,8 @@ export function useDuckFeedGame(
   );
 
   // Everything time-based (combo expiry, bonus-pickup spawning, bonus-phase
-  // and crumb expiry, popup cleanup) runs off this clock instead of pointer
-  // events, so it stays correct even if the cursor never moves.
+  // expiry, popup cleanup) runs off this clock instead of pointer events, so
+  // it stays correct even if the cursor never moves.
   useEffect(() => {
     if (state.status === 'idle' || state.status === 'game-over') return;
 
@@ -400,33 +402,19 @@ export function useDuckFeedGame(
         return;
       }
 
-      if (current.status === 'bonus-phase') {
-        if (
-          current.bonusPhaseEndsAt !== null &&
-          now >= current.bonusPhaseEndsAt
-        ) {
-          countdownRef.current.resume();
-          nextBonusPickupAtRef.current =
-            now +
-            randomDelayMs(BONUS_PICKUP_MIN_DELAY_MS, BONUS_PICKUP_MAX_DELAY_MS);
-          // Treat the moment play resumes as a fresh flee for combo-timing
-          // purposes, so the enforced pause doesn't cost the player their streak.
-          lastFleeAtRef.current = now;
-          dispatch({ type: 'end-bonus-phase' });
-          return;
-        }
-        if (current.crumb && now >= crumbExpiresAtRef.current) {
-          crumbExpiresAtRef.current = now + CRUMB_LIFESPAN_MS;
-          dispatch({
-            type: 'relocate-crumb',
-            item: {
-              ...current.crumb,
-              id: crypto.randomUUID(),
-              position: randomPosition(boardSizeRef.current),
-              lastMovedAt: now,
-            },
-          });
-        }
+      if (
+        current.status === 'bonus-phase' &&
+        current.bonusPhaseEndsAt !== null &&
+        now >= current.bonusPhaseEndsAt
+      ) {
+        countdownRef.current.resume();
+        nextBonusPickupAtRef.current =
+          now +
+          randomDelayMs(BONUS_PICKUP_MIN_DELAY_MS, BONUS_PICKUP_MAX_DELAY_MS);
+        // Treat the moment play resumes as a fresh flee for combo-timing
+        // purposes, so the enforced pause doesn't cost the player their streak.
+        lastFleeAtRef.current = now;
+        dispatch({ type: 'end-bonus-phase' });
       }
     }, GAME_TICK_MS);
 
@@ -437,9 +425,9 @@ export function useDuckFeedGame(
     const items: FeedItem[] = [];
     if (state.feed) items.push(state.feed);
     if (state.bonusPickup) items.push(state.bonusPickup);
-    if (state.crumb) items.push(state.crumb);
+    items.push(...state.crumbs);
     return items;
-  }, [state.feed, state.bonusPickup, state.crumb]);
+  }, [state.feed, state.bonusPickup, state.crumbs]);
 
   return {
     status: state.status,

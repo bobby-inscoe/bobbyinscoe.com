@@ -6,11 +6,12 @@ import '@/features/duck-feed/components/duck-feed.css';
 import { GameBoard } from '@/features/duck-feed/components/game-board';
 import { GameHud } from '@/features/duck-feed/components/game-hud';
 import { GameOverScreen } from '@/features/duck-feed/components/game-over-screen';
+import { HighScoreList } from '@/features/duck-feed/components/high-score-list';
 import { StartScreen } from '@/features/duck-feed/components/start-screen';
 import { useDuckFeedGame } from '@/features/duck-feed/hooks/use-duck-feed-game';
 import { useElementSize } from '@/features/duck-feed/hooks/use-element-size';
 import { useHighScores } from '@/features/duck-feed/hooks/use-high-scores';
-import type { Difficulty } from '@/features/duck-feed/types/game';
+import type { Avatar, Difficulty } from '@/features/duck-feed/types/game';
 import type { RoundDurationSeconds } from '@/features/duck-feed/utils/difficulty';
 
 interface DuckFeedProps {
@@ -22,6 +23,7 @@ const DEFAULT_ROUND_DURATION_SECONDS: RoundDurationSeconds = 30;
 export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
   const { ref: boardRef, size: boardSize } = useElementSize<HTMLDivElement>();
   const highScores = useHighScores();
+  const [avatar, setAvatar] = useState<Avatar>('duck');
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [durationSeconds, setDurationSeconds] = useState<RoundDurationSeconds>(
     DEFAULT_ROUND_DURATION_SECONDS,
@@ -52,6 +54,7 @@ export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
       <div className="DuckFeed-boardFrame">
         <GameBoard
           ref={boardRef}
+          avatar={avatar}
           feedItems={game.feedItems}
           popups={game.popups}
           isBonusPhase={game.status === 'bonus-phase'}
@@ -60,23 +63,30 @@ export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
         />
         {game.status === 'idle' && (
           <StartScreen
+            avatar={avatar}
+            onAvatarChange={setAvatar}
             difficulty={difficulty}
             onDifficultyChange={setDifficulty}
             durationSeconds={durationSeconds}
             onDurationChange={setDurationSeconds}
-            highScores={highScores.scores}
             canStart={boardSize.width > 0}
             onStart={game.start}
           />
         )}
         {game.status === 'game-over' && game.lastResult && (
           <GameOverScreen
+            avatar={avatar}
             result={game.lastResult}
             onPlayAgain={game.start}
             onChangeSettings={game.returnToMenu}
           />
         )}
       </div>
+      {game.status === 'idle' && (
+        <div className="DuckFeed-highScores">
+          <HighScoreList scores={highScores.scores} />
+        </div>
+      )}
     </div>
   );
 }

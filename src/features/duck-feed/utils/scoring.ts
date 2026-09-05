@@ -12,9 +12,11 @@ export const BONUS_PICKUP_MIN_DELAY_MS = 6000;
 export const BONUS_PICKUP_MAX_DELAY_MS = 12000;
 export const BONUS_PICKUP_RADIUS_PX = 50;
 
-export const BONUS_PHASE_DURATION_MS = 6000;
-export const CRUMB_LIFESPAN_MS = 900;
+export const BONUS_PHASE_DURATION_MS = 5000;
+/** Crumbs in the flurry, maintained at all times: catching one immediately spawns its replacement. */
+export const FLURRY_CRUMB_COUNT = 3;
 export const CRUMB_PICKUP_RADIUS_PX = 40;
+/** Minimum distance a freshly (re)spawned crumb must keep from the cursor. */
 export const CRUMB_MIN_SEPARATION_PX = 40;
 export const CRUMB_TIME_BONUS_MS = 100;
 

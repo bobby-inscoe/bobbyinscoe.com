@@ -1,14 +1,17 @@
 import type React from 'react';
 
-import type { RoundResult } from '@/features/duck-feed/types/game';
+import { AvatarArt } from '@/features/duck-feed/components/avatar-art';
+import type { Avatar, RoundResult } from '@/features/duck-feed/types/game';
 
 interface GameOverScreenProps {
+  avatar: Avatar;
   result: RoundResult;
   onPlayAgain: () => void;
   onChangeSettings: () => void;
 }
 
 export function GameOverScreen({
+  avatar,
   result,
   onPlayAgain,
   onChangeSettings,
@@ -19,6 +22,7 @@ export function GameOverScreen({
       role="alertdialog"
       aria-labelledby="duck-feed-game-over-heading"
     >
+      <AvatarArt avatar={avatar} />
       <h2 id="duck-feed-game-over-heading">Round over!</h2>
       <p className="GameOverScreen-score">{result.score} points</p>
       {result.isNewHighScore && (

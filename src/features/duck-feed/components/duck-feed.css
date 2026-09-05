@@ -53,7 +53,7 @@
   align-items: center;
   gap: 0.5rem;
   width: 100%;
-  max-width: 600px;
+  max-width: 720px;
 }
 
 .GameHud-row {
@@ -127,8 +127,8 @@
 .DuckFeed-boardFrame {
   position: relative;
   width: 100%;
-  max-width: 600px;
-  height: 400px;
+  max-width: 720px;
+  height: 480px;
 }
 
 .GameBoard {
@@ -139,6 +139,18 @@
   cursor: url(../assets/ducky.png), auto;
   overflow: hidden;
   transition: background-image 0.3s ease;
+}
+
+.GameBoard--custom-cursor {
+  cursor: none;
+}
+
+.CursorAvatar {
+  position: absolute;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  color: var(--primary);
+  display: flex;
 }
 
 .GameBoard--bonus-phase {
@@ -173,6 +185,14 @@
   opacity: 0.3;
   filter: grayscale(1);
   pointer-events: none;
+}
+
+.FeedItem--icon {
+  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4ade80;
 }
 
 .CatchPopup {
@@ -212,6 +232,21 @@
   overflow: auto;
 }
 
+.AvatarArt {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--primary);
+}
+
+.AvatarArt img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
 .StartScreen-field {
   border: 0;
   display: flex;
@@ -220,10 +255,32 @@
   gap: 0.35rem;
 }
 
+.StartScreen-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.StartScreen-info {
+  display: inline-flex;
+  align-items: center;
+  color: var(--secondary);
+  cursor: help;
+}
+
 .StartScreen-option {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.DuckFeed-highScores {
+  width: 100%;
+  max-width: 260px;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  background-color: var(--secondary-dark);
 }
 
 .GameOverScreen-score {
@@ -265,7 +322,13 @@
   align-items: center;
   gap: 0.35rem;
   width: 100%;
-  max-width: 220px;
+}
+
+.HighScoreList h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--secondary);
 }
 
 .HighScoreList-empty {

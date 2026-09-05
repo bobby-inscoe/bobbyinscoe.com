@@ -2,6 +2,8 @@ export type GameStatus = 'idle' | 'playing' | 'bonus-phase' | 'game-over';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
+export type Avatar = 'duck' | 'snail';
+
 export interface Position {
   x: number;
   y: number;

@@ -1,8 +1,11 @@
+import { Snail } from 'lucide-react';
 import type React from 'react';
+import { useState } from 'react';
 
 import { CatchPopup } from '@/features/duck-feed/components/catch-popup';
 import { FeedItem } from '@/features/duck-feed/components/feed-item';
 import type {
+  Avatar,
   FeedItem as FeedItemModel,
   Popup,
   Position,
@@ -10,6 +13,7 @@ import type {
 
 interface GameBoardProps {
   ref: React.Ref<HTMLDivElement>;
+  avatar: Avatar;
   feedItems: FeedItemModel[];
   popups: Popup[];
   isBonusPhase: boolean;
@@ -19,29 +23,37 @@ interface GameBoardProps {
 
 export function GameBoard({
   ref,
+  avatar,
   feedItems,
   popups,
   isBonusPhase,
   onPointerMove,
   onItemActivate,
 }: GameBoardProps): React.JSX.Element {
+  const [cursorPos, setCursorPos] = useState<Position | null>(null);
+  const hasCustomCursor = avatar !== 'duck';
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: this tracks cursor position for the game's proximity mechanic; every feed item is independently reachable and activatable via keyboard focus.
     <div
       ref={ref}
-      className={`GameBoard${isBonusPhase ? ' GameBoard--bonus-phase' : ''}`}
+      className={`GameBoard${isBonusPhase ? ' GameBoard--bonus-phase' : ''}${hasCustomCursor ? ' GameBoard--custom-cursor' : ''}`}
       onMouseMove={(event) => {
         const bounds = event.currentTarget.getBoundingClientRect();
-        onPointerMove({
+        const position = {
           x: event.clientX - bounds.left,
           y: event.clientY - bounds.top,
-        });
+        };
+        onPointerMove(position);
+        if (hasCustomCursor) setCursorPos(position);
       }}
+      onMouseLeave={() => setCursorPos(null)}
     >
       {feedItems.map((item) => (
         <FeedItem
           key={item.id}
           item={item}
+          avatar={avatar}
           muted={isBonusPhase && item.kind === 'normal'}
           onActivate={onItemActivate}
         />
@@ -49,6 +61,14 @@ export function GameBoard({
       {popups.map((popup) => (
         <CatchPopup key={popup.id} popup={popup} />
       ))}
+      {hasCustomCursor && cursorPos && (
+        <span
+          className="CursorAvatar"
+          style={{ left: cursorPos.x, top: cursorPos.y }}
+        >
+          <Snail size={28} strokeWidth={1.75} color="green" />
+        </span>
+      )}
     </div>
   );
 }
