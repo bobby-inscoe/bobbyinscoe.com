@@ -1,10 +1,11 @@
-# .ai, the operating system for this repository
+# AGENTS.md
 
 Nine files. Two of them you edit per project, the rest work unchanged.
 
-This directory holds the shared operating rules for a solo developer and the AI
-agents working in this repository. It is not a prompt library. It is the small
-set of files that keep a human and an agent making the same decisions.
+This file, together with `instructions/`, `docs/`, and `skills/`, holds the
+shared operating rules for a solo developer and the AI agents working in this
+repository. It is not a prompt library. It is the small set of files that keep
+a human and an agent making the same decisions.
 
 ## For agents: read this first
 
@@ -74,25 +75,23 @@ which of those three it is.
 
 ## Adapting this to a new repository
 
-1. Copy `.ai/` in. Nothing in it imports anything, so it works immediately.
+1. Copy `AGENTS.md`, `instructions/`, `docs/`, and `skills/` into the new
+   repository's root. Nothing in them imports anything, so it works
+   immediately.
 2. Fill the `FILL IN` markers in `instructions/engineering.md`. Budget twenty
    minutes. Wrong-but-specific beats vague, because you will correct it the first
    time an agent follows it badly.
 3. Write the first three sections of `docs/architecture.md`. Leave the rest empty
    until the shape is real.
-4. Point your agent at this directory by adding these lines to the root file your
-   harness already reads (`AGENTS.md`, `CLAUDE.md`, or
-   `.github/copilot-instructions.md`):
+4. Leave `docs/decisions.md` empty. It earns its content.
 
-   ```markdown
-   ## Operating rules
-   Read `.ai/README.md` before doing anything in this repository.
-   `.ai/instructions/` overrides your defaults.
-   ```
+Optional: if you also use a tool that doesn't yet read `AGENTS.md` natively
+(for example, a harness that only looks for `CLAUDE.md` or
+`.github/copilot-instructions.md`), point it here with a one-line file:
 
-5. Leave `docs/decisions.md` empty. It earns its content.
-
-Skip step 2 and the system degrades to generic advice. That step is the product.
+```markdown
+See `AGENTS.md`.
+```
 
 ## Maintaining it
 
@@ -107,7 +106,8 @@ missing rule, and the fix goes in the layer that would have prevented it:
 Two rules keep this from rotting into the thing it replaced.
 
 **Prefer deleting.** If a rule has not changed an agent's behavior in months, it
-is decoration. Remove it. This directory should get denser over time, not longer.
+is decoration. Remove it. This set of files should get denser over time, not
+longer.
 
 **Never add a file an agent will not open.** Before creating anything here, name
 the request that would cause an agent to read it. If you cannot, the content
