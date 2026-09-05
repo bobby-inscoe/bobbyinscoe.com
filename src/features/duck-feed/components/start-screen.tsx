@@ -1,9 +1,14 @@
 import { Info, Snail } from 'lucide-react';
 import type React from 'react';
-
 import { AvatarArt } from '@/features/duck-feed/components/avatar-art';
+import { DuckIcon } from '@/features/duck-feed/components/icons/duck-icon';
 import type { Avatar, Difficulty } from '@/features/duck-feed/types/game';
-import { AVATAR_LABELS, AVATARS } from '@/features/duck-feed/utils/avatars';
+import {
+  AVATAR_LABELS,
+  AVATARS,
+  DUCK_COLOR,
+  SNAIL_COLOR,
+} from '@/features/duck-feed/utils/avatars';
 import {
   DIFFICULTIES,
   DIFFICULTY_SETTINGS,
@@ -49,7 +54,21 @@ export function StartScreen({
               checked={avatar === option}
               onChange={() => onAvatarChange(option)}
             />
-            {option === 'snail' && <Snail size={16} strokeWidth={1.75} color="green" />}
+            {option === 'duck' ? (
+              <DuckIcon
+                className="StartScreen-avatarIcon"
+                size={16}
+                strokeWidth={1.75}
+                color={DUCK_COLOR}
+              />
+            ) : (
+              <Snail
+                className="StartScreen-avatarIcon"
+                size={16}
+                strokeWidth={1.75}
+                color={SNAIL_COLOR}
+              />
+            )}
             {AVATAR_LABELS[option]}
           </label>
         ))}

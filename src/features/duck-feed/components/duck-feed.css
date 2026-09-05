@@ -136,7 +136,6 @@
   inset: 0;
   background-color: var(--primary-dark);
   border-radius: 12px;
-  cursor: url(../assets/ducky.png), auto;
   overflow: hidden;
   transition: background-image 0.3s ease;
 }
@@ -149,7 +148,6 @@
   position: absolute;
   pointer-events: none;
   transform: translate(-50%, -50%);
-  color: var(--primary);
   display: flex;
 }
 
@@ -162,7 +160,6 @@
 }
 
 .FeedItem {
-  background: url("../assets/cereal.png") no-repeat center / contain;
   border: 0;
   padding: 0;
   position: absolute;
@@ -188,11 +185,9 @@
 }
 
 .FeedItem--icon {
-  background: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #4ade80;
 }
 
 .CatchPopup {
@@ -241,12 +236,6 @@
   color: var(--primary);
 }
 
-.AvatarArt img {
-  width: 48px;
-  height: 48px;
-  object-fit: contain;
-}
-
 .StartScreen-field {
   border: 0;
   display: flex;
@@ -273,6 +262,10 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.StartScreen-avatarIcon {
+  flex-shrink: 0;
 }
 
 .DuckFeed-highScores {

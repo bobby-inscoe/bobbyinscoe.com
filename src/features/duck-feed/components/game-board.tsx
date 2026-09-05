@@ -4,12 +4,14 @@ import { useState } from 'react';
 
 import { CatchPopup } from '@/features/duck-feed/components/catch-popup';
 import { FeedItem } from '@/features/duck-feed/components/feed-item';
+import { DuckIcon } from '@/features/duck-feed/components/icons/duck-icon';
 import type {
   Avatar,
   FeedItem as FeedItemModel,
   Popup,
   Position,
 } from '@/features/duck-feed/types/game';
+import { DUCK_COLOR, SNAIL_COLOR } from '@/features/duck-feed/utils/avatars';
 
 interface GameBoardProps {
   ref: React.Ref<HTMLDivElement>;
@@ -31,13 +33,12 @@ export function GameBoard({
   onItemActivate,
 }: GameBoardProps): React.JSX.Element {
   const [cursorPos, setCursorPos] = useState<Position | null>(null);
-  const hasCustomCursor = avatar !== 'duck';
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: this tracks cursor position for the game's proximity mechanic; every feed item is independently reachable and activatable via keyboard focus.
     <div
       ref={ref}
-      className={`GameBoard${isBonusPhase ? ' GameBoard--bonus-phase' : ''}${hasCustomCursor ? ' GameBoard--custom-cursor' : ''}`}
+      className={`GameBoard GameBoard--custom-cursor${isBonusPhase ? ' GameBoard--bonus-phase' : ''}`}
       onMouseMove={(event) => {
         const bounds = event.currentTarget.getBoundingClientRect();
         const position = {
@@ -45,7 +46,7 @@ export function GameBoard({
           y: event.clientY - bounds.top,
         };
         onPointerMove(position);
-        if (hasCustomCursor) setCursorPos(position);
+        setCursorPos(position);
       }}
       onMouseLeave={() => setCursorPos(null)}
     >
@@ -61,12 +62,16 @@ export function GameBoard({
       {popups.map((popup) => (
         <CatchPopup key={popup.id} popup={popup} />
       ))}
-      {hasCustomCursor && cursorPos && (
+      {cursorPos && (
         <span
           className="CursorAvatar"
           style={{ left: cursorPos.x, top: cursorPos.y }}
         >
-          <Snail size={28} strokeWidth={1.75} color="green" />
+          {avatar === 'snail' ? (
+            <Snail size={28} strokeWidth={1.75} color={SNAIL_COLOR} />
+          ) : (
+            <DuckIcon size={28} strokeWidth={1.75} color={DUCK_COLOR} />
+          )}
         </span>
       )}
     </div>
