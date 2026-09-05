@@ -1,83 +1,123 @@
-# Repository agent instructions
+# .ai, the operating system for this repository
 
-These instructions apply to every coding agent working in this repository.
+Nine files. Two of them you edit per project, the rest work unchanged.
 
-## Implementation priority
+This directory holds the shared operating rules for a solo developer and the AI
+agents working in this repository. It is not a prompt library. It is the small
+set of files that keep a human and an agent making the same decisions.
 
-You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
+## For agents: read this first
 
-Before writing any code, stop at the first rung that holds:
+**Always load** [`instructions/workflow.md`](instructions/workflow.md) and
+[`instructions/engineering.md`](instructions/engineering.md) before changing
+anything. They override your defaults. Everything else loads on demand.
 
-1. Does this need to be built at all? (YAGNI)
-2. Does it already exist in this codebase? Reuse the helper, util, or pattern that's already here, don't re-write it.
-3. Does the standard library already do this? Use it.
-4. Does a native platform feature cover it? Use it.
-5. Does an already-installed dependency solve it? Use it.
-6. Can this be one line? Make it one line.
-7. Only then: write the minimum code that works.
+`workflow.md` is always in force. `engineering.md` is in force to the extent it
+has been filled in, and its unfilled parts are questions for the developer rather
+than permission to improvise.
 
-The ladder runs after you understand the problem, not instead of it: read the task and the code it touches, trace the real flow end to end, then climb.
+Route the current request by what it needs first:
 
-Bug fix = root cause, not symptom: a report names a symptom. Grep every caller of the function you touch and fix the shared function once — one guard there is a smaller diff than one per caller, and patching only the path the ticket names leaves a sibling caller still broken.
+| The request is | Start with |
+|---|---|
+| Build, change, or add something non-trivial | [`skills/plan/plan.md`](skills/plan/plan.md) |
+| Something is broken, failing, or slow | [`skills/diagnose/diagnose.md`](skills/diagnose/diagnose.md) |
+| Check, critique, or challenge existing work | [`skills/review/review.md`](skills/review/review.md) |
+| This session is ending or getting expensive | [`skills/handoff/handoff.md`](skills/handoff/handoff.md) |
+| A one-line change with an obvious answer | none, just do it, then verify |
 
-Rules:
+Skills compose, in that order. "Fix this bug" starts at `diagnose.md`, and if the
+fix turns out to be medium rigor or above, you plan it before building. Load the
+second skill when you reach it, not up front.
 
-- No abstractions that weren't explicitly requested.
-- No new dependency if it can be avoided.
-- No boilerplate nobody asked for.
-- Deletion over addition. Boring over clever. Fewest files possible.
-- Shortest working diff wins, but only once you understand the problem. The smallest change in the wrong place isn't lazy, it's a second bug.
-- Question complex requests: "Do you actually need X, or does Y cover it?"
-- Pick the edge-case-correct option when two stdlib approaches are the same size, lazy means less code, not the flimsier algorithm.
-- Mark deliberate simplifications that cut a real corner with a known ceiling (global lock, O(n²) scan, naive heuristic) with a `ponytail:` comment naming the ceiling and upgrade path.
+Two reference documents, read when the question calls for them:
 
-Not lazy about: understanding the problem (read it fully and trace the real flow before picking a rung, a small diff you don't understand is just laziness dressed up as efficiency), input validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs (the platform is never the spec ideal, a clock drifts, a sensor reads off), anything explicitly requested. Lazy code without its check is unfinished: non-trivial logic leaves ONE runnable check behind, the smallest thing that fails if the logic breaks (an assert-based demo/self-check or one small test file; no frameworks, no fixtures). Trivial one-liners need no test.
+- [`docs/architecture.md`](docs/architecture.md) tells you where code goes and why.
+- [`docs/decisions.md`](docs/decisions.md) tells you why something is the way it is
+  before you argue it should be different.
 
-(Yes, this file also applies to agents working on this repository itself. Especially to them.)
+If no skill fits, follow `workflow.md` directly. Do not invent a process.
 
-## Project conventions
+If `instructions/engineering.md` still contains `FILL IN` markers, this system was
+never adapted to this project. Say so and ask the developer for the ones your task
+needs, usually the stack and the test command. Do not guess commands or invent
+conventions from what you see in the tree.
 
-- Use kebab-case for all new files and folders.
-- Do not create index barrel files.
-- Name custom hooks with the `use-` prefix.
-- Use absolute `@/` imports for source modules. Do not use relative imports.
-- Do not use `import type`; use normal named imports for types.
-- Write React components as named function declarations, such as `export function UserCard() {}`.
-- Prefer named exports over default exports for components, hooks, and utilities.
-- Use semantic HTML, keyboard-accessible controls, visible focus, labels, and useful alternative text.
-- Keep state close to where it is used and handle loading, empty, and error states explicitly.
-- Format with Prettier using single quotes, two-space indentation, and trailing commas where supported.
-- Prefer flexbox and `gap` for layout. Do not use CSS `margin`; use parent layout, `gap`, and padding.
-- Do not add files to generated output directories such as `build/` or `dist/`.
+## For the developer
 
-## Reliability and scope
+You invoke skills by name in plain language: "plan this", "diagnose this",
+"review this", "hand off". Nothing is a magic command, so this works on any
+agent harness, today and after the tooling changes.
 
-- Validate inputs at trust boundaries and surface actionable errors. Do not swallow failures or add broad catches.
-- Keep diffs focused. Do not refactor unrelated code or add dependencies without a clear need.
-- Update directly related documentation when behavior or developer workflow changes.
-- Run the smallest existing validation command that covers the change and report what ran.
-- Use the pull request template for summary, changes, validation, and relevant notes.
+You never invoke verification. It is a gate in `workflow.md` that the agent owes
+you on every task.
 
-## Sub-agents
+## Why the parts exist
 
-Agents may spawn sub-agents when doing so materially improves the result.
+**Instructions are the constitution.** Always loaded, project-specific, small.
+They encode what is true about *this* repository: standards, boundaries, the
+definition of done. An agent that reads nothing else should still not embarrass
+you.
 
-- Use sub-agents for genuinely independent work, such as parallel research, separate implementation seams, or an independent review.
-- Give each sub-agent a complete task, the relevant scope, and a concrete expected output.
-- Do not delegate work that is faster or clearer to complete directly.
-- Do not have multiple agents edit the same files or shared state at the same time.
-- Review and verify every sub-agent result before incorporating it.
-- Keep the final implementation, decisions, and validation under the primary agent's control.
+**Skills are the verbs.** Loaded on demand, portable across every project. They
+encode *how* to do a kind of work well. They are project-agnostic on purpose, so
+you can copy them into a new repository untouched.
 
-## Portable skills
+**Docs are the memory.** They answer questions that the code cannot: why this
+shape, why not the obvious alternative. They exist because agents confidently
+re-litigate settled decisions when nothing records them.
 
-Portable workflow skills live in [`skills/`](skills/). They are Markdown playbooks, not a promise that every agent host supports the same slash commands, sub-agent APIs, or model orchestration.
+The split is the whole design. Project truth changes per repository and belongs
+in instructions. Technique does not change and belongs in skills. History
+accumulates and belongs in docs. When you are unsure where something goes, ask
+which of those three it is.
 
-- Use `arena` for genuinely non-trivial design or artifact decisions where independent candidates add signal.
-- Use `interrogate` for adversarial review and blind-spot analysis.
-- Use `architect` for significant module or system design.
-- Use `blast-radius` before shipping changes with non-obvious downstream effects.
-- Use `figure-it-out` for large or ambiguous work with no narrower workflow.
-- Apply `unslop` to every agent-authored natural-language response, conversation, explanation, documentation change, and PR text. Do not apply it to source code, identifiers, API names, commands, or required technical syntax.
+## Adapting this to a new repository
 
-If the current host cannot spawn sub-agents or select multiple models, perform the same phases sequentially and state that limitation. Never claim that parallel or multi-model work happened when it did not.
+1. Copy `.ai/` in. Nothing in it imports anything, so it works immediately.
+2. Fill the `FILL IN` markers in `instructions/engineering.md`. Budget twenty
+   minutes. Wrong-but-specific beats vague, because you will correct it the first
+   time an agent follows it badly.
+3. Write the first three sections of `docs/architecture.md`. Leave the rest empty
+   until the shape is real.
+4. Point your agent at this directory by adding these lines to the root file your
+   harness already reads (`AGENTS.md`, `CLAUDE.md`, or
+   `.github/copilot-instructions.md`):
+
+   ```markdown
+   ## Operating rules
+   Read `.ai/README.md` before doing anything in this repository.
+   `.ai/instructions/` overrides your defaults.
+   ```
+
+5. Leave `docs/decisions.md` empty. It earns its content.
+
+Skip step 2 and the system degrades to generic advice. That step is the product.
+
+## Maintaining it
+
+Change a file when an agent gets something wrong twice. Once is noise. Twice is a
+missing rule, and the fix goes in the layer that would have prevented it:
+
+- It did the work wrong → `instructions/engineering.md`
+- It followed a bad process → `instructions/workflow.md`
+- It handled a whole class of work badly → the relevant skill
+- It argued against a settled decision → `docs/decisions.md`
+
+Two rules keep this from rotting into the thing it replaced.
+
+**Prefer deleting.** If a rule has not changed an agent's behavior in months, it
+is decoration. Remove it. This directory should get denser over time, not longer.
+
+**Never add a file an agent will not open.** Before creating anything here, name
+the request that would cause an agent to read it. If you cannot, the content
+belongs inside an existing file or nowhere.
+
+One more guard, because this is how these systems bloat. If a linter, formatter,
+type checker, or test can enforce it, do that instead of writing it down here.
+Prose rules are for judgment calls, and a mechanical rule written as prose is a
+rule an agent can talk itself out of. Every line you move into tooling is a line
+that enforces itself for free.
+
+A realistic steady state is this set of files, slowly getting sharper. If you are
+at thirty, something went wrong.
