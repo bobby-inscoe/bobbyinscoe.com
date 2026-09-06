@@ -1,23 +1,23 @@
-import { Info, Snail } from 'lucide-react';
-import type React from 'react';
-import { AvatarArt } from '@/features/duck-feed/components/avatar-art';
-import { DuckIcon } from '@/features/duck-feed/components/icons/duck-icon';
-import type { Avatar, Difficulty } from '@/features/duck-feed/types/game';
+import { Info, Snail } from "lucide-react";
+import type React from "react";
+import { AvatarArt } from "@/features/duck-feed/components/avatar-art";
+import { DuckIcon } from "@/features/duck-feed/components/icons/duck-icon";
+import type { Avatar, Difficulty } from "@/features/duck-feed/types/game";
 import {
   AVATAR_LABELS,
   AVATARS,
   DUCK_COLOR,
   SNAIL_COLOR,
-} from '@/features/duck-feed/utils/avatars';
+} from "@/features/duck-feed/utils/avatars";
 import {
   DIFFICULTIES,
   DIFFICULTY_SETTINGS,
   ROUND_DURATIONS_SECONDS,
   type RoundDurationSeconds,
-} from '@/features/duck-feed/utils/difficulty';
+} from "@/features/duck-feed/utils/difficulty";
 
 const DIFFICULTY_EXPLANATION =
-  'Higher difficulty shrinks how close you need to get before the feed flees, makes it wait longer before it can flee again, and shortens your combo window. The catch radius also keeps shrinking as the round goes on.';
+  "Higher difficulty shrinks how close you need to get before the feed flees, makes it wait longer before it can flee again, and shortens your combo window. The catch radius also keeps shrinking as the round goes on.";
 
 interface StartScreenProps {
   avatar: Avatar;
@@ -54,8 +54,9 @@ export function StartScreen({
               checked={avatar === option}
               onChange={() => onAvatarChange(option)}
             />
-            {option === 'duck' ? (
+            {option === "duck" ? (
               <DuckIcon
+                useOriginalArt
                 className="StartScreen-avatarIcon"
                 size={16}
                 strokeWidth={1.75}
@@ -119,7 +120,7 @@ export function StartScreen({
         onClick={onStart}
         disabled={!canStart}
       >
-        {canStart ? 'Start Game' : 'Measuring board…'}
+        {canStart ? "Start Game" : "Measuring board…"}
       </button>
     </div>
   );

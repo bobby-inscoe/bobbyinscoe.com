@@ -26,7 +26,7 @@ export function AvatarArt({ avatar }: AvatarArtProps): React.JSX.Element {
 
   return (
     <div className="AvatarArt" aria-hidden="true">
-      <DuckIcon size={48} strokeWidth={1.5} color={DUCK_COLOR} />
+      <DuckIcon useOriginalArt size={48} strokeWidth={1.5} color={DUCK_COLOR} />
       <WheatIcon size={40} strokeWidth={1.5} color={WHEAT_COLOR} />
     </div>
   );
