@@ -70,7 +70,12 @@ export function GameBoard({
           {avatar === 'snail' ? (
             <Snail size={28} strokeWidth={1.75} color={SNAIL_COLOR} />
           ) : (
-            <DuckIcon useOriginalArt size={28} strokeWidth={1.75} color={DUCK_COLOR} />
+            <DuckIcon
+              useOriginalArt
+              size={28}
+              strokeWidth={1.75}
+              color={DUCK_COLOR}
+            />
           )}
         </span>
       )}
