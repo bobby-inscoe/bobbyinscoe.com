@@ -1,6 +1,6 @@
 import { type AnyRoute, createRoute } from '@tanstack/react-router';
 
-import { DuckFeed } from '@/features/projects/features/duck-feed/components/duck-feed';
+import { DuckFeedPage } from '@/features/projects/features/duck-feed/components/duck-feed-page';
 
 export function createDuckFeedRoute<TParent extends AnyRoute>(
   parentRoute: TParent,
@@ -8,6 +8,6 @@ export function createDuckFeedRoute<TParent extends AnyRoute>(
   return createRoute({
     getParentRoute: () => parentRoute,
     path: 'duck-feed',
-    component: DuckFeed,
+    component: DuckFeedPage,
   });
 }

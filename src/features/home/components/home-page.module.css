@@ -11,8 +11,3 @@
   list-style: none;
   padding: 0;
 }
-
-.link {
-  color: var(--site-mark);
-  text-decoration: underline;
-}

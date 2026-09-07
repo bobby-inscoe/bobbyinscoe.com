@@ -1,0 +1,58 @@
+/*
+ * Structural only. The editorial typography pass (phase 4) is what turns
+ * this into the identity layer; here it is layout, the status node, and the
+ * plate/canvas surface treatment using tokens already in place.
+ */
+
+.entry {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--site-space-sm) var(--site-space-md);
+  padding: var(--site-space-md) 0;
+  border-bottom: 1px solid var(--site-line-faint);
+}
+
+.node {
+  width: 8px;
+  height: 8px;
+  align-self: center;
+  border-radius: var(--site-radius-round);
+  background: var(--site-mark);
+}
+
+.node[data-hollow="true"] {
+  border: 1px solid var(--site-line-strong);
+  background: transparent;
+}
+
+.index {
+  color: var(--site-mark-muted);
+}
+
+.body {
+  display: grid;
+  min-width: 0;
+  gap: var(--site-space-xs);
+}
+
+.titleLink {
+  color: var(--site-mark);
+  text-decoration: underline;
+}
+
+.meta {
+  color: var(--site-mark-muted);
+}
+
+.blurb {
+  color: var(--site-mark-secondary);
+}
+
+.entry[data-presentation="plate"],
+.entry[data-presentation="canvas"] {
+  border: 1px solid var(--site-line);
+  border-radius: var(--site-radius-control);
+  padding: var(--site-space-lg);
+  background: var(--site-raised);
+}

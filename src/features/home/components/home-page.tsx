@@ -1,12 +1,14 @@
-import { Link } from '@tanstack/react-router';
 import type React from 'react';
 
 import classes from '@/features/home/components/home-page.module.css';
+import { ProjectEntry } from '@/shared/patterns/project-entry';
 import { PROJECTS } from '@/shared/projects/registry';
 
 /*
- * A bare list, on purpose. The collection page is phase 4's identity layer
- * and phase 3's ProjectEntry; nothing here is the design.
+ * ThreadSpine (phase 5) will collect each entry's anchorRef to measure the
+ * thread's path from the DOM. Until it exists there is nothing to measure
+ * into, so every entry passes null; the prop is required by ProjectEntry's
+ * signature regardless of whether a consumer is mounted yet.
  */
 export function HomePage(): React.JSX.Element {
   return (
@@ -15,19 +17,16 @@ export function HomePage(): React.JSX.Element {
       {PROJECTS.length === 0 ? (
         <p>No projects yet.</p>
       ) : (
-        <ul className={classes.list}>
-          {PROJECTS.map((project) =>
-            project.route === null ? (
-              <li key={project.id}>{project.title}</li>
-            ) : (
-              <li key={project.id}>
-                <Link className={classes.link} to={project.route}>
-                  {project.title}
-                </Link>
-              </li>
-            ),
-          )}
-        </ul>
+        <ol className={classes.list}>
+          {PROJECTS.map((project, i) => (
+            <ProjectEntry
+              anchorRef={null}
+              index={i + 1}
+              key={project.id}
+              project={project}
+            />
+          ))}
+        </ol>
       )}
     </div>
   );
