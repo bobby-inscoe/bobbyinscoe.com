@@ -7,6 +7,8 @@ import { ProjectIndexRow } from '@/shared/patterns/project-index-row';
 import { byTag, byYear } from '@/shared/projects/queries';
 import { PROJECTS } from '@/shared/projects/registry';
 import type { ProjectRecord } from '@/shared/projects/types';
+import { Prose } from '@/shared/ui/prose';
+import { Rule } from '@/shared/ui/rule';
 
 function uniqueSorted(values: readonly string[]): string[] {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b));
@@ -46,7 +48,8 @@ export function ProjectsIndex(): React.JSX.Element {
 
   return (
     <div className={classes.page}>
-      <h1>Projects</h1>
+      <h1 className={classes.title}>Projects</h1>
+      <Rule />
       <div className={classes.filters}>
         <Select
           clearable
@@ -74,7 +77,9 @@ export function ProjectsIndex(): React.JSX.Element {
         />
       </div>
       {filtered.length === 0 ? (
-        <p>No projects match these filters.</p>
+        <Prose>
+          <p>No projects match these filters.</p>
+        </Prose>
       ) : (
         <div className={classes.scroller}>
           <table className={classes.table}>

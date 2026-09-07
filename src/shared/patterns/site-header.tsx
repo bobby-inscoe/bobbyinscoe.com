@@ -6,7 +6,7 @@ import classes from '@/shared/patterns/site-header.module.css';
 export function SiteHeader(): React.JSX.Element {
   return (
     <header className={classes.header}>
-      <Link className={classes.link} to="/">
+      <Link className={classes.wordmark} to="/">
         Bobby Inscoe
       </Link>
       <nav aria-label="Primary" className={classes.nav}>

@@ -21,7 +21,14 @@ export function AppShell(): React.JSX.Element {
         <a className={classes.skipLink} href={`#${MAIN_ID}`}>
           Skip to content
         </a>
-        <div aria-hidden="true" className={classes.ambient} />
+        <div aria-hidden="true" className={classes.ambient}>
+          <div className={classes.texture} />
+          <div className={classes.mote} data-mote="1" />
+          <div className={classes.mote} data-mote="2" />
+          <div className={classes.mote} data-mote="3" />
+          <div className={classes.mote} data-mote="4" />
+          <div className={classes.mote} data-mote="5" />
+        </div>
         <SiteHeader />
         <main className={classes.main} id={MAIN_ID}>
           <Outlet />

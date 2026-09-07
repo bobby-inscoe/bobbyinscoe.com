@@ -3,6 +3,7 @@ import type React from 'react';
 
 import classes from '@/shared/patterns/project-index-row.module.css';
 import type { ProjectRecord } from '@/shared/projects/types';
+import { Meta } from '@/shared/ui/meta';
 
 export interface ProjectIndexRowProps {
   project: ProjectRecord;
@@ -30,9 +31,11 @@ export function ProjectIndexRow({
         )}
       </td>
       <td className={classes.tabular}>{project.year}</td>
-      <td>{project.kind}</td>
-      <td>{project.tags.join(', ')}</td>
-      <td>{isInProgress ? 'In progress' : 'Live'}</td>
+      <td className={classes.cell}>{project.kind}</td>
+      <td className={classes.cell}>{project.tags.join(', ')}</td>
+      <td>
+        <Meta>{isInProgress ? 'In progress' : 'Live'}</Meta>
+      </td>
     </tr>
   );
 }

@@ -1,9 +1,17 @@
 .header {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: var(--site-space-lg);
-  padding: var(--site-space-md) var(--site-space-lg);
+  padding: var(--site-space-md) var(--site-frame-inset);
   border-bottom: 1px solid var(--site-line-faint);
+}
+
+.wordmark {
+  font: var(--site-type-ui);
+  letter-spacing: var(--site-track-heading);
+  color: var(--site-mark);
+  text-decoration: none;
 }
 
 .nav {
@@ -13,10 +21,17 @@
 
 /* Links in running text are underlined; colour alone never marks a link. */
 .link {
-  color: var(--site-mark);
+  font: var(--site-type-ui-small);
+  color: var(--site-mark-secondary);
   text-decoration: underline;
+  text-underline-offset: 0.18em;
 }
 
+.wordmark[data-status="active"],
 .link[data-status="active"] {
   color: var(--site-accent);
+}
+
+.link:hover {
+  color: var(--site-mark);
 }

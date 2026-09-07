@@ -1,0 +1,21 @@
+/*
+ * `font:` is a shorthand and resets every other font-* longhand, so it is
+ * declared first in every rule here. See tokens.css.
+ */
+
+.prose {
+  display: grid;
+  gap: var(--site-space-md);
+  max-width: var(--site-measure);
+  font: var(--site-type-read);
+  color: var(--site-mark);
+  font-optical-sizing: auto;
+  text-wrap: pretty;
+}
+
+/* Links in running text are underlined; colour alone never marks a link. */
+.prose a {
+  color: var(--site-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}

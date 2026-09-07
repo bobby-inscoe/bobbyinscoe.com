@@ -3,6 +3,9 @@ import type React from 'react';
 
 import classes from '@/shared/patterns/project-entry.module.css';
 import type { ProjectRecord } from '@/shared/projects/types';
+import { Meta } from '@/shared/ui/meta';
+import { Plate } from '@/shared/ui/plate';
+import { Prose } from '@/shared/ui/prose';
 
 export interface ProjectEntryProps {
   project: ProjectRecord;
@@ -18,6 +21,31 @@ export function ProjectEntry({
   anchorRef,
 }: ProjectEntryProps): React.JSX.Element {
   const isInProgress = project.status === 'in-progress';
+  const isPlated = project.presentation !== 'text';
+
+  const content = (
+    <div className={classes.inner}>
+      <span className={classes.index}>{String(index).padStart(2, '0')}</span>
+      <div className={classes.body}>
+        <h3 className={classes.title}>
+          {project.route ? (
+            <Link className={classes.titleLink} to={project.route}>
+              {project.title}
+            </Link>
+          ) : (
+            project.title
+          )}
+        </h3>
+        <Meta>
+          {project.kind} &middot; {project.year} &middot;{' '}
+          {isInProgress ? 'In progress' : 'Live'}
+        </Meta>
+        <Prose>
+          <p>{project.blurb}</p>
+        </Prose>
+      </div>
+    </div>
+  );
 
   return (
     <li
@@ -30,23 +58,7 @@ export function ProjectEntry({
         className={classes.node}
         data-hollow={isInProgress}
       />
-      <span className={classes.index}>{String(index).padStart(2, '0')}</span>
-      <div className={classes.body}>
-        <h2 className={classes.title}>
-          {project.route ? (
-            <Link className={classes.titleLink} to={project.route}>
-              {project.title}
-            </Link>
-          ) : (
-            project.title
-          )}
-        </h2>
-        <p className={classes.meta}>
-          {project.kind} &middot; {project.year}
-          {isInProgress ? <> &middot; In progress</> : null}
-        </p>
-        <p className={classes.blurb}>{project.blurb}</p>
-      </div>
+      {isPlated ? <Plate>{content}</Plate> : content}
     </li>
   );
 }

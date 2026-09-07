@@ -45,7 +45,10 @@ function parseDeclarations(block: string): Map<string, string> {
   let match: RegExpExecArray | null;
   // biome-ignore lint/suspicious/noAssignInExpressions: standard regex-exec-in-loop idiom
   while ((match = re.exec(block))) {
-    declarations.set(match[1], match[2].trim());
+    // Multi-line values (shadow-overlay) carry the block's indentation, which
+    // differs between the media block and the attribute block. Collapse it so
+    // the two dark declarations compare on their content.
+    declarations.set(match[1], match[2].trim().replace(/\s+/g, ' '));
   }
   return declarations;
 }
@@ -64,7 +67,13 @@ const light = parseDeclarations(lightBlock);
 const darkMedia = parseDeclarations(darkMediaBlock);
 const darkAttr = parseDeclarations(darkAttrBlock);
 
-const COLOR_TOKENS = [
+/*
+ * Every token whose value changes with the colour scheme, so every one of
+ * them must be declared in all three blocks. Not all are colours: grain is a
+ * number and shadow-overlay is a shadow, and both differ per scheme, which
+ * is the property this list is about.
+ */
+const SCHEME_TOKENS = [
   'ground',
   'raised',
   'surface',
@@ -85,22 +94,23 @@ const COLOR_TOKENS = [
   'warning',
   'success',
   'grain',
+  'shadow-overlay',
 ];
 
 describe('tokens declared in every scheme', () => {
-  it('declares every colour token in the bare :root', () => {
-    for (const name of COLOR_TOKENS) {
+  it('declares every scheme-dependent token in the bare :root', () => {
+    for (const name of SCHEME_TOKENS) {
       expect(light.has(name), `--site-${name} missing from :root`).toBe(true);
     }
   });
 
-  it('redeclares the identical set of colour tokens for prefers-color-scheme: dark', () => {
-    const lightNames = new Set(COLOR_TOKENS);
+  it('redeclares the identical set of scheme-dependent tokens for prefers-color-scheme: dark', () => {
+    const lightNames = new Set(SCHEME_TOKENS);
     expect(new Set(darkMedia.keys())).toEqual(lightNames);
   });
 
-  it('redeclares the identical set of colour tokens for [data-mantine-color-scheme="dark"]', () => {
-    const lightNames = new Set(COLOR_TOKENS);
+  it('redeclares the identical set of scheme-dependent tokens for [data-mantine-color-scheme="dark"]', () => {
+    const lightNames = new Set(SCHEME_TOKENS);
     expect(new Set(darkAttr.keys())).toEqual(lightNames);
   });
 

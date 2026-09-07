@@ -1,6 +1,7 @@
 /*
- * Structural only. The identity layer (typography, texture, atmosphere) is
- * phase 4; this file does layout and the skip link and nothing else.
+ * Layout, the skip link, and the ambient layer: the two ground textures and
+ * the depth-of-field motes. Everything in the ambient layer is decoration
+ * and is marked aria-hidden in the markup.
  */
 
 .shell {
@@ -10,15 +11,134 @@
 }
 
 /*
- * The ambient layer. Phase 4 gives it the two ground textures and the
- * depth-of-field elements; here it is the fixed element they attach to,
- * behind everything at --site-layer-ambient.
+ * One fixed layer behind everything, never applied per card or per surface.
  */
 .ambient {
   position: fixed;
   inset: 0;
   z-index: var(--site-layer-ambient);
   pointer-events: none;
+  overflow: hidden;
+}
+
+/*
+ * The two grounds are different materials, so they take different textures.
+ * Both are one feTurbulence field with stitchTiles, tiled at 140px, which is
+ * small enough that the repeat cannot be located.
+ *
+ * Light is a woven tooth: baseFrequency is anisotropic, fast across x and
+ * slow along y, so the structure elongates vertically. That is the warp, and
+ * the thread in phase 5 runs with it rather than across it.
+ *
+ * Dark is a quiet mottle, isotropic and coarser: what shows through ink is
+ * what is beneath it, so there is no tooth.
+ *
+ * Opacity comes from --site-grain, which is 0.04 light and 0.055 dark. Both
+ * figures are load-bearing: every contrast number in the palette was
+ * measured with them composited.
+ */
+.texture {
+  position: absolute;
+  inset: 0;
+  opacity: var(--site-grain);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='w' x='0' y='0' width='140' height='140' filterUnits='userSpaceOnUse'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9 0.06' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23w)'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mantine-color-scheme="light"]) .texture {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='m' x='0' y='0' width='140' height='140' filterUnits='userSpaceOnUse'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23m)'/%3E%3C/svg%3E");
+  }
+}
+
+:root[data-mantine-color-scheme="dark"] .texture {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='m' x='0' y='0' width='140' height='140' filterUnits='userSpaceOnUse'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23m)'/%3E%3C/svg%3E");
+}
+
+/*
+ * Depth of field: dust in a shaft of light, not a starfield. Five elements,
+ * each blurred by at least its own diameter so nothing resolves to a dot, at
+ * a few percent opacity. Three drift rates, which is the depth cue; each
+ * travels between 12 and 22 pixels per ten seconds.
+ */
+.mote {
+  position: absolute;
+  border-radius: var(--site-radius-round);
+  background: radial-gradient(
+    circle at 50% 50%,
+    var(--site-mark) 0%,
+    transparent 70%
+  );
+  animation: drift var(--mote-period) linear infinite alternate;
+}
+
+@keyframes drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(var(--mote-dx), var(--mote-dy), 0);
+  }
+}
+
+.mote[data-mote="1"] {
+  top: 12%;
+  left: 8%;
+  width: 180px;
+  height: 180px;
+  filter: blur(200px);
+  opacity: 0.05;
+  --mote-period: 120s;
+  --mote-dx: 240px;
+  --mote-dy: -90px;
+}
+
+.mote[data-mote="2"] {
+  top: 46%;
+  left: 62%;
+  width: 260px;
+  height: 260px;
+  filter: blur(280px);
+  opacity: 0.04;
+  --mote-period: 190s;
+  --mote-dx: -280px;
+  --mote-dy: 110px;
+}
+
+.mote[data-mote="3"] {
+  top: 74%;
+  left: 22%;
+  width: 120px;
+  height: 120px;
+  filter: blur(140px);
+  opacity: 0.06;
+  --mote-period: 120s;
+  --mote-dx: 180px;
+  --mote-dy: -190px;
+}
+
+.mote[data-mote="4"] {
+  top: 4%;
+  left: 68%;
+  width: 340px;
+  height: 340px;
+  filter: blur(360px);
+  opacity: 0.03;
+  --mote-period: 280s;
+  --mote-dx: -200px;
+  --mote-dy: 270px;
+}
+
+.mote[data-mote="5"] {
+  top: 58%;
+  left: 4%;
+  width: 220px;
+  height: 220px;
+  filter: blur(240px);
+  opacity: 0.04;
+  --mote-period: 190s;
+  --mote-dx: 300px;
+  --mote-dy: 60px;
 }
 
 /*
@@ -35,6 +155,7 @@
   border-radius: var(--site-radius-control);
   background: var(--site-surface);
   color: var(--site-mark);
+  font: var(--site-type-ui);
   transform: translateY(calc(-100% - var(--site-space-lg) * 2));
   transition: transform var(--site-duration-quick) var(--site-ease-enter);
 }
@@ -46,12 +167,31 @@
 .main {
   display: grid;
   align-content: start;
-  gap: var(--site-space-xl);
-  padding: var(--site-space-xl) var(--site-space-lg);
+  width: 100%;
+  gap: var(--site-space-3xl);
+  padding: var(--site-space-4xl) var(--site-frame-inset) var(--site-space-5xl);
+}
+
+@media (max-width: 640px) {
+  .main {
+    gap: var(--site-space-2xl);
+    padding: var(--site-space-2xl) var(--site-frame-inset) var(--site-space-3xl);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .skipLink {
     transition-duration: var(--site-duration-instant);
+  }
+
+  /* The layer still reads as depth; the drift is what goes. */
+  .mote {
+    animation: none;
+  }
+}
+
+@media print {
+  .ambient {
+    display: none;
   }
 }
