@@ -1,8 +1,7 @@
 import type React from 'react';
 import { useState } from 'react';
 
-import '@/features/projects/features/duck-feed/components/duck-feed.css';
-
+import classes from '@/features/projects/features/duck-feed/components/duck-feed.module.css';
 import { GameBoard } from '@/features/projects/features/duck-feed/components/game-board';
 import { GameHud } from '@/features/projects/features/duck-feed/components/game-hud';
 import { GameOverScreen } from '@/features/projects/features/duck-feed/components/game-over-screen';
@@ -40,8 +39,8 @@ export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
   });
 
   return (
-    <div className={`${className ?? ''} DuckFeed`}>
-      <h1>Feed the Duck!</h1>
+    <div className={[classes.duckFeed, className].filter(Boolean).join(' ')}>
+      <h1 className={classes.title}>Feed the Duck!</h1>
       {game.status !== 'idle' && (
         <GameHud
           score={game.score}
@@ -54,7 +53,7 @@ export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
           bestScore={highScores.scores[0] ?? null}
         />
       )}
-      <div className="DuckFeed-boardFrame">
+      <div className={classes.boardFrame}>
         <GameBoard
           ref={boardRef}
           avatar={avatar}
@@ -86,7 +85,7 @@ export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
         )}
       </div>
       {game.status === 'idle' && (
-        <div className="DuckFeed-highScores">
+        <div className={classes.highScores}>
           <HighScoreList scores={highScores.scores} />
         </div>
       )}

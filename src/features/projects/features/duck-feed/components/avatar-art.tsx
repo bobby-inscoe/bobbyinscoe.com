@@ -1,14 +1,14 @@
 import { Leaf, Snail } from 'lucide-react';
 import type React from 'react';
+import classes from '@/features/projects/features/duck-feed/components/avatar-art.module.css';
+import {
+  LEAF_ICON_COLOR,
+  SNAIL_ICON_COLOR,
+  WHEAT_ICON_COLOR,
+} from '@/features/projects/features/duck-feed/components/avatar-colors';
 import { DuckIcon } from '@/features/projects/features/duck-feed/components/icons/duck-icon';
 import { WheatIcon } from '@/features/projects/features/duck-feed/components/icons/wheat-icon';
 import type { Avatar } from '@/features/projects/features/duck-feed/types/game';
-import {
-  DUCK_COLOR,
-  LEAF_COLOR,
-  SNAIL_COLOR,
-  WHEAT_COLOR,
-} from '@/features/projects/features/duck-feed/utils/avatars';
 
 interface AvatarArtProps {
   avatar: Avatar;
@@ -17,17 +17,17 @@ interface AvatarArtProps {
 export function AvatarArt({ avatar }: AvatarArtProps): React.JSX.Element {
   if (avatar === 'snail') {
     return (
-      <div className="AvatarArt" aria-hidden="true">
-        <Snail size={48} strokeWidth={1.5} color={SNAIL_COLOR} />
-        <Leaf size={40} strokeWidth={1.5} color={LEAF_COLOR} />
+      <div className={classes.avatarArt} aria-hidden="true">
+        <Snail size={48} strokeWidth={1.5} color={SNAIL_ICON_COLOR} />
+        <Leaf size={40} strokeWidth={1.5} color={LEAF_ICON_COLOR} />
       </div>
     );
   }
 
   return (
-    <div className="AvatarArt" aria-hidden="true">
-      <DuckIcon useOriginalArt size={48} strokeWidth={1.5} color={DUCK_COLOR} />
-      <WheatIcon size={40} strokeWidth={1.5} color={WHEAT_COLOR} />
+    <div className={classes.avatarArt} aria-hidden="true">
+      <DuckIcon useOriginalArt size={48} strokeWidth={1.5} />
+      <WheatIcon size={40} strokeWidth={1.5} color={WHEAT_ICON_COLOR} />
     </div>
   );
 }

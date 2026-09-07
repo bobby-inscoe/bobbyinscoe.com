@@ -1,15 +1,16 @@
 import { Leaf } from 'lucide-react';
 import type React from 'react';
 
+import {
+  LEAF_ICON_COLOR,
+  WHEAT_ICON_COLOR,
+} from '@/features/projects/features/duck-feed/components/avatar-colors';
+import classes from '@/features/projects/features/duck-feed/components/feed-item.module.css';
 import { WheatIcon } from '@/features/projects/features/duck-feed/components/icons/wheat-icon';
 import type {
   Avatar,
   FeedItem as FeedItemModel,
 } from '@/features/projects/features/duck-feed/types/game';
-import {
-  LEAF_COLOR,
-  WHEAT_COLOR,
-} from '@/features/projects/features/duck-feed/utils/avatars';
 import { FEED_ITEM_SIZE_PX } from '@/features/projects/features/duck-feed/utils/constants';
 
 interface FeedItemProps {
@@ -41,7 +42,9 @@ export function FeedItem({
       type="button"
       aria-label={ariaLabel(item.kind, avatar)}
       tabIndex={muted ? -1 : 0}
-      className={`FeedItem FeedItem--icon FeedItem--${item.kind}${item.kind === 'crumb' ? '' : ' shake'}${muted ? ' FeedItem--muted' : ''}`}
+      className={classes.feedItem}
+      data-kind={item.kind}
+      data-muted={muted}
       style={{
         left: item.position.x,
         top: item.position.y,
@@ -51,9 +54,9 @@ export function FeedItem({
       onFocus={() => onActivate(item.id)}
     >
       {avatar === 'snail' ? (
-        <Leaf size={32} strokeWidth={1.75} color={LEAF_COLOR} />
+        <Leaf size={32} strokeWidth={1.75} color={LEAF_ICON_COLOR} />
       ) : (
-        <WheatIcon size={32} strokeWidth={1.75} color={WHEAT_COLOR} />
+        <WheatIcon size={32} strokeWidth={1.75} color={WHEAT_ICON_COLOR} />
       )}
     </button>
   );

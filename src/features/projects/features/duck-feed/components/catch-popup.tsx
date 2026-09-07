@@ -1,5 +1,6 @@
 import type React from 'react';
 
+import classes from '@/features/projects/features/duck-feed/components/catch-popup.module.css';
 import type { Popup } from '@/features/projects/features/duck-feed/types/game';
 import { CRUMB_TIME_BONUS_MS } from '@/features/projects/features/duck-feed/utils/scoring';
 
@@ -17,7 +18,8 @@ interface CatchPopupProps {
 export function CatchPopup({ popup }: CatchPopupProps): React.JSX.Element {
   return (
     <span
-      className={`CatchPopup CatchPopup--${popup.kind}`}
+      className={classes.popup}
+      data-kind={popup.kind}
       style={{ left: popup.position.x, top: popup.position.y }}
     >
       {LABEL_BY_KIND[popup.kind]}
