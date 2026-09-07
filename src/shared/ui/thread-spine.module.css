@@ -1,0 +1,202 @@
+/*
+ * The thread. Three layers carrying the same path: a blurred glow, a blurred
+ * bloom that only the pointer lights, and the strand itself. Each layer is a
+ * separate element with one blur on it, which is what "a duplicated path with
+ * a blur, on its own layer" asks for and what "not a filter chain" rules out.
+ *
+ * The four illumination properties are registered so they can be transitioned.
+ * An unregistered custom property is a token stream and does not interpolate,
+ * so without @property the light would jump between inputs. Registering them
+ * is also what lets the whole animation live in CSS: JavaScript only writes a
+ * target when an input event arrives, and never on a frame timer.
+ *
+ * --thread-focus-y and --thread-bloom-y are document-space, as the spec
+ * defines them. --thread-origin-y is the layer's own document-space top, so
+ * every consumer here subtracts it to get back to local pixels.
+ */
+
+@property --thread-focus-y {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --thread-focus-strength {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --thread-bloom-y {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --thread-bloom-opacity {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --thread-origin-y {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+/*
+ * The layer reaches --thread-inset to the left of the entries, into the frame
+ * inset, which floors at --site-space-lg at every width. That is where the
+ * band's left half goes; the right half stops short of the entry text. The
+ * fallback matches the value thread-spine.tsx writes, and exists only for the
+ * frame before the layout effect runs.
+ *
+ * At --site-layer-base with the entry list at --site-layer-raised: the thread
+ * is in the cloth and the ink is on top of it. It stays well under the ambient
+ * grain at 100, which is not this layer and must not become it.
+ */
+.spine {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: calc(-1 * var(--thread-inset, var(--site-space-lg)));
+  z-index: var(--site-layer-base);
+  pointer-events: none;
+
+  /*
+   * The strand passes through the collection rather than beginning and ending
+   * at it, so both ends fade instead of stopping on a cut edge. The mask is on
+   * the layer root, so it composes over the glow and bloom masks too.
+   */
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    var(--site-mark) var(--site-space-2xl),
+    var(--site-mark) calc(100% - var(--site-space-2xl)),
+    transparent 100%
+  );
+  mask-repeat: no-repeat;
+
+  /* how far the light reaches along the strand, and the tighter pointer bloom */
+  --thread-light-w: 200px;
+  --thread-light-h: 280px;
+  --thread-bloom-w: 90px;
+  --thread-bloom-h: 150px;
+  animation: thread-drift 52s var(--site-ease-enter) infinite alternate;
+  transition:
+    --thread-focus-y var(--site-duration-base) var(--site-ease-enter),
+    --thread-focus-strength var(--site-duration-base) var(--site-ease-enter),
+    --thread-bloom-y var(--site-duration-quick) var(--site-ease-enter),
+    --thread-bloom-opacity var(--site-duration-quick) var(--site-ease-enter);
+}
+
+/*
+ * Ambient drift: a few pixels over the better part of a minute, uncoupled from
+ * scroll. thread-spine.tsx hands the generator a band already reduced by twice
+ * this, so the curve plus the drift equals the stated total travel instead of
+ * exceeding it.
+ */
+@keyframes thread-drift {
+  from {
+    transform: translate3d(calc(-1 * var(--thread-drift, 2px)), 0, 0);
+  }
+
+  to {
+    transform: translate3d(var(--thread-drift, 2px), 0, 0);
+  }
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+}
+
+/*
+ * No viewBox, so one SVG user unit is one CSS pixel and the generator can work
+ * in the same space the DOM was measured in. overflow is visible because the
+ * band's left half is drawn at negative x relative to the entries; the layer
+ * itself already extends far enough left that nothing escapes the masks.
+ */
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.strand {
+  fill: none;
+  stroke: var(--site-line);
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+.glowLayer {
+  opacity: var(--thread-focus-strength);
+  mask-image: radial-gradient(
+    var(--thread-light-w) var(--thread-light-h) at var(--thread-axis-x)
+      calc(var(--thread-focus-y) - var(--thread-origin-y)),
+    var(--site-mark) 0%,
+    transparent 100%
+  );
+  mask-repeat: no-repeat;
+}
+
+.glowLayer .strand {
+  stroke: var(--site-accent);
+  stroke-width: 2;
+  filter: blur(6px);
+}
+
+.bloomLayer {
+  opacity: var(--thread-bloom-opacity);
+  mask-image: radial-gradient(
+    var(--thread-bloom-w) var(--thread-bloom-h) at var(--thread-axis-x)
+      calc(var(--thread-bloom-y) - var(--thread-origin-y)),
+    var(--site-mark) 0%,
+    transparent 100%
+  );
+  mask-repeat: no-repeat;
+}
+
+.bloomLayer .strand {
+  stroke: var(--site-accent-strong);
+  stroke-width: 3;
+  filter: blur(10px);
+}
+
+/*
+ * The halo behind an entry's status node. It reads as the thread being joined
+ * to the entry, never as a second status indicator: --site-line only, never
+ * the state or accent colour, and the two states differ by an opacity step
+ * small enough that the halos alone cannot be sorted into live and in
+ * progress. The dot in front of it is what states the status, in the DOM,
+ * where it survives this element being deleted.
+ */
+.halo {
+  fill: none;
+  stroke: var(--site-line);
+  stroke-width: 1;
+  opacity: 0.42;
+}
+
+.halo[data-filled="true"] {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spine {
+    animation: none;
+    transition:
+      --thread-focus-strength var(--site-duration-instant) linear,
+      --thread-bloom-opacity var(--site-duration-instant) linear;
+  }
+}
+
+@media print {
+  .spine {
+    display: none;
+  }
+}

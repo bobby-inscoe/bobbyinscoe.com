@@ -376,3 +376,49 @@ describe('colour literals outside src must be palette values', () => {
     },
   );
 });
+
+/*
+ * The no-margin rule, as a test rather than a grep a human remembers to run.
+ * Tier two exists to turn the rules in the spec into build failures, and this
+ * one was specified and never written: it held only because someone looked.
+ *
+ * Margin is the most reflexive property in CSS, so it is the rule most likely
+ * to be broken by reflex rather than by decision, and phase 6 is motion, which
+ * touches layout. Shorthand and every longhand, physical and logical.
+ * margin-inline: auto is not exempt: docs/decisions.md ruled before phase 0
+ * that justify-self and justify-content already do that work, so the rule
+ * needed no centring exemption.
+ *
+ * Margins emitted inside Mantine's own stylesheets are third-party output and
+ * out of scope, which is also why this scans src/ and not node_modules.
+ */
+const MARGIN_DECLARATION =
+  /(^|[\s;{])margin(-(top|right|bottom|left|inline|block)(-(start|end))?)?\s*:/;
+
+describe('no margin outside reset.css', () => {
+  const styleRoot = join(repoRoot, 'src');
+  const resetPath = join(styleRoot, 'shared', 'theme', 'reset.css');
+  const stylesheets = walk(styleRoot, ['.css']).filter(
+    (file) => file !== resetPath,
+  );
+
+  it('finds stylesheets to scan', () => {
+    expect(stylesheets.length).toBeGreaterThan(10);
+  });
+
+  for (const file of stylesheets) {
+    it(`src${sep}${relative(styleRoot, file)}`, () => {
+      const offending = readFileSync(file, 'utf-8')
+        .split('\n')
+        .map((line, i) => [i + 1, line] as const)
+        .filter(([, line]) => MARGIN_DECLARATION.test(line));
+      expect(offending).toEqual([]);
+    });
+  }
+
+  it('reset.css is the one file that may clear user-agent margins', () => {
+    expect(MARGIN_DECLARATION.test(readFileSync(resetPath, 'utf-8'))).toBe(
+      true,
+    );
+  });
+});
