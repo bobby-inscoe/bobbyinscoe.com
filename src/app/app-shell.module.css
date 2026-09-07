@@ -11,7 +11,14 @@
 }
 
 /*
- * One fixed layer behind everything, never applied per card or per surface.
+ * One fixed layer over everything, never applied per card or per surface.
+ *
+ * Over, not behind: the palette's contrast figures were measured with the
+ * grain composited onto every colour, and an underlay can only tint the
+ * ground it can still see. See the layer token in tokens.css for the
+ * measurement that settled it. pointer-events: none is load-bearing now
+ * that the layer covers the content rather than sitting under it, and it
+ * inherits to the texture and the motes.
  */
 .ambient {
   position: fixed;

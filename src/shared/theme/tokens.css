@@ -135,8 +135,28 @@
   --site-breakpoint-1200: 1200px;
   --site-breakpoint-1600: 1600px;
 
-  /* layer, z-index */
-  --site-layer-ambient: -1;
+  /*
+   * layer, z-index
+   *
+   * ambient is an overlay, not an underlay, and that is a correction to the
+   * spec's own layer table rather than a deviation from it. The palette was
+   * verified by a script that composites the grain over every colour before
+   * measuring, so the published contrast figures describe a layer that sits
+   * above content. At -1 the grain could only lighten whatever ground was
+   * left exposed: measured on the homepage it lifted the dark ground from
+   * #10171c to rgb(21,27,32) while leaving the opaque plate untouched, which
+   * cut the ground-to-raised step from delta-L* 3.09 to 1.00, under the
+   * floor of 3. Composited over both, the step keeps (1 - grain) of its
+   * separation instead.
+   *
+   * The value is 100 because that is the only step on the scale above every
+   * content layer and below Mantine's own modal (200) and popover (300), so
+   * portalled overlays stay clear of it. It ties with sticky, and the
+   * ambient element is later in the DOM than the skip link, so the grain
+   * passes over that too. That is correct: the grain belongs to the whole
+   * printed image, which is also why it is never applied per surface.
+   */
+  --site-layer-ambient: 100;
   --site-layer-base: 0;
   --site-layer-raised: 10;
   --site-layer-sticky: 100;
