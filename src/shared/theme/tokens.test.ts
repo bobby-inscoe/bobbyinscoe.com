@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
@@ -95,6 +95,7 @@ const SCHEME_TOKENS = [
   'success',
   'grain',
   'shadow-overlay',
+  'shadow-raised',
 ];
 
 describe('tokens declared in every scheme', () => {
@@ -260,3 +261,118 @@ describe.each([
     }
   },
 );
+
+/*
+ * The colour-literal rule, as a test rather than a shell grep.
+ *
+ * It lived only in phase 1's acceptance command, scoped to src/, and that
+ * scope let three defects through: index.html and public/manifest.json both
+ * carried pre-rebuild colours that no check ever looked at. Widened here to
+ * the two non-src files that can hold a colour.
+ *
+ * It cannot catch a literal that lives inside a dependency's stylesheet,
+ * which is how Mantine's component layer rendered stock controls while this
+ * check passed. Nothing static can. That class is the browser pass's job.
+ */
+const repoRoot = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  '..',
+);
+const COLOUR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\brgb\(|\bhsl\(|\boklch\(/;
+
+function walk(dir: string, extensions: readonly string[]): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...walk(full, extensions));
+    } else if (extensions.some((ext) => entry.name.endsWith(ext))) {
+      found.push(full);
+    }
+  }
+  return found;
+}
+
+/*
+ * Every entry is a known, dated exception rather than a way to silence the
+ * rule. Duck Feed's are the ones phase 7 is told by name to remove, and its
+ * do-not list forbids touching utils/ before then. types.ts carries two
+ * hexes inside doc comments the spec's own type block includes verbatim.
+ */
+const PENDING_LITERALS = [
+  join(
+    'features',
+    'projects',
+    'features',
+    'duck-feed',
+    'components',
+    'duck-feed.css',
+  ),
+  join('features', 'projects', 'features', 'duck-feed', 'utils', 'avatars.ts'),
+  join('shared', 'projects', 'types.ts'),
+];
+
+describe('no colour literal outside tokens.css', () => {
+  const srcRoot = join(repoRoot, 'src');
+  const sourceFiles = walk(srcRoot, ['.css', '.ts', '.tsx']).filter(
+    (file) => !file.endsWith(join('shared', 'theme', 'tokens.css')),
+  );
+
+  it('finds files to scan', () => {
+    expect(sourceFiles.length).toBeGreaterThan(20);
+  });
+
+  for (const file of sourceFiles) {
+    const rel = relative(srcRoot, file);
+    if (PENDING_LITERALS.includes(rel)) continue;
+    it(`src${sep}${rel}`, () => {
+      const offending = readFileSync(file, 'utf-8')
+        .split('\n')
+        .map((line, i) => [i + 1, line] as const)
+        .filter(([, line]) => COLOUR_LITERAL.test(line));
+      expect(offending).toEqual([]);
+    });
+  }
+
+  it('every pending exception still exists, so the list cannot rot', () => {
+    for (const rel of PENDING_LITERALS) {
+      expect(
+        COLOUR_LITERAL.test(readFileSync(join(srcRoot, rel), 'utf-8')),
+        `${rel} is clean; remove it from PENDING_LITERALS`,
+      ).toBe(true);
+    }
+  });
+});
+
+/*
+ * index.html and manifest.json cannot reference a custom property, so the
+ * rule for them is not "no literal" but "no literal that is not a palette
+ * value". Anything they name must be declared in tokens.css.
+ */
+describe('colour literals outside src must be palette values', () => {
+  const declaredColours = new Set(
+    [...css.matchAll(/#[0-9a-fA-F]{6}\b/g)].map((m) => m[0].toLowerCase()),
+  );
+
+  const files = [
+    join(repoRoot, 'index.html'),
+    join(repoRoot, 'public', 'manifest.json'),
+  ];
+
+  it.each(files.map((f) => [relative(repoRoot, f), f]))(
+    '%s names only palette colours',
+    (_label, file) => {
+      const literals = [
+        ...readFileSync(file, 'utf-8').matchAll(/#[0-9a-fA-F]{3,8}\b/g),
+      ].map((m) => m[0].toLowerCase());
+      for (const literal of literals) {
+        expect(
+          declaredColours.has(literal),
+          `${literal} is not in tokens.css`,
+        ).toBe(true);
+      }
+    },
+  );
+});

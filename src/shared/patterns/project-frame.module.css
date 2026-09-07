@@ -9,7 +9,14 @@
   gap: var(--site-space-lg);
 }
 
+/*
+ * `font:` is a shorthand and resets the other font-* longhands, so it comes
+ * first. Without it this link inherited Mantine's body weight and rendered
+ * at 15px/400, which is the ui role's size at a weight the scale does not
+ * have.
+ */
 .back {
+  font: var(--site-type-ui);
   color: var(--site-mark);
   text-decoration: underline;
   width: fit-content;

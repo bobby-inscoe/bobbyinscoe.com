@@ -10,15 +10,22 @@
  * elevation steps already declared below (ground/raised/surface/
  * surface-hover/surface-active) plus the line-faint/line-strong hairlines.
  *
- * --site-shadow-overlay is the one shadow token, for modals and popovers
- * only, never a card or an entry or a plate. It differs between the schemes
- * in kind rather than in value: on the fibre ground a real shadow works,
- * while on the ink ground a shadow is invisible or muddy, so dark separates
- * with a ring and an inset highlight and uses the broad black only to kill
- * the seam against the scrim. Do not collapse the two into one value. The
- * alpha colours are --site-mark in the scheme they appear in, so in light
- * the shadow reads as ink pooling under a sheet of fibre, and in dark the
- * highlight is the same fibre as the text above it.
+ * There are two shadow tokens and they are not interchangeable.
+ * --site-shadow-overlay is for modals and popovers only, never a card or an
+ * entry or a plate. --site-shadow-raised is for raised surfaces: Plate and
+ * anything else that steps up from the ground, never an entry row.
+ *
+ * Both differ between the schemes in kind rather than in value, and that is
+ * the rule for depth tokens in this system rather than an exception to it,
+ * because a shadow on near-black is muddy and a luminance step on paper is
+ * invisible. In light both are real drop shadows; raised is a lift and not
+ * a float, since the 3.8 delta-L* step and the hairline already do most of
+ * the work. In dark, overlay separates with a ring and uses the broad black
+ * only to kill the seam against the scrim, and raised is the 1px inset top
+ * highlight the spec's depth table names. Do not collapse either pair into
+ * one value. The alpha colours are --site-mark in the scheme they appear
+ * in, so in light the shadow reads as ink pooling under a sheet of fibre,
+ * and in dark the highlight is the same fibre as the text above it.
  */
 
 :root {
@@ -46,6 +53,8 @@
 
   --site-shadow-overlay:
     0 1px 2px rgb(16 23 28 / 0.1), 0 12px 32px rgb(16 23 28 / 0.14);
+  --site-shadow-raised:
+    0 1px 1px rgb(16 23 28 / 0.04), 0 2px 6px rgb(16 23 28 / 0.06);
 
   /* type: three families, one source. theme.ts reads these same variables. */
   --site-font-display:
@@ -135,8 +144,28 @@
   --site-breakpoint-1200: 1200px;
   --site-breakpoint-1600: 1600px;
 
-  /* layer, z-index */
-  --site-layer-ambient: -1;
+  /*
+   * layer, z-index
+   *
+   * ambient is an overlay, not an underlay, and that is a correction to the
+   * spec's own layer table rather than a deviation from it. The palette was
+   * verified by a script that composites the grain over every colour before
+   * measuring, so the published contrast figures describe a layer that sits
+   * above content. At -1 the grain could only lighten whatever ground was
+   * left exposed: measured on the homepage it lifted the dark ground from
+   * #10171c to rgb(21,27,32) while leaving the opaque plate untouched, which
+   * cut the ground-to-raised step from delta-L* 3.09 to 1.00, under the
+   * floor of 3. Composited over both, the step keeps (1 - grain) of its
+   * separation instead.
+   *
+   * The value is 100 because that is the only step on the scale above every
+   * content layer and below Mantine's own modal (200) and popover (300), so
+   * portalled overlays stay clear of it. It ties with sticky, and the
+   * ambient element is later in the DOM than the skip link, so the grain
+   * passes over that too. That is correct: the grain belongs to the whole
+   * printed image, which is also why it is never applied per surface.
+   */
+  --site-layer-ambient: 100;
   --site-layer-base: 0;
   --site-layer-raised: 10;
   --site-layer-sticky: 100;
@@ -171,6 +200,7 @@
     --site-shadow-overlay:
       0 0 0 1px var(--site-line), inset 0 1px 0 rgb(214 211 200 / 0.06),
       0 16px 40px rgb(0 0 0 / 0.45);
+    --site-shadow-raised: inset 0 1px 0 rgb(214 211 200 / 0.05);
   }
 }
 
@@ -199,4 +229,5 @@
   --site-shadow-overlay:
     0 0 0 1px var(--site-line), inset 0 1px 0 rgb(214 211 200 / 0.06),
     0 16px 40px rgb(0 0 0 / 0.45);
+  --site-shadow-raised: inset 0 1px 0 rgb(214 211 200 / 0.05);
 }

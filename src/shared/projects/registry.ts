@@ -5,8 +5,11 @@ import type { ProjectRecord } from '@/shared/projects/types';
  * route paths as string literals, nothing else. Do not invert this by having
  * each feature export a meta.ts that shared/ reads.
  *
- * One entry, deliberately. Which in-progress entries exist is a human
- * decision; do not invent projects to make the collection look fuller.
+ * Which in-progress entries exist is a human decision; do not invent projects
+ * to make the collection look fuller. The two below were supplied by Bobby.
+ * They are ideas with no code behind them yet, which is exactly what an
+ * in-progress entry with a null route is for: the collection lists them and
+ * renders the title as a paragraph rather than a link.
  */
 export const PROJECTS: readonly ProjectRecord[] = [
   {
@@ -23,5 +26,29 @@ export const PROJECTS: readonly ProjectRecord[] = [
     route: '/projects/duck-feed',
     accent: null,
     accentLight: null,
+  },
+  {
+    id: 'beer-map',
+    title: 'BeerMap',
+    blurb:
+      'A map of the bars in Gothenburg. Find one nearby, and see what it charges for a beer.',
+    year: 2026,
+    kind: 'Map',
+    tags: ['map', 'browser'],
+    status: 'in-progress',
+    presentation: 'text',
+    route: null,
+  },
+  {
+    id: 'shared-grocery-list',
+    title: 'Shared grocery list',
+    blurb:
+      'A grocery list several people edit at once. Staples like bread and toilet paper stay on the list between shops, and each household sets its own.',
+    year: 2026,
+    kind: 'Tool',
+    tags: ['tool', 'browser'],
+    status: 'in-progress',
+    presentation: 'text',
+    route: null,
   },
 ];

@@ -27,11 +27,6 @@
   cursor: not-allowed;
 }
 
-.Button:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
 .Button--secondary {
   background-color: transparent;
   border-color: var(--secondary-dark);

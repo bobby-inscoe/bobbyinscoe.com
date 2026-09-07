@@ -27,8 +27,16 @@
   max-width: 100%;
 }
 
+/*
+ * width: 100% alone meant the table could always shrink to fit, so the
+ * scroller never engaged and the columns crushed instead: at 380 the title
+ * broke mid-word and the tag list wrapped to four lines. min-width gives the
+ * table a floor to scroll against. Density itself is left alone, because a
+ * column layout tuned against a single row would be wrong against five.
+ */
 .table {
   width: 100%;
+  min-width: 640px;
   border-collapse: collapse;
 }
 
