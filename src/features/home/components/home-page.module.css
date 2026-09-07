@@ -34,7 +34,18 @@
   text-wrap: balance;
 }
 
+.threaded {
+  position: relative;
+}
+
+/*
+ * The entries sit above the thread: it is a strand in the cloth and the ink
+ * is printed on top of it. Both values are layer tokens, and both are far
+ * below the ambient grain, which passes over everything.
+ */
 .list {
+  position: relative;
+  z-index: var(--site-layer-raised);
   display: grid;
   gap: var(--site-space-xl);
   list-style: none;

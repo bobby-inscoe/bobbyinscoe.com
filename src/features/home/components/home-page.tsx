@@ -1,20 +1,27 @@
 import type React from 'react';
+import { useMemo } from 'react';
 
 import classes from '@/features/home/components/home-page.module.css';
+import { useThreadAnchors } from '@/features/home/hooks/use-thread-anchors';
 import { ProjectEntry } from '@/shared/patterns/project-entry';
 import { PROJECTS } from '@/shared/projects/registry';
 import { Prose } from '@/shared/ui/prose';
 import { Rule } from '@/shared/ui/rule';
+import { ThreadSpine } from '@/shared/ui/thread-spine';
 
 const COLLECTION_HEADING_ID = 'collection';
 
-/*
- * ThreadSpine (phase 5) will collect each entry's anchorRef to measure the
- * thread's path from the DOM. Until it exists there is nothing to measure
- * into, so every entry passes null; the prop is required by ProjectEntry's
- * signature regardless of whether a consumer is mounted yet.
- */
 export function HomePage(): React.JSX.Element {
+  const anchorSources = useMemo(
+    () =>
+      PROJECTS.map((project) => ({
+        id: project.id,
+        filled: project.status === 'live',
+      })),
+    [],
+  );
+  const { anchors, registerAnchor } = useThreadAnchors(anchorSources);
+
   return (
     <div className={classes.page}>
       <header className={classes.masthead}>
@@ -34,16 +41,19 @@ export function HomePage(): React.JSX.Element {
               <p>Nothing in the collection yet.</p>
             </Prose>
           ) : (
-            <ol className={classes.list}>
-              {PROJECTS.map((project, i) => (
-                <ProjectEntry
-                  anchorRef={null}
-                  index={i + 1}
-                  key={project.id}
-                  project={project}
-                />
-              ))}
-            </ol>
+            <div className={classes.threaded}>
+              <ThreadSpine anchors={anchors} />
+              <ol className={classes.list}>
+                {PROJECTS.map((project, i) => (
+                  <ProjectEntry
+                    anchorRef={registerAnchor(project.id)}
+                    index={i + 1}
+                    key={project.id}
+                    project={project}
+                  />
+                ))}
+              </ol>
+            </div>
           )}
         </div>
       </section>
