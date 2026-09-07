@@ -1,12 +1,8 @@
-import {
-  createMemoryHistory,
-  createRouter,
-  RouterProvider,
-} from '@tanstack/react-router';
+import { createMemoryHistory, RouterProvider } from '@tanstack/react-router';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { routeTree } from '@/app/router';
+import { createAppRouter } from '@/app/router';
 
 /*
  * Tier three: render smoke. Each route renders, the skip link is present,
@@ -20,13 +16,13 @@ const ROUTES = [
   { path: '/', heading: 'Bobby Inscoe' },
   { path: '/projects', heading: 'Projects' },
   { path: '/projects/duck-feed', heading: 'Feed the Duck!' },
+  { path: '/no-such-page', heading: 'Not found' },
 ] as const;
 
 async function renderRoute(path: string): Promise<void> {
-  const router = createRouter({
-    routeTree,
-    history: createMemoryHistory({ initialEntries: [path] }),
-  });
+  const router = createAppRouter(
+    createMemoryHistory({ initialEntries: [path] }),
+  );
 
   render(<RouterProvider router={router} />);
   await screen.findByRole('main');
