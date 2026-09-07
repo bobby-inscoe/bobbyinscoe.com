@@ -1,0 +1,22 @@
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--site-space-lg);
+  padding: var(--site-space-md) var(--site-space-lg);
+  border-bottom: 1px solid var(--site-line-faint);
+}
+
+.nav {
+  display: flex;
+  gap: var(--site-space-md);
+}
+
+/* Links in running text are underlined; colour alone never marks a link. */
+.link {
+  color: var(--site-mark);
+  text-decoration: underline;
+}
+
+.link[data-status="active"] {
+  color: var(--site-accent);
+}

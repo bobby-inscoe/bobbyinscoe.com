@@ -48,6 +48,20 @@ trigger down is what makes that happen.
 
 <!-- Add new entries directly below this line, newest first. -->
 
+## 2026-09-07 The token layer follows Mantine's colour-scheme attribute
+**Decision.** `src/shared/theme/tokens.css` switches schemes on `[data-mantine-color-scheme]`, not on a site-owned `[data-theme]`. The two selectors changed are `:root:not([data-mantine-color-scheme="light"])` inside the `prefers-color-scheme: dark` media block, and `:root[data-mantine-color-scheme="dark"]`. No token value, grain opacity, or type size changed; this was a selector rename.
+**Why.** Phase 2 mounts `MantineProvider` and Mantine's colour-scheme script, which write `data-mantine-color-scheme` to `<html>`. The token layer written in phase 1 read `data-theme`. Two attributes for one piece of state diverge: a scheme set through Mantine would move Mantine's variables and leave every `--site-*` token behind. Mantine is the one that owns the persistence and writes the value before paint, so its attribute is the one to keep. Verified from `use-provider-color-scheme.ts` and the inline script that both resolve `auto` through `matchMedia` before writing, so the attribute is only ever `light` or `dark` and never the literal `auto`.
+**Instead of.** Keeping `data-theme` and mirroring Mantine's value onto it with an effect, which is a second source of truth plus a frame of skew on first paint. Or dropping Mantine's script and writing our own persistence, which discards the part of Mantine that runs before paint and is the reason it exists.
+**Costs.** The site's tokens now name a vendor attribute, so replacing Mantine means a selector change in `tokens.css`. That is two lines and a test regex.
+**Revisit if.** Mantine is removed, or its attribute name changes across a major version.
+
+## 2026-09-07 `/projects` is a layout route with a separate index route
+**Decision.** `src/features/projects/routes/projects-route.ts` creates a layout route at `projects` with no component of its own, and `src/features/projects/routes/projects-index-route.ts` creates the index at `/` beneath it. The archive page hangs off the index route; the feature's `route-tree.ts` composes both plus the Duck Feed tree.
+**Why.** In TanStack Router path nesting is component nesting. Putting the archive component on the `projects` route itself would render every project page, Duck Feed included, inside the archive's own markup, because a child route renders through its parent's `Outlet`. A parent route with no `component` renders its `Outlet` directly, which is what a URL prefix that is not itself a page should do.
+**Instead of.** One route file with the archive as its component, which is what the specification's file enumeration literally lists. That enumeration was not exhaustive, and the single-file form is broken rather than merely less tidy.
+**Costs.** One more route file than the feature would otherwise have, and `/projects` now has two route modules that have to stay in agreement about which one owns the page.
+**Revisit if.** TanStack adds a way to render a route's own component only on an exact match, or `/projects` stops having children.
+
 ## 2026-09-07 CSS margin stays banned; reset.css and centring are the exceptions
 **Decision.** The `instructions/engineering.md` rule against CSS `margin` stands as written, with no exemption for the redesign. `src/shared/theme/reset.css` may set `margin: 0` to clear user-agent defaults; that is the one permitted rule. To centre an element, use `justify-self: center` on a grid child or `justify-content: center` on a flex parent, never `margin: auto`. Margins emitted inside Mantine's own stylesheets are third-party output and are out of scope for this rule.
 **Why.** An agent working the spec raised this as an apparent conflict between `instructions/engineering.md` and the design system's layout needs. It is not a conflict: `gap` and `padding` cover every layout case the redesign needs, and the one legitimate exception (clearing user-agent default margins) already has a designated home in the reset file.

@@ -53,9 +53,12 @@ function parseDeclarations(block: string): Map<string, string> {
 const lightBlock = extractBraceBody(css, /:root\s*\{/);
 const darkMediaBlock = extractBraceBody(
   css,
-  /:root:not\(\[data-theme="light"]\)\s*\{/,
+  /:root:not\(\[data-mantine-color-scheme="light"]\)\s*\{/,
 );
-const darkAttrBlock = extractBraceBody(css, /:root\[data-theme="dark"]\s*\{/);
+const darkAttrBlock = extractBraceBody(
+  css,
+  /:root\[data-mantine-color-scheme="dark"]\s*\{/,
+);
 
 const light = parseDeclarations(lightBlock);
 const darkMedia = parseDeclarations(darkMediaBlock);
@@ -96,7 +99,7 @@ describe('tokens declared in every scheme', () => {
     expect(new Set(darkMedia.keys())).toEqual(lightNames);
   });
 
-  it('redeclares the identical set of colour tokens for [data-theme="dark"]', () => {
+  it('redeclares the identical set of colour tokens for [data-mantine-color-scheme="dark"]', () => {
     const lightNames = new Set(COLOR_TOKENS);
     expect(new Set(darkAttr.keys())).toEqual(lightNames);
   });

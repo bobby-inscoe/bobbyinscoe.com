@@ -1,8 +1,10 @@
 /*
  * Design tokens. The only file permitted to contain a colour literal.
  * Light lives in the bare :root. Dark is declared twice: once for the OS
- * preference, once for an explicit `data-theme="dark"` override, so a
- * user choice always wins over the system setting.
+ * preference, once for an explicit `data-mantine-color-scheme="dark"`
+ * override, so a user choice always wins over the system setting. The
+ * attribute is Mantine's: it owns the persistence and writes the value
+ * before paint, and one piece of state gets one attribute.
  *
  * Depth (raised surfaces, hover/active states) is expressed through the
  * elevation steps already declared below (ground/raised/surface/
@@ -82,7 +84,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-mantine-color-scheme="light"]) {
     --site-ground: #10171c;
     --site-raised: #171d22;
     --site-surface: #1d2429;
@@ -106,7 +108,7 @@
   }
 }
 
-:root[data-theme="dark"] {
+:root[data-mantine-color-scheme="dark"] {
   --site-ground: #10171c;
   --site-raised: #171d22;
   --site-surface: #1d2429;

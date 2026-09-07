@@ -1,0 +1,57 @@
+/*
+ * Structural only. The identity layer (typography, texture, atmosphere) is
+ * phase 4; this file does layout and the skip link and nothing else.
+ */
+
+.shell {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100%;
+}
+
+/*
+ * The ambient layer. Phase 4 gives it the two ground textures and the
+ * depth-of-field elements; here it is the fixed element they attach to,
+ * behind everything at --site-layer-ambient.
+ */
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: var(--site-layer-ambient);
+  pointer-events: none;
+}
+
+/*
+ * Off-canvas rather than display: none, so it stays in the tab order and
+ * reaches the first Tab press.
+ */
+.skipLink {
+  position: fixed;
+  top: var(--site-space-md);
+  left: var(--site-space-md);
+  z-index: var(--site-layer-sticky);
+  padding: var(--site-space-xs) var(--site-space-md);
+  border: 1px solid var(--site-line);
+  border-radius: var(--site-radius-control);
+  background: var(--site-surface);
+  color: var(--site-mark);
+  transform: translateY(calc(-100% - var(--site-space-lg) * 2));
+  transition: transform var(--site-duration-quick) var(--site-ease-enter);
+}
+
+.skipLink:focus {
+  transform: none;
+}
+
+.main {
+  display: grid;
+  align-content: start;
+  gap: var(--site-space-xl);
+  padding: var(--site-space-xl) var(--site-space-lg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skipLink {
+    transition-duration: var(--site-duration-instant);
+  }
+}
