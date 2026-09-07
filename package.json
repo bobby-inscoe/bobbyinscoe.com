@@ -26,8 +26,10 @@
     "check": "biome check .",
     "format": "biome format --write .",
     "lint": "biome lint .",
+    "fix": "biome check --write .",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
-    "preview": "vite preview --host localhost --port 4173"
+    "preview": "vite preview --host localhost --port 4173",
+    "prepare": "git config core.hooksPath .githooks"
   }
 }
