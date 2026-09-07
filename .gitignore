@@ -15,7 +15,6 @@
 # misc
 /skills-backup
 /prompts
-/docs/handoff
 .agents/
 .DS_Store
 .notes/
