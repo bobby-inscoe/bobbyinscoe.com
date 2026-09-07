@@ -1,5 +1,7 @@
 import type { CSSVariablesResolver } from '@mantine/core';
-import { createTheme, Modal } from '@mantine/core';
+import { createTheme, Input, InputWrapper, Modal, Select } from '@mantine/core';
+import { ChevronDown } from 'lucide-react';
+import { createElement } from 'react';
 
 declare module '@mantine/core' {
   export interface MantineThemeSizesOverride {
@@ -58,6 +60,35 @@ const semanticColorVariables = {
 };
 
 /*
+ * Mantine's component layer does not read the semantic variables above. Its
+ * Input and Popover rules reach past them into the raw palette, so a themed
+ * site still rendered stock controls: the archive's Selects computed
+ * rgb(46,46,46) in dark and pure white in light, neither of which is a token
+ * and neither of which a grep over src/ can see, because the literals live in
+ * Mantine's own stylesheet.
+ *
+ * These five palette entries are the ones those rules name. Overriding them
+ * here rather than per component means a control added later inherits the
+ * token layer instead of having to be remembered. They are declared in both
+ * scheme buckets because each value is a --site-* variable that already
+ * resolves correctly for the active scheme.
+ *
+ * --popover-shadow has no palette source and Mantine never declares it, only
+ * consumes it with a `none` fallback, so it can be set here and inherit.
+ */
+const componentColorVariables = {
+  '--mantine-color-white': 'var(--site-surface)',
+  '--mantine-color-black': 'var(--site-mark)',
+  '--mantine-color-gray-2': 'var(--site-line)',
+  '--mantine-color-gray-4': 'var(--site-line)',
+  '--mantine-color-dark-4': 'var(--site-line)',
+  '--mantine-color-dark-6': 'var(--site-surface)',
+
+  /* A dropdown is a popover, and the overlay shadow is what popovers get. */
+  '--popover-shadow': 'var(--site-shadow-overlay)',
+};
+
+/*
  * Mantine's `theme` prop and `cssVariablesResolver` prop are separate
  * MantineProvider inputs; createTheme's return type has no slot for the
  * resolver. Both are exported here so the provider can be wired to
@@ -65,8 +96,8 @@ const semanticColorVariables = {
  */
 export const cssVariablesResolver: CSSVariablesResolver = () => ({
   variables: {},
-  light: semanticColorVariables,
-  dark: semanticColorVariables,
+  light: { ...semanticColorVariables, ...componentColorVariables },
+  dark: { ...semanticColorVariables, ...componentColorVariables },
 });
 
 /*
@@ -110,6 +141,47 @@ export const theme = createTheme({
         overlayProps: { blur: 3 },
         transitionProps: { duration: 240, transition: 'fade' },
       },
+    }),
+
+    /*
+     * Mantine sets the control's font weight itself, so mapping the font
+     * sizes above is not enough: the label rendered 13px/600 and the input
+     * 13px/400, and the scale has neither. Both belong to the ui-small role,
+     * which is 500. The `font` shorthand resets the other font longhands, so
+     * it carries the family and the line height with it.
+     */
+    Input: Input.extend({
+      styles: {
+        input: { font: 'var(--site-type-ui-small)' },
+        section: { color: 'var(--site-mark-muted)' },
+      },
+    }),
+    /*
+     * The label belongs to InputWrapper, not to InputLabel: the rendered
+     * element carries mantine-InputWrapper-label, so a theme entry keyed to
+     * InputLabel is silently ignored. Keyed here it reaches every Mantine
+     * control's label rather than only the Select's.
+     */
+    InputWrapper: InputWrapper.extend({
+      styles: { label: { font: 'var(--site-type-ui-small)' } },
+    }),
+
+    /*
+     * The chevron is Mantine's own inline SVG, which is a second icon set on
+     * a site whose only icon set is lucide. Replaced here rather than at the
+     * three call sites so a fourth Select inherits it. createElement rather
+     * than JSX because the spec's file tree names this file theme.ts and a
+     * rename is not ours to make.
+     */
+    Select: Select.extend({
+      defaultProps: {
+        rightSection: createElement(ChevronDown, {
+          'aria-hidden': true,
+          size: 14,
+        }),
+        rightSectionPointerEvents: 'none',
+      },
+      styles: { option: { font: 'var(--site-type-ui-small)' } },
     }),
   },
 });
