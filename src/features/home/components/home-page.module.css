@@ -1,0 +1,18 @@
+/* Structural only. Phase 4 is the identity layer; there is no design here. */
+
+.page {
+  display: grid;
+  gap: var(--site-space-lg);
+}
+
+.list {
+  display: grid;
+  gap: var(--site-space-sm);
+  list-style: none;
+  padding: 0;
+}
+
+.link {
+  color: var(--site-mark);
+  text-decoration: underline;
+}

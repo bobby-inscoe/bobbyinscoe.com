@@ -1,0 +1,7 @@
+.footer {
+  display: flex;
+  gap: var(--site-space-md);
+  padding: var(--site-space-lg);
+  border-top: 1px solid var(--site-line-faint);
+  color: var(--site-mark-muted);
+}
