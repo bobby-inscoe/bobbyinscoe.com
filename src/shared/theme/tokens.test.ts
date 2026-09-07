@@ -95,6 +95,7 @@ const SCHEME_TOKENS = [
   'success',
   'grain',
   'shadow-overlay',
+  'shadow-raised',
 ];
 
 describe('tokens declared in every scheme', () => {

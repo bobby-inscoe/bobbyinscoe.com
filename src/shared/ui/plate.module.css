@@ -1,7 +1,10 @@
 /*
- * The raised editorial surface. Depth is a luminance step away from the
- * ground plus a hairline; there is no drop shadow, in either scheme. The
- * one shadow the system has is for modals and popovers, never a plate.
+ * The raised editorial surface: a luminance step away from the ground, a
+ * hairline, and --site-shadow-raised. That token resolves to a real drop
+ * shadow in light and to the 1px inset top highlight in dark, so the two
+ * schemes separate by the mechanism that works on their own ground and this
+ * file does not need to know which it got. The overlay shadow is a
+ * different token and never appears here.
  *
  * Radius is zero: plates are structural and editorial surfaces, and 3px is
  * reserved for interactive controls.
@@ -12,21 +15,5 @@
   border: 1px solid var(--site-line-faint);
   border-radius: var(--site-radius-none);
   padding: var(--site-space-lg);
-}
-
-/*
- * Dark adds the 1px inset top highlight, because on a near-black ground the
- * luminance step alone is close to invisible. Light does not: the step from
- * ground to raised is already 3.8 delta-L*. The selector is written twice
- * for the same reason tokens.css writes its dark block twice, once for the
- * OS preference and once for an explicit override.
- */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-mantine-color-scheme="light"]) .plate {
-    box-shadow: inset 0 1px 0 var(--site-line);
-  }
-}
-
-:root[data-mantine-color-scheme="dark"] .plate {
-  box-shadow: inset 0 1px 0 var(--site-line);
+  box-shadow: var(--site-shadow-raised);
 }

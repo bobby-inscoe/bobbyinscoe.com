@@ -10,15 +10,22 @@
  * elevation steps already declared below (ground/raised/surface/
  * surface-hover/surface-active) plus the line-faint/line-strong hairlines.
  *
- * --site-shadow-overlay is the one shadow token, for modals and popovers
- * only, never a card or an entry or a plate. It differs between the schemes
- * in kind rather than in value: on the fibre ground a real shadow works,
- * while on the ink ground a shadow is invisible or muddy, so dark separates
- * with a ring and an inset highlight and uses the broad black only to kill
- * the seam against the scrim. Do not collapse the two into one value. The
- * alpha colours are --site-mark in the scheme they appear in, so in light
- * the shadow reads as ink pooling under a sheet of fibre, and in dark the
- * highlight is the same fibre as the text above it.
+ * There are two shadow tokens and they are not interchangeable.
+ * --site-shadow-overlay is for modals and popovers only, never a card or an
+ * entry or a plate. --site-shadow-raised is for raised surfaces: Plate and
+ * anything else that steps up from the ground, never an entry row.
+ *
+ * Both differ between the schemes in kind rather than in value, and that is
+ * the rule for depth tokens in this system rather than an exception to it,
+ * because a shadow on near-black is muddy and a luminance step on paper is
+ * invisible. In light both are real drop shadows; raised is a lift and not
+ * a float, since the 3.8 delta-L* step and the hairline already do most of
+ * the work. In dark, overlay separates with a ring and uses the broad black
+ * only to kill the seam against the scrim, and raised is the 1px inset top
+ * highlight the spec's depth table names. Do not collapse either pair into
+ * one value. The alpha colours are --site-mark in the scheme they appear
+ * in, so in light the shadow reads as ink pooling under a sheet of fibre,
+ * and in dark the highlight is the same fibre as the text above it.
  */
 
 :root {
@@ -46,6 +53,8 @@
 
   --site-shadow-overlay:
     0 1px 2px rgb(16 23 28 / 0.1), 0 12px 32px rgb(16 23 28 / 0.14);
+  --site-shadow-raised:
+    0 1px 1px rgb(16 23 28 / 0.04), 0 2px 6px rgb(16 23 28 / 0.06);
 
   /* type: three families, one source. theme.ts reads these same variables. */
   --site-font-display:
@@ -191,6 +200,7 @@
     --site-shadow-overlay:
       0 0 0 1px var(--site-line), inset 0 1px 0 rgb(214 211 200 / 0.06),
       0 16px 40px rgb(0 0 0 / 0.45);
+    --site-shadow-raised: inset 0 1px 0 rgb(214 211 200 / 0.05);
   }
 }
 
@@ -219,4 +229,5 @@
   --site-shadow-overlay:
     0 0 0 1px var(--site-line), inset 0 1px 0 rgb(214 211 200 / 0.06),
     0 16px 40px rgb(0 0 0 / 0.45);
+  --site-shadow-raised: inset 0 1px 0 rgb(214 211 200 / 0.05);
 }
