@@ -1,32 +1,52 @@
 /*
- * Structural only. The editorial typography pass (phase 4) is what turns
- * this into the identity layer; here it is layout, the status node, and the
- * plate/canvas surface treatment using tokens already in place.
+ * `font:` is a shorthand and resets the other font-* longhands, so it comes
+ * first in every rule that uses one.
+ *
+ * The plate and canvas presentations put their content on a Plate; text
+ * leaves it bare. The status node stays outside the surface either way,
+ * because that is the point the thread will attach to in phase 5.
  */
 
 .entry {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
-  gap: var(--site-space-sm) var(--site-space-md);
-  padding: var(--site-space-md) 0;
-  border-bottom: 1px solid var(--site-line-faint);
+  gap: var(--site-space-md);
 }
 
 .node {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   align-self: center;
   border-radius: var(--site-radius-round);
   background: var(--site-mark);
 }
 
+/*
+ * Hollow means in progress: work that has been into the vat once rather than
+ * dipped to depth, which is why the ring is the state colour. The shape is
+ * never the only signal; every entry also carries its status as text.
+ */
 .node[data-hollow="true"] {
-  border: 1px solid var(--site-line-strong);
+  border: 2px solid var(--site-state);
   background: transparent;
 }
 
+.inner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--site-space-md);
+}
+
+.entry[data-presentation="text"] .inner {
+  padding: var(--site-space-md) 0;
+  border-bottom: 1px solid var(--site-line-faint);
+}
+
 .index {
+  font: var(--site-type-data);
+  font-variant-numeric: tabular-nums;
   color: var(--site-mark-muted);
 }
 
@@ -36,23 +56,27 @@
   gap: var(--site-space-xs);
 }
 
+.title {
+  font: var(--site-type-heading);
+  letter-spacing: var(--site-track-heading);
+  color: var(--site-mark);
+  text-wrap: balance;
+}
+
 .titleLink {
   color: var(--site-mark);
   text-decoration: underline;
+  text-underline-offset: 0.16em;
+  text-decoration-thickness: 1px;
 }
 
-.meta {
-  color: var(--site-mark-muted);
+.titleLink:hover {
+  color: var(--site-accent);
 }
 
-.blurb {
-  color: var(--site-mark-secondary);
-}
-
-.entry[data-presentation="plate"],
-.entry[data-presentation="canvas"] {
-  border: 1px solid var(--site-line);
-  border-radius: var(--site-radius-control);
-  padding: var(--site-space-lg);
-  background: var(--site-raised);
+@media (max-width: 640px) {
+  .inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--site-space-xs);
+  }
 }

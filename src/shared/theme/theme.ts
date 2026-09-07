@@ -1,5 +1,5 @@
 import type { CSSVariablesResolver } from '@mantine/core';
-import { createTheme } from '@mantine/core';
+import { createTheme, Modal } from '@mantine/core';
 
 declare module '@mantine/core' {
   export interface MantineThemeSizesOverride {
@@ -11,10 +11,13 @@ declare module '@mantine/core' {
   }
 }
 
-const fontDisplay =
-  "'Bricolage Grotesque Variable', 'Helvetica Neue', Arial, sans-serif";
-const fontMono =
-  "'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace";
+/*
+ * The families themselves live in tokens.css alongside the type scale, so
+ * there is one declaration of each rather than a string here and a copy
+ * there that can drift.
+ */
+const fontDisplay = 'var(--site-font-display)';
+const fontMono = 'var(--site-font-mono)';
 
 /*
  * Mantine's semantic colour variables (body, text, anchor, and so on) are
@@ -40,6 +43,18 @@ const semanticColorVariables = {
   '--mantine-color-disabled-border': 'var(--site-line-faint)',
   '--mantine-color-error': 'var(--site-error)',
   '--mantine-color-success': 'var(--site-success)',
+
+  /*
+   * Mantine's primary colour defaults to its own blue, which reaches the
+   * page as the focus ring on every control. Point it at the accent so no
+   * hue outside the palette can appear.
+   */
+  '--mantine-primary-color-filled': 'var(--site-accent)',
+  '--mantine-primary-color-filled-hover': 'var(--site-accent-strong)',
+  '--mantine-primary-color-light': 'var(--site-accent-wash)',
+  '--mantine-primary-color-light-hover': 'var(--site-accent-wash)',
+  '--mantine-primary-color-light-color': 'var(--site-accent)',
+  '--mantine-primary-color-contrast': 'var(--site-ground)',
 };
 
 /*
@@ -54,9 +69,24 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
   dark: semanticColorVariables,
 });
 
+/*
+ * Mantine sizes every component off `--mantine-font-size-*`, and its own
+ * five-step scale is not ours. The site's scale has exactly two interface
+ * sizes, so Mantine's five map onto those two: anything Mantine renders
+ * lands on the scale without a style prop at the call site.
+ */
+const fontSizes = {
+  xs: 'var(--site-type-ui-small-size)',
+  sm: 'var(--site-type-ui-small-size)',
+  md: 'var(--site-type-ui-size)',
+  lg: 'var(--site-type-ui-size)',
+  xl: 'var(--site-type-ui-size)',
+};
+
 export const theme = createTheme({
   fontFamily: fontDisplay,
   fontFamilyMonospace: fontMono,
+  fontSizes,
   headings: {
     fontFamily: fontDisplay,
   },
@@ -65,5 +95,21 @@ export const theme = createTheme({
     none: 'var(--site-radius-none)',
     control: 'var(--site-radius-control)',
     round: 'var(--site-radius-round)',
+  },
+  components: {
+    /*
+     * Blur belongs only on an overlay backdrop, per the motion vocabulary.
+     * The modal's own elevation is --site-shadow-overlay, applied in
+     * colophon.module.css. It is deliberately not registered here in
+     * Mantine's shadow scale and not passed through Modal's `shadow` prop:
+     * there is one consumer, and a scale invites a second.
+     */
+    Modal: Modal.extend({
+      defaultProps: {
+        centered: true,
+        overlayProps: { blur: 3 },
+        transitionProps: { duration: 240, transition: 'fade' },
+      },
+    }),
   },
 });

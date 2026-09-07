@@ -9,9 +9,16 @@
  * Depth (raised surfaces, hover/active states) is expressed through the
  * elevation steps already declared below (ground/raised/surface/
  * surface-hover/surface-active) plus the line-faint/line-strong hairlines.
- * --site-shadow-overlay, the one shadow token, is deferred: the spec names
- * it for modals and popovers but gives no literal value, and phase 4's
- * Colophon modal is the first real consumer.
+ *
+ * --site-shadow-overlay is the one shadow token, for modals and popovers
+ * only, never a card or an entry or a plate. It differs between the schemes
+ * in kind rather than in value: on the fibre ground a real shadow works,
+ * while on the ink ground a shadow is invisible or muddy, so dark separates
+ * with a ring and an inset highlight and uses the broad black only to kill
+ * the seam against the scrim. Do not collapse the two into one value. The
+ * alpha colours are --site-mark in the scheme they appear in, so in light
+ * the shadow reads as ink pooling under a sheet of fibre, and in dark the
+ * highlight is the same fibre as the text above it.
  */
 
 :root {
@@ -36,6 +43,61 @@
   --site-warning: #6c5200;
   --site-success: #355f37;
   --site-grain: 0.04;
+
+  --site-shadow-overlay:
+    0 1px 2px rgb(16 23 28 / 0.1), 0 12px 32px rgb(16 23 28 / 0.14);
+
+  /* type: three families, one source. theme.ts reads these same variables. */
+  --site-font-display:
+    "Bricolage Grotesque Variable", "Helvetica Neue", Arial, sans-serif;
+  --site-font-read: "Newsreader Variable", Georgia, "Times New Roman", serif;
+  --site-font-mono:
+    "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  /*
+   * The eight roles of the type scale, as `font` shorthands. Sizes are not
+   * ours to change; see the spec's scale table.
+   *
+   * The shorthand resets every other font-* longhand, so in any rule that
+   * uses one, declare `font:` FIRST and the companions below (tracking,
+   * width, tabular-nums, case) after it. letter-spacing is not part of the
+   * shorthand and is safe in either order.
+   */
+  --site-type-display-xl:
+    800 clamp(38px, 6vw, 68px) / 1.06 var(--site-font-display);
+  --site-type-display-l:
+    700 clamp(26px, 3.4vw, 40px) / 1.1 var(--site-font-display);
+  --site-type-heading: 700 22px / 1.2 var(--site-font-display);
+  --site-type-ui-size: 15px;
+  --site-type-ui: 500 var(--site-type-ui-size) / 1.4 var(--site-font-display);
+  --site-type-ui-small-size: 13px;
+  --site-type-ui-small:
+    500 var(--site-type-ui-small-size) / 1.4 var(--site-font-display);
+  --site-type-read: 400 17px / 1.62 var(--site-font-read);
+  --site-type-meta: 500 11px / 1.45 var(--site-font-mono);
+  --site-type-data: 400 15px var(--site-font-mono);
+
+  --site-track-display-xl: -0.035em;
+  --site-track-display-l: -0.03em;
+  --site-track-heading: -0.02em;
+  --site-track-meta: 0.15em;
+  --site-width-display-xl: 92%;
+  --site-width-display-l: 94%;
+
+  /* measure and frame, from the breakpoint row of the token table */
+  --site-measure: 66ch;
+  --site-frame-max: 1280px;
+
+  /*
+   * Horizontal inset that holds content inside the frame and falls back to
+   * the lg step once the viewport is narrower than it. Derived from the two
+   * values above and the space scale, so it introduces no new number, and
+   * it keeps a full-bleed header rule while its content stays in the frame.
+   */
+  --site-frame-inset: max(
+    var(--site-space-lg),
+    calc((100% - var(--site-frame-max)) / 2)
+  );
 
   /* space, px */
   --site-space-3xs: 2px;
@@ -105,6 +167,10 @@
     --site-warning: #d9b764;
     --site-success: #84b184;
     --site-grain: 0.055;
+
+    --site-shadow-overlay:
+      0 0 0 1px var(--site-line), inset 0 1px 0 rgb(214 211 200 / 0.06),
+      0 16px 40px rgb(0 0 0 / 0.45);
   }
 }
 
@@ -129,4 +195,8 @@
   --site-warning: #d9b764;
   --site-success: #84b184;
   --site-grain: 0.055;
+
+  --site-shadow-overlay:
+    0 0 0 1px var(--site-line), inset 0 1px 0 rgb(214 211 200 / 0.06),
+    0 16px 40px rgb(0 0 0 / 0.45);
 }

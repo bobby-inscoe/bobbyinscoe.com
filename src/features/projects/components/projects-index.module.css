@@ -1,6 +1,19 @@
+/*
+ * `font:` is a shorthand and resets the other font-* longhands, so it comes
+ * first in every rule that uses one.
+ */
+
 .page {
   display: grid;
-  gap: var(--site-space-lg);
+  gap: var(--site-space-xl);
+}
+
+.title {
+  font: var(--site-type-display-l);
+  font-stretch: var(--site-width-display-l);
+  letter-spacing: var(--site-track-display-l);
+  color: var(--site-mark);
+  text-wrap: balance;
 }
 
 .filters {
@@ -23,11 +36,15 @@
 .table td {
   padding: var(--site-space-sm) var(--site-space-md) var(--site-space-sm) 0;
   text-align: left;
-  vertical-align: top;
+  vertical-align: baseline;
   border-bottom: 1px solid var(--site-line-faint);
 }
 
 .table th {
+  font: var(--site-type-meta);
+  letter-spacing: var(--site-track-meta);
+  text-transform: uppercase;
   color: var(--site-mark-muted);
   border-bottom: 1px solid var(--site-line-strong);
+  white-space: nowrap;
 }
