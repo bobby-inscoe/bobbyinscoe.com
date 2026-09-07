@@ -62,10 +62,10 @@ const semanticColorVariables = {
 /*
  * Mantine's component layer does not read the semantic variables above. Its
  * Input and Popover rules reach past them into the raw palette, so a themed
- * site still rendered stock controls: the archive's Selects computed
- * rgb(46,46,46) in dark and pure white in light, neither of which is a token
- * and neither of which a grep over src/ can see, because the literals live in
- * Mantine's own stylesheet.
+ * site still rendered stock controls: the archive's Selects computed a flat
+ * neutral grey in dark and pure white in light, neither of which is a token
+ * and neither of which a scan over src/ can see, because the literals live
+ * in Mantine's own stylesheet.
  *
  * These five palette entries are the ones those rules name. Overriding them
  * here rather than per component means a control added later inherits the
