@@ -17,8 +17,12 @@ scratchpad rather than a product, so the content and implementation can stay
 lightweight and experimental while the navigation and page shell remain
 predictable.
 
-The current site contains the Duck Feed game. More experiments should be easy to
-add without forcing them into a rigid internal template.
+The current site contains the Duck Feed game, sitting at the root route `/` as a
+placeholder rather than a settled position: it is the only experiment that
+exists yet, not a decision that the site's entry point belongs to a game. The
+redesign gives the site an actual homepage and moves Duck Feed under
+`/projects`, per `docs/decisions.md`. More experiments should be easy to add
+without forcing them into a rigid internal template.
 
 ## Shape
 
@@ -49,9 +53,9 @@ worked example of the leaf case. The rules live in `instructions/engineering.md`
 
 New experiments belong in `src/features/<feature-name>/`. Each feature may
 contain `api`, `assets`, `components`, `context`, `features`, `hooks`, `mock`,
-`routes`, `types`, and `utils` directories as needed. Shared shadcn primitives
-and cross-feature utilities belong in `src/shared/`; the site shell and route
-tree stay at the application level.
+`routes`, `types`, and `utils` directories as needed. Shared Mantine-based
+primitives and cross-feature utilities belong in `src/shared/`; the site shell
+and route tree stay at the application level.
 
 There is currently no generated application code, database, migration directory,
 or server-side code. Static assets that belong only to an experiment stay with
@@ -72,22 +76,21 @@ remains local unless there is a clear cross-page need.
 
 ## External dependencies
 
-The production site is static and deployed to GitHub Pages. The only current
-runtime network dependency is the Google Fonts stylesheet imported by the global
-CSS; the site should remain usable with the font unavailable.
+The production site is static and deployed to GitHub Pages. Fonts are
+self-hosted through `@fontsource` packages and bundled at build time; there is
+no runtime font network dependency.
 
-TanStack Router provides navigation, and shadcn is the planned source of shared
-UI primitives.
+TanStack Router provides navigation, and Mantine is the source of shared UI
+primitives.
 
 | Dependency | Used for | On failure |
 |---|---|---|
 | React | Rendering the client application | The site cannot render; surface the build/deployment failure rather than adding a fallback |
 | Vite | Development server and production build | Development/build fails explicitly |
 | GitHub Pages | Hosting the static production build | The deployed site is unavailable; local development remains independent |
-| Google Fonts | Optional Quicksand typography | Fall back to the browser's available font stack |
 | TanStack Router | Page and experiment navigation | Navigation work is incomplete; do not duplicate ad hoc routing |
 | lucide-react | Icon set for in-experiment UI (e.g. Duck Feed's info tooltip and avatar picker) | Bundled at build time, no runtime network call; a feature may fall back to text/emoji until an icon is added |
-| shadcn (planned) | Shared shell and UI primitives | A feature may use plain local styling until the primitive exists |
+| Mantine | Shared shell and UI primitives, theming | A feature may use plain local styling until the primitive exists |
 
 ## Boundaries
 
