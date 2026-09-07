@@ -1,0 +1,20 @@
+/*
+ * The only file permitted to write `margin`, and only to clear user-agent
+ * defaults. Every other layout need is gap and padding; see
+ * docs/decisions.md, "CSS margin stays banned".
+ */
+
+* {
+  margin: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--site-ground);
+  color: var(--site-mark);
+}

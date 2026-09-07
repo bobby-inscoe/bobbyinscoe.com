@@ -1,0 +1,130 @@
+/*
+ * Design tokens. The only file permitted to contain a colour literal.
+ * Light lives in the bare :root. Dark is declared twice: once for the OS
+ * preference, once for an explicit `data-theme="dark"` override, so a
+ * user choice always wins over the system setting.
+ *
+ * Depth (raised surfaces, hover/active states) is expressed through the
+ * elevation steps already declared below (ground/raised/surface/
+ * surface-hover/surface-active) plus the line-faint/line-strong hairlines.
+ * --site-shadow-overlay, the one shadow token, is deferred: the spec names
+ * it for modals and popovers but gives no literal value, and phase 4's
+ * Colophon modal is the first real consumer.
+ */
+
+:root {
+  /* colour: light, fibre ground */
+  --site-ground: #d6d3c8;
+  --site-raised: #e0ded2;
+  --site-surface: #eae7dd;
+  --site-surface-hover: #e0ded2;
+  --site-surface-active: #d6d3c8;
+  --site-line-faint: #c2c3b8;
+  --site-line: #a8aca2;
+  --site-line-strong: #8b938a;
+  --site-mark-muted: #4d5856;
+  --site-mark-secondary: #303b3d;
+  --site-mark: #10171c;
+  --site-accent: #672f02;
+  --site-accent-strong: #4c2000;
+  --site-accent-wash: #dcbdac;
+  --site-state: #355a6f;
+  --site-state-wash: #b5c6d1;
+  --site-error: #933832;
+  --site-warning: #6c5200;
+  --site-success: #355f37;
+  --site-grain: 0.04;
+
+  /* space, px */
+  --site-space-3xs: 2px;
+  --site-space-2xs: 4px;
+  --site-space-xs: 8px;
+  --site-space-sm: 12px;
+  --site-space-md: 16px;
+  --site-space-lg: 24px;
+  --site-space-xl: 32px;
+  --site-space-2xl: 48px;
+  --site-space-3xl: 64px;
+  --site-space-4xl: 96px;
+  --site-space-5xl: 128px;
+
+  /* radius: three values, no others */
+  --site-radius-none: 0;
+  --site-radius-control: 3px;
+  --site-radius-round: 999px;
+
+  /* duration, ms */
+  --site-duration-instant: 80ms;
+  --site-duration-quick: 160ms;
+  --site-duration-base: 240ms;
+  --site-duration-page: 400ms;
+  --site-duration-ambient: 1200ms;
+
+  /* easing */
+  --site-ease-enter: cubic-bezier(0.2, 0, 0, 1);
+  --site-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* breakpoint, px */
+  --site-breakpoint-480: 480px;
+  --site-breakpoint-640: 640px;
+  --site-breakpoint-900: 900px;
+  --site-breakpoint-1200: 1200px;
+  --site-breakpoint-1600: 1600px;
+
+  /* layer, z-index */
+  --site-layer-ambient: -1;
+  --site-layer-base: 0;
+  --site-layer-raised: 10;
+  --site-layer-sticky: 100;
+  --site-layer-popover: 200;
+  --site-layer-modal: 300;
+  --site-layer-toast: 400;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --site-ground: #10171c;
+    --site-raised: #171d22;
+    --site-surface: #1d2429;
+    --site-surface-hover: #232b2f;
+    --site-surface-active: #2a3337;
+    --site-line-faint: #232b2f;
+    --site-line: #303b3d;
+    --site-line-strong: #404c4c;
+    --site-mark-muted: #8f9891;
+    --site-mark-secondary: #a3a89e;
+    --site-mark: #d6d3c8;
+    --site-accent: #e9a77f;
+    --site-accent-strong: #fcc2a0;
+    --site-accent-wash: #361d0c;
+    --site-state: #739bb2;
+    --site-state-wash: #14252d;
+    --site-error: #dd7a6f;
+    --site-warning: #d9b764;
+    --site-success: #84b184;
+    --site-grain: 0.055;
+  }
+}
+
+:root[data-theme="dark"] {
+  --site-ground: #10171c;
+  --site-raised: #171d22;
+  --site-surface: #1d2429;
+  --site-surface-hover: #232b2f;
+  --site-surface-active: #2a3337;
+  --site-line-faint: #232b2f;
+  --site-line: #303b3d;
+  --site-line-strong: #404c4c;
+  --site-mark-muted: #8f9891;
+  --site-mark-secondary: #a3a89e;
+  --site-mark: #d6d3c8;
+  --site-accent: #e9a77f;
+  --site-accent-strong: #fcc2a0;
+  --site-accent-wash: #361d0c;
+  --site-state: #739bb2;
+  --site-state-wash: #14252d;
+  --site-error: #dd7a6f;
+  --site-warning: #d9b764;
+  --site-success: #84b184;
+  --site-grain: 0.055;
+}
