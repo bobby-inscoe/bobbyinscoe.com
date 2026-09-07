@@ -6,11 +6,17 @@
   background: var(--site-surface-hover);
 }
 
+/*
+ * The node and the title stay on one line and the title does not break
+ * inside itself: "Duck Feed" wrapping to "Duck / Feed" also detached the
+ * status node from the text it belongs to.
+ */
 .title {
   display: flex;
   align-items: center;
   gap: var(--site-space-xs);
   font: var(--site-type-ui);
+  white-space: nowrap;
 }
 
 .cell {
