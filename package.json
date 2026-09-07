@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22.12.0"
   },
   "dependencies": {
     "@tanstack/react-router": "^1.170.32",
@@ -14,11 +14,14 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",
+    "@testing-library/react": "16.3.3",
     "@types/node": "^26.4.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
+    "jsdom": "30.0.1",
     "typescript": "^7.0.2",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "vitest": "5.0.0"
   },
   "scripts": {
     "dev": "vite --host localhost --port 5173",
@@ -28,6 +31,7 @@
     "lint": "biome lint .",
     "fix": "biome check --write .",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "build": "vite build",
     "preview": "vite preview --host localhost --port 4173",
     "prepare": "git config core.hooksPath .githooks"
