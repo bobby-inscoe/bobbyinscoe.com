@@ -8,6 +8,7 @@ import { byTag, byYear } from '@/shared/projects/queries';
 import { PROJECTS } from '@/shared/projects/registry';
 import type { ProjectRecord } from '@/shared/projects/types';
 import { Prose } from '@/shared/ui/prose';
+import { Reveal } from '@/shared/ui/reveal';
 import { Rule } from '@/shared/ui/rule';
 
 function uniqueSorted(values: readonly string[]): string[] {
@@ -48,58 +49,66 @@ export function ProjectsIndex(): React.JSX.Element {
 
   return (
     <div className={classes.page}>
-      <h1 className={classes.title}>Projects</h1>
-      <Rule />
-      <div className={classes.filters}>
-        <Select
-          clearable
-          data={tagOptions}
-          label="Tag"
-          onChange={setTag}
-          placeholder="All tags"
-          value={tag}
-        />
-        <Select
-          clearable
-          data={yearOptions}
-          label="Year"
-          onChange={setYear}
-          placeholder="All years"
-          value={year}
-        />
-        <Select
-          clearable
-          data={kindOptions}
-          label="Kind"
-          onChange={setKind}
-          placeholder="All kinds"
-          value={kind}
-        />
-      </div>
-      {filtered.length === 0 ? (
-        <Prose>
-          <p>No projects match these filters.</p>
-        </Prose>
-      ) : (
-        <div className={classes.scroller}>
-          <table className={classes.table}>
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Year</th>
-                <th>Kind</th>
-                <th>Tags</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((project) => (
-                <ProjectIndexRow key={project.id} project={project} />
-              ))}
-            </tbody>
-          </table>
+      <Reveal index={0}>
+        <h1 className={classes.title}>Projects</h1>
+      </Reveal>
+      <Reveal index={1}>
+        <Rule />
+      </Reveal>
+      <Reveal index={2}>
+        <div className={classes.filters}>
+          <Select
+            clearable
+            data={tagOptions}
+            label="Tag"
+            onChange={setTag}
+            placeholder="All tags"
+            value={tag}
+          />
+          <Select
+            clearable
+            data={yearOptions}
+            label="Year"
+            onChange={setYear}
+            placeholder="All years"
+            value={year}
+          />
+          <Select
+            clearable
+            data={kindOptions}
+            label="Kind"
+            onChange={setKind}
+            placeholder="All kinds"
+            value={kind}
+          />
         </div>
-      )}
+      </Reveal>
+      <Reveal index={3}>
+        {filtered.length === 0 ? (
+          <Prose>
+            <p>No projects match these filters.</p>
+          </Prose>
+        ) : (
+          <div className={classes.scroller}>
+            <table className={classes.table}>
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Year</th>
+                  <th>Kind</th>
+                  <th>Tags</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((project) => (
+                  <ProjectIndexRow key={project.id} project={project} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Reveal>
     </div>
   );
 }

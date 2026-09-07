@@ -171,12 +171,20 @@
   transform: none;
 }
 
+/*
+ * The name lifts main out of the document's root snapshot during a view
+ * transition, so the header, footer and ambient layer stay in root and are
+ * held still while only the content changes. The animations that consume this
+ * name are in shared/theme/motion.css: the ::view-transition pseudos are not
+ * reachable from a module.
+ */
 .main {
   display: grid;
   align-content: start;
   width: 100%;
   gap: var(--site-space-3xl);
   padding: var(--site-space-4xl) var(--site-frame-inset) var(--site-space-5xl);
+  view-transition-name: main-content;
 }
 
 @media (max-width: 640px) {
