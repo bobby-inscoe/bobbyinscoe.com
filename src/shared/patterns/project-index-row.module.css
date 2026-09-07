@@ -1,0 +1,30 @@
+.row {
+  border-bottom: 1px solid var(--site-line-faint);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: var(--site-space-xs);
+}
+
+.node {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--site-radius-round);
+  background: var(--site-mark);
+}
+
+.node[data-hollow="true"] {
+  border: 1px solid var(--site-line-strong);
+  background: transparent;
+}
+
+.link {
+  color: var(--site-mark);
+  text-decoration: underline;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

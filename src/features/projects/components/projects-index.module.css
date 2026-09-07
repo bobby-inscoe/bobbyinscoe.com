@@ -2,3 +2,32 @@
   display: grid;
   gap: var(--site-space-lg);
 }
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--site-space-md);
+}
+
+.scroller {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: var(--site-space-sm) var(--site-space-md) var(--site-space-sm) 0;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--site-line-faint);
+}
+
+.table th {
+  color: var(--site-mark-muted);
+  border-bottom: 1px solid var(--site-line-strong);
+}

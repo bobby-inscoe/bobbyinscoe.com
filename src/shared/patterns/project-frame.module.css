@@ -1,0 +1,16 @@
+/*
+ * Structural only. Per-mode presentation (dark-fixed application/immersive
+ * pages, the accent applied to anything) is not decided yet; `data-mode`
+ * and the `--project-accent*` variables exist for a later phase to read.
+ */
+
+.frame {
+  display: grid;
+  gap: var(--site-space-lg);
+}
+
+.back {
+  color: var(--site-mark);
+  text-decoration: underline;
+  width: fit-content;
+}
