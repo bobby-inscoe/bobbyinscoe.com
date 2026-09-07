@@ -1,0 +1,30 @@
+.duckFeed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--site-space-md);
+}
+
+.title {
+  font: var(--site-type-display-l);
+  font-stretch: var(--site-width-display-l);
+  letter-spacing: var(--site-track-display-l);
+}
+
+/*
+ * Ceiling is 560px, not 480px: the Start Screen's three fieldsets plus the
+ * avatar art and button measure ~510px including padding, and a ceiling
+ * shorter than its own overlay content is what caused the internal
+ * scrollbar this value exists to avoid. See docs/decisions.md.
+ */
+.boardFrame {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  height: clamp(320px, 62vh, 560px);
+}
+
+.highScores {
+  width: 100%;
+  max-width: 260px;
+}

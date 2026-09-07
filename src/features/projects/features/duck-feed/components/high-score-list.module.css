@@ -1,0 +1,37 @@
+.highScoreList {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--site-space-xs);
+  width: 100%;
+}
+
+.heading {
+  font: var(--site-type-ui-small);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--site-mark-muted);
+}
+
+.empty {
+  font: var(--site-type-ui-small);
+  color: var(--site-mark-muted);
+}
+
+.items {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--site-space-3xs);
+  width: 100%;
+}
+
+.items li {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: var(--site-space-md);
+  font: var(--site-type-data);
+  font-variant-numeric: tabular-nums;
+}

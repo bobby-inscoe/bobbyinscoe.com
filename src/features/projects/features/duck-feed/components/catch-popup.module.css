@@ -1,0 +1,44 @@
+.popup {
+  position: absolute;
+  pointer-events: none;
+  font: var(--site-type-ui);
+  font-weight: 600;
+  white-space: nowrap;
+  animation: popup-float 0.7s ease-out forwards;
+}
+
+.popup[data-kind="catch"] {
+  color: var(--site-error);
+}
+
+.popup[data-kind="time-bonus"] {
+  color: var(--site-accent);
+}
+
+@keyframes popup-float {
+  0% {
+    opacity: 0;
+    translate: -50% -100%;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: -50% calc(-100% - 28px);
+  }
+}
+
+/*
+ * Carried forward from the phase 6 reduced-motion audit (docs/decisions.md).
+ * popup-float fills `forwards` from translate: -50% -100%, which centres the
+ * label over the item it belongs to. Pin that and drop the float; the popup
+ * stays legible for its full lifetime and is pruned by the game clock as
+ * before.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .popup {
+    animation: none;
+    translate: -50% -100%;
+  }
+}

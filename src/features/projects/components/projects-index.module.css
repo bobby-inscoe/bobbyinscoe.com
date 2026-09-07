@@ -1,0 +1,58 @@
+/*
+ * `font:` is a shorthand and resets the other font-* longhands, so it comes
+ * first in every rule that uses one.
+ */
+
+.page {
+  display: grid;
+  gap: var(--site-space-xl);
+}
+
+.title {
+  font: var(--site-type-display-l);
+  font-stretch: var(--site-width-display-l);
+  letter-spacing: var(--site-track-display-l);
+  color: var(--site-mark);
+  text-wrap: balance;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--site-space-md);
+}
+
+.scroller {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/*
+ * width: 100% alone meant the table could always shrink to fit, so the
+ * scroller never engaged and the columns crushed instead: at 380 the title
+ * broke mid-word and the tag list wrapped to four lines. min-width gives the
+ * table a floor to scroll against. Density itself is left alone, because a
+ * column layout tuned against a single row would be wrong against five.
+ */
+.table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: var(--site-space-sm) var(--site-space-md) var(--site-space-sm) 0;
+  text-align: left;
+  vertical-align: baseline;
+  border-bottom: 1px solid var(--site-line-faint);
+}
+
+.table th {
+  font: var(--site-type-meta);
+  letter-spacing: var(--site-track-meta);
+  text-transform: uppercase;
+  color: var(--site-mark-muted);
+  border-bottom: 1px solid var(--site-line-strong);
+  white-space: nowrap;
+}

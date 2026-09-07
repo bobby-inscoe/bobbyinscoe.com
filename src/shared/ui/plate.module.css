@@ -1,0 +1,19 @@
+/*
+ * The raised editorial surface: a luminance step away from the ground, a
+ * hairline, and --site-shadow-raised. That token resolves to a real drop
+ * shadow in light and to the 1px inset top highlight in dark, so the two
+ * schemes separate by the mechanism that works on their own ground and this
+ * file does not need to know which it got. The overlay shadow is a
+ * different token and never appears here.
+ *
+ * Radius is zero: plates are structural and editorial surfaces, and 3px is
+ * reserved for interactive controls.
+ */
+
+.plate {
+  background: var(--site-raised);
+  border: 1px solid var(--site-line-faint);
+  border-radius: var(--site-radius-none);
+  padding: var(--site-space-lg);
+  box-shadow: var(--site-shadow-raised);
+}

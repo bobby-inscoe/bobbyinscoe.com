@@ -1,0 +1,126 @@
+/*
+ * `font:` is a shorthand and resets the other font-* longhands, so it comes
+ * first in every rule that uses one.
+ */
+
+.body {
+  display: grid;
+  gap: var(--site-space-xl);
+  padding-bottom: var(--site-space-md);
+}
+
+/*
+ * The one shadow the system has, on its only consumer. It is not registered
+ * in Mantine's shadow scale and is not passed through Modal's `shadow` prop:
+ * there is exactly one modal, and a scale invites a second.
+ */
+.modalContent {
+  box-shadow: var(--site-shadow-overlay);
+}
+
+/*
+ * Mantine's Modal title is an h2 and would otherwise render smaller than the
+ * h3 section titles below it. classNames is how a Mantine component's own
+ * element is reached; there is no defaultProp for this.
+ */
+.modalTitle {
+  font: var(--site-type-heading);
+  letter-spacing: var(--site-track-heading);
+  color: var(--site-mark);
+}
+
+.section {
+  display: grid;
+  gap: var(--site-space-md);
+}
+
+.sectionTitle {
+  font: var(--site-type-heading);
+  letter-spacing: var(--site-track-heading);
+  color: var(--site-mark);
+  text-wrap: balance;
+}
+
+.faces,
+.dyes {
+  display: grid;
+  gap: var(--site-space-lg);
+}
+
+.face,
+.dye {
+  display: grid;
+  gap: var(--site-space-2xs);
+  max-width: var(--site-measure);
+}
+
+.faceName {
+  font: var(--site-type-ui);
+  color: var(--site-mark);
+}
+
+.faceRole,
+.dyeNote {
+  font: var(--site-type-read);
+  color: var(--site-mark-secondary);
+}
+
+.dyeName {
+  display: flex;
+  align-items: center;
+  gap: var(--site-space-xs);
+  font: var(--site-type-meta);
+  letter-spacing: var(--site-track-meta);
+  text-transform: uppercase;
+  color: var(--site-mark);
+}
+
+/*
+ * Each swatch reads the live token, so a palette change moves this page with
+ * it. The dye is named in text beside every swatch: the colour never carries
+ * the meaning on its own.
+ */
+.swatch {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--site-line);
+  border-radius: var(--site-radius-none);
+}
+
+.swatch[data-token="mark"] {
+  background: var(--site-mark);
+}
+
+.swatch[data-token="ground"] {
+  background: var(--site-ground);
+}
+
+.swatch[data-token="accent"] {
+  background: var(--site-accent);
+}
+
+.swatch[data-token="state"] {
+  background: var(--site-state);
+}
+
+.swatch[data-token="error"] {
+  background: var(--site-error);
+}
+
+.swatch[data-token="warning"] {
+  background: var(--site-warning);
+}
+
+.swatch[data-token="success"] {
+  background: var(--site-success);
+}
+
+.stack {
+  display: grid;
+  gap: var(--site-space-xs);
+  padding-left: var(--site-space-lg);
+  max-width: var(--site-measure);
+  font: var(--site-type-read);
+  color: var(--site-mark-secondary);
+}

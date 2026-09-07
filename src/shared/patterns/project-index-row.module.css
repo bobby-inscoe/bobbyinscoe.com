@@ -1,0 +1,55 @@
+.row {
+  border-bottom: 1px solid var(--site-line-faint);
+}
+
+.row:hover {
+  background: var(--site-surface-hover);
+}
+
+/*
+ * The node and the title stay on one line and the title does not break
+ * inside itself: "Duck Feed" wrapping to "Duck / Feed" also detached the
+ * status node from the text it belongs to.
+ */
+.title {
+  display: flex;
+  align-items: center;
+  gap: var(--site-space-xs);
+  font: var(--site-type-ui);
+  white-space: nowrap;
+}
+
+.cell {
+  font: var(--site-type-ui-small);
+  color: var(--site-mark-secondary);
+}
+
+.node {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--site-radius-round);
+  background: var(--site-mark);
+}
+
+/* Hollow is in progress. The row also states the status in words. */
+.node[data-hollow="true"] {
+  border: 2px solid var(--site-state);
+  background: transparent;
+}
+
+.link {
+  color: var(--site-mark);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
+.link:hover {
+  color: var(--site-accent);
+}
+
+.tabular {
+  font: var(--site-type-data);
+  font-variant-numeric: tabular-nums;
+  color: var(--site-mark-secondary);
+}

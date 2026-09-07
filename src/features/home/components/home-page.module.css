@@ -1,0 +1,53 @@
+/*
+ * `font:` is a shorthand and resets the other font-* longhands, so it comes
+ * first in every rule that uses one.
+ */
+
+.page {
+  display: grid;
+  gap: var(--site-space-3xl);
+}
+
+.masthead {
+  display: grid;
+  gap: var(--site-space-lg);
+}
+
+.title {
+  font: var(--site-type-display-xl);
+  font-stretch: var(--site-width-display-xl);
+  letter-spacing: var(--site-track-display-xl);
+  color: var(--site-mark);
+  text-wrap: balance;
+}
+
+.collection {
+  display: grid;
+  gap: var(--site-space-xl);
+}
+
+.collectionTitle {
+  font: var(--site-type-display-l);
+  font-stretch: var(--site-width-display-l);
+  letter-spacing: var(--site-track-display-l);
+  color: var(--site-mark);
+  text-wrap: balance;
+}
+
+.threaded {
+  position: relative;
+}
+
+/*
+ * The entries sit above the thread: it is a strand in the cloth and the ink
+ * is printed on top of it. Both values are layer tokens, and both are far
+ * below the ambient grain, which passes over everything.
+ */
+.list {
+  position: relative;
+  z-index: var(--site-layer-raised);
+  display: grid;
+  gap: var(--site-space-xl);
+  list-style: none;
+  padding: 0;
+}

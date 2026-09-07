@@ -1,0 +1,46 @@
+/*
+ * The only file permitted to write `margin`, and only to clear user-agent
+ * defaults. Every other layout need is gap and padding; see
+ * docs/decisions.md, "CSS margin stays banned".
+ */
+
+* {
+  margin: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--site-ground);
+  color: var(--site-mark);
+}
+
+/*
+ * One focus model for the whole site. Before this there was exactly one
+ * designed focus rule, on the colophon button, and everything else fell back
+ * to the browser's own outline.
+ *
+ * outline-offset rather than a ring token: the gap shows whatever surface is
+ * actually behind the element, so the same rule is correct on the ground, on
+ * a plate and on a control without a per-surface variant.
+ *
+ * Accent rather than state, because state means project lifecycle in this
+ * system and not interface state. It follows that on a project's own page
+ * the ring inherits that project's accent, which is intended.
+ *
+ * The second selector is still this one rule, not a second model. Mantine
+ * writes `outline: none` on its own input at class-plus-pseudo specificity
+ * and swaps the border colour instead, which a bare :focus-visible cannot
+ * outrank. Naming its stable class matches that specificity and this file
+ * loads after Mantine's, so the tie goes here. The hashed class is not used;
+ * it changes between releases.
+ */
+:focus-visible,
+.mantine-Input-input:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
+}

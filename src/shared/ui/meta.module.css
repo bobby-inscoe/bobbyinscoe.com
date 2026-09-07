@@ -1,0 +1,7 @@
+.meta {
+  font: var(--site-type-meta);
+  letter-spacing: var(--site-track-meta);
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--site-mark-muted);
+}
