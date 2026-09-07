@@ -2,8 +2,10 @@ import { Snail } from 'lucide-react';
 import type React from 'react';
 import { useState } from 'react';
 
+import { SNAIL_ICON_COLOR } from '@/features/projects/features/duck-feed/components/avatar-colors';
 import { CatchPopup } from '@/features/projects/features/duck-feed/components/catch-popup';
 import { FeedItem } from '@/features/projects/features/duck-feed/components/feed-item';
+import classes from '@/features/projects/features/duck-feed/components/game-board.module.css';
 import { DuckIcon } from '@/features/projects/features/duck-feed/components/icons/duck-icon';
 import type {
   Avatar,
@@ -11,10 +13,6 @@ import type {
   Popup,
   Position,
 } from '@/features/projects/features/duck-feed/types/game';
-import {
-  DUCK_COLOR,
-  SNAIL_COLOR,
-} from '@/features/projects/features/duck-feed/utils/avatars';
 
 interface GameBoardProps {
   ref: React.Ref<HTMLDivElement>;
@@ -24,6 +22,14 @@ interface GameBoardProps {
   isBonusPhase: boolean;
   onPointerMove: (position: Position) => void;
   onItemActivate: (id: string) => void;
+}
+
+function positionFromPoint(
+  bounds: DOMRect,
+  clientX: number,
+  clientY: number,
+): Position {
+  return { x: clientX - bounds.left, y: clientY - bounds.top };
 }
 
 export function GameBoard({
@@ -38,20 +44,36 @@ export function GameBoard({
   const [cursorPos, setCursorPos] = useState<Position | null>(null);
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: this tracks cursor position for the game's proximity mechanic; every feed item is independently reachable and activatable via keyboard focus.
+    // biome-ignore lint/a11y/noStaticElementInteractions: this tracks pointer position for the game's proximity mechanic; every feed item is independently reachable and activatable via keyboard focus.
     <div
       ref={ref}
-      className={`GameBoard GameBoard--custom-cursor${isBonusPhase ? ' GameBoard--bonus-phase' : ''}`}
+      className={classes.board}
+      data-bonus-phase={isBonusPhase}
       onMouseMove={(event) => {
         const bounds = event.currentTarget.getBoundingClientRect();
-        const position = {
-          x: event.clientX - bounds.left,
-          y: event.clientY - bounds.top,
-        };
+        const position = positionFromPoint(
+          bounds,
+          event.clientX,
+          event.clientY,
+        );
         onPointerMove(position);
         setCursorPos(position);
       }}
       onMouseLeave={() => setCursorPos(null)}
+      onTouchMove={(event) => {
+        const touch = event.touches[0];
+        if (!touch) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const position = positionFromPoint(
+          bounds,
+          touch.clientX,
+          touch.clientY,
+        );
+        onPointerMove(position);
+        setCursorPos(position);
+      }}
+      onTouchEnd={() => setCursorPos(null)}
+      onTouchCancel={() => setCursorPos(null)}
     >
       {feedItems.map((item) => (
         <FeedItem
@@ -67,18 +89,13 @@ export function GameBoard({
       ))}
       {cursorPos && (
         <span
-          className="CursorAvatar"
+          className={classes.cursorAvatar}
           style={{ left: cursorPos.x, top: cursorPos.y }}
         >
           {avatar === 'snail' ? (
-            <Snail size={28} strokeWidth={1.75} color={SNAIL_COLOR} />
+            <Snail size={28} strokeWidth={1.75} color={SNAIL_ICON_COLOR} />
           ) : (
-            <DuckIcon
-              useOriginalArt
-              size={28}
-              strokeWidth={1.75}
-              color={DUCK_COLOR}
-            />
+            <DuckIcon useOriginalArt size={28} strokeWidth={1.75} />
           )}
         </span>
       )}

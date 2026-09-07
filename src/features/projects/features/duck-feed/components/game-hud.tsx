@@ -1,5 +1,6 @@
 import type React from 'react';
 
+import classes from '@/features/projects/features/duck-feed/components/game-hud.module.css';
 import { useNow } from '@/features/projects/features/duck-feed/hooks/use-now';
 
 type UrgencyTier = 'normal' | 'warning' | 'critical';
@@ -47,45 +48,47 @@ export function GameHud({
     bonusPhaseDurationMs > 0 ? bonusMsRemaining / bonusPhaseDurationMs : 0;
 
   return (
-    <div className="GameHud">
-      <div className="GameHud-row">
-        <div className="GameHud-stat">
-          <span className="GameHud-label">Score</span>
-          <span className="GameHud-value">{score}</span>
+    <div className={classes.hud}>
+      <div className={classes.row}>
+        <div className={classes.stat}>
+          <span className={classes.label}>Score</span>
+          <span className={classes.value}>{score}</span>
         </div>
         {comboCount > 1 && (
-          <div className="GameHud-stat GameHud-combo">
-            <span className="GameHud-label">Combo</span>
-            <span className="GameHud-value">x{comboCount}</span>
+          <div className={classes.stat} data-variant="combo">
+            <span className={classes.label}>Combo</span>
+            <span className={classes.value}>x{comboCount}</span>
           </div>
         )}
         <div
-          className={`GameHud-stat GameHud-timer GameHud-timer--${urgencyTier(remainingMs, durationMs)}${isBonusPhase ? ' GameHud-timer--paused' : ''}`}
+          className={classes.stat}
+          data-urgency={urgencyTier(remainingMs, durationMs)}
+          data-paused={isBonusPhase}
         >
-          <span className="GameHud-label">
+          <span className={classes.label}>
             {isBonusPhase ? 'Time (paused)' : 'Time'}
           </span>
-          <span className="GameHud-value">{secondsRemaining.toFixed(1)}s</span>
+          <span className={classes.value}>{secondsRemaining.toFixed(1)}s</span>
         </div>
         {isBonusPhase && (
-          <div className="GameHud-stat GameHud-bonus">
-            <span className="GameHud-label">Bonus phase</span>
-            <span className="GameHud-value">
+          <div className={classes.stat} data-variant="bonus">
+            <span className={classes.label}>Bonus phase</span>
+            <span className={classes.value}>
               {(bonusMsRemaining / 1000).toFixed(1)}s
             </span>
           </div>
         )}
         {bestScore !== null && (
-          <div className="GameHud-stat">
-            <span className="GameHud-label">Best</span>
-            <span className="GameHud-value">{bestScore}</span>
+          <div className={classes.stat}>
+            <span className={classes.label}>Best</span>
+            <span className={classes.value}>{bestScore}</span>
           </div>
         )}
       </div>
       {isBonusPhase && (
-        <div className="GameHud-bonusBar">
+        <div className={classes.bonusBar}>
           <div
-            className="GameHud-bonusBar-fill"
+            className={classes.bonusBarFill}
             style={{ width: `${bonusProgress * 100}%` }}
           />
         </div>

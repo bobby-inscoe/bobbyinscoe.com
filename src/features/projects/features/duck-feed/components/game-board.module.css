@@ -1,0 +1,37 @@
+.board {
+  position: absolute;
+  inset: 0;
+  background-color: var(--site-raised);
+  border: 1px solid var(--site-line-faint);
+  border-radius: var(--site-radius-none);
+  overflow: hidden;
+  touch-action: none;
+  transition: background-image 0.3s ease;
+}
+
+@media (pointer: fine) {
+  .board {
+    cursor: none;
+  }
+}
+
+.board[data-bonus-phase="true"] {
+  background-image: radial-gradient(
+    circle at center,
+    color-mix(in oklab, var(--site-accent) 12%, transparent),
+    transparent 70%
+  );
+}
+
+.cursorAvatar {
+  position: absolute;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  display: flex;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board {
+    transition-duration: var(--site-duration-instant);
+  }
+}

@@ -1,0 +1,55 @@
+.startScreen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: safe center;
+  justify-content: safe center;
+  padding: var(--site-space-lg);
+  overflow: auto;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--site-space-sm);
+  text-align: center;
+}
+
+.field {
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--site-space-2xs);
+  font: var(--site-type-ui-small);
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--site-space-2xs);
+}
+
+.info {
+  display: inline-flex;
+  align-items: center;
+  color: var(--site-mark-muted);
+  cursor: help;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--site-space-xs);
+  font: var(--site-type-ui);
+}
+
+.option input {
+  accent-color: var(--site-accent);
+}
+
+.avatarIcon {
+  flex-shrink: 0;
+}

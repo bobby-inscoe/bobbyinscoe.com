@@ -1,0 +1,24 @@
+.duckFeed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--site-space-md);
+}
+
+.title {
+  font: var(--site-type-display-l);
+  font-stretch: var(--site-width-display-l);
+  letter-spacing: var(--site-track-display-l);
+}
+
+.boardFrame {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  height: clamp(320px, 60vh, 480px);
+}
+
+.highScores {
+  width: 100%;
+  max-width: 260px;
+}

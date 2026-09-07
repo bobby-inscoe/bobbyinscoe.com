@@ -297,19 +297,13 @@ function walk(dir: string, extensions: readonly string[]): string[] {
 
 /*
  * Every entry is a known, dated exception rather than a way to silence the
- * rule. Duck Feed's are the ones phase 7 is told by name to remove, and its
- * do-not list forbids touching utils/ before then. types.ts carries two
- * hexes inside doc comments the spec's own type block includes verbatim.
+ * rule. Phase 7 converted duck-feed.css to CSS modules reading tokens and
+ * removed it from this list; avatars.ts stays, because phase 7's own
+ * do-not list forbids touching utils/ (docs/decisions.md). types.ts carries
+ * two hexes inside doc comments the spec's own type block includes
+ * verbatim.
  */
 const PENDING_LITERALS = [
-  join(
-    'features',
-    'projects',
-    'features',
-    'duck-feed',
-    'components',
-    'duck-feed.css',
-  ),
   join('features', 'projects', 'features', 'duck-feed', 'utils', 'avatars.ts'),
   join('shared', 'projects', 'types.ts'),
 ];
