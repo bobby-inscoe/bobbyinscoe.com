@@ -1,6 +1,6 @@
 import { Snail } from 'lucide-react';
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { SNAIL_ICON_COLOR } from '@/features/projects/features/duck-feed/components/avatar-colors';
 import { CatchPopup } from '@/features/projects/features/duck-feed/components/catch-popup';
@@ -42,6 +42,37 @@ export function GameBoard({
   onItemActivate,
 }: GameBoardProps): React.JSX.Element {
   const [cursorPos, setCursorPos] = useState<Position | null>(null);
+  const pendingPositionRef = useRef<Position | null>(null);
+  const rafIdRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
+    },
+    [],
+  );
+
+  /*
+   * touchmove can fire far more often than mousemove ever did, especially
+   * for a near-stationary finger, and each call reaches the game's
+   * proximity-catch logic. Uncapped, that read as items spawning
+   * exponentially under touch: a light touch-and-hold could fire dozens of
+   * catches a second, which then compounds as more items appear nearby and
+   * the thread falls further behind. Coalescing to one call per animation
+   * frame caps it at display refresh rate regardless of raw event volume.
+   * The cursor avatar still updates every event, since that cost is just a
+   * style attribute, not a game-state change.
+   */
+  function reportPosition(position: Position): void {
+    setCursorPos(position);
+    pendingPositionRef.current = position;
+    if (rafIdRef.current !== null) return;
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null;
+      const pending = pendingPositionRef.current;
+      if (pending) onPointerMove(pending);
+    });
+  }
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: this tracks pointer position for the game's proximity mechanic; every feed item is independently reachable and activatable via keyboard focus.
@@ -51,26 +82,14 @@ export function GameBoard({
       data-bonus-phase={isBonusPhase}
       onMouseMove={(event) => {
         const bounds = event.currentTarget.getBoundingClientRect();
-        const position = positionFromPoint(
-          bounds,
-          event.clientX,
-          event.clientY,
-        );
-        onPointerMove(position);
-        setCursorPos(position);
+        reportPosition(positionFromPoint(bounds, event.clientX, event.clientY));
       }}
       onMouseLeave={() => setCursorPos(null)}
       onTouchMove={(event) => {
         const touch = event.touches[0];
         if (!touch) return;
         const bounds = event.currentTarget.getBoundingClientRect();
-        const position = positionFromPoint(
-          bounds,
-          touch.clientX,
-          touch.clientY,
-        );
-        onPointerMove(position);
-        setCursorPos(position);
+        reportPosition(positionFromPoint(bounds, touch.clientX, touch.clientY));
       }}
       onTouchEnd={() => setCursorPos(null)}
       onTouchCancel={() => setCursorPos(null)}
