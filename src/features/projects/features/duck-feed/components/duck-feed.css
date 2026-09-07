@@ -439,3 +439,66 @@
     translate: -50% calc(-100% - 28px);
   }
 }
+
+/* --------------------------------- */
+/* Reduced motion                     */
+/* --------------------------------- */
+
+/*
+ * Added in phase 6, whose deliverable is a full reduced-motion audit; this
+ * file was the largest gap in the repository and had no guard at all. It is
+ * an accessibility defect rather than a style one: .shake is a five-second
+ * infinite rotation on every feed item and the critical-timer pulse is an
+ * infinite flash, and neither asked the user first.
+ *
+ * Phase 7 rewrites this file into CSS modules. It inherits this guard as a
+ * requirement, not as code: a rewrite that drops it is a regression.
+ *
+ * Scope: this block only. Nothing above it was touched.
+ *
+ * Reduced motion is not the same as faster. The infinite animations stop
+ * outright, because a five-second shake played quickly is still a shake. Only
+ * the finite transitions collapse toward instant.
+ *
+ * Checked before writing it: none of the nine motion sites is the only signal
+ * for a game event. The critical timer also turns red and is still counting
+ * down; a catch is also scored in the HUD; item positions come from state, not
+ * from the transition that smooths them. Two of them do carry a static end
+ * state in their fill, though, and cancelling those without pinning the end
+ * state would resize a crumb and displace a popup rather than just stopping
+ * them, so both are pinned below.
+ */
+@media (prefers-reduced-motion: reduce) {
+  /* Infinite. These stop. */
+  .GameHud-timer--critical .GameHud-value {
+    animation: none;
+  }
+
+  .shake {
+    animation: none;
+  }
+
+  /* crumb-spawn fills `both` and ends at scale 0.7. Pin it. */
+  .FeedItem--crumb {
+    animation: none;
+    scale: 0.7;
+  }
+
+  /*
+   * popup-float fills `forwards` from translate: -50% -100%, which is what
+   * centres the label over the item it belongs to. Pin that and drop the
+   * float. The popup stays legible for its full POPUP_LIFETIME_MS and is
+   * pruned by the game clock, exactly as before.
+   */
+  .CatchPopup {
+    animation: none;
+    translate: -50% -100%;
+  }
+
+  /* Finite transitions. The value still changes; the easing into it goes. */
+  .GameHud-bonusBar-fill,
+  .GameBoard,
+  .FeedItem {
+    transition-duration: var(--site-duration-instant);
+  }
+}

@@ -115,6 +115,14 @@ const fontSizes = {
 };
 
 export const theme = createTheme({
+  /*
+   * Mantine defaults this to false, which leaves its own transitions running
+   * under prefers-reduced-motion: the Colophon modal's 240ms fade and every
+   * Select dropdown on the archive. This is Mantine's own switch rather than a
+   * patch over its output: it sets data-respect-reduced-motion on the root,
+   * which its stylesheets read, and Collapse reads the flag directly.
+   */
+  respectReducedMotion: true,
   fontFamily: fontDisplay,
   fontFamilyMonospace: fontMono,
   fontSizes,

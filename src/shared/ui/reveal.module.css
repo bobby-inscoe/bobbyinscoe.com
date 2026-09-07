@@ -1,0 +1,54 @@
+/*
+ * The stagger step. It is not a duration on the site's five-value scale and
+ * must not become one: the scale measures how long a thing takes, this
+ * measures how far apart two things start. The spec gives it as a range,
+ * 30 to 50ms, rather than a token.
+ */
+.reveal {
+  --reveal-stagger: 40ms;
+
+  /*
+   * A reveal wraps content and must not resize it. Without this the wrapper
+   * becomes the grid item in its parent's place and inherits min-width: auto,
+   * which propagates the archive table's 640px floor up through the layout:
+   * the browser pass caught /projects scrolling horizontally at 380 because
+   * the .scroller underneath could no longer absorb it.
+   */
+  min-width: 0;
+
+  animation: site-reveal var(--site-duration-base) var(--site-ease-enter) both;
+  animation-delay: calc(var(--reveal-order, 0) * var(--reveal-stagger));
+}
+
+@keyframes site-reveal {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+@keyframes site-reveal-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/*
+ * Opacity only, at instant, and no stagger: everything arrives together rather
+ * than in sequence, which is the same reasoning as the six-item cap taken to
+ * its end. See docs/decisions.md for why instant is 80ms and not the spec's
+ * literal 120.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation-name: site-reveal-fade;
+    animation-duration: var(--site-duration-instant);
+    animation-delay: 0s;
+  }
+}
+
+@media print {
+  .reveal {
+    animation: none;
+  }
+}

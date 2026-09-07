@@ -1,0 +1,114 @@
+/*
+ * Charter: this file holds only motion that cannot be scoped to a component.
+ *
+ * Today that is the ::view-transition-* pseudo-elements and the keyframes they
+ * name. Those pseudos live on the document's own transition tree, outside the
+ * element tree entirely, so a CSS module cannot reach them: a module scopes by
+ * rewriting class names, and there is no class here to rewrite. Everything
+ * else stays in the module beside the component it moves. If a rule written
+ * here could have been written in a module, it is in the wrong file.
+ *
+ * Load order is tokens, reset, motion. Every duration and easing below is a
+ * token, so tokens must already be declared.
+ */
+
+/*
+ * The transition between the collection and a project.
+ *
+ * `main` carries its own view-transition-name (app-shell.module.css), which
+ * lifts it out of the root snapshot. What is left in root is the header, the
+ * footer and the ambient layer: the same pixels on both pages, so they are
+ * held still rather than cross-faded. Only the content moves, which is what
+ * changed.
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/*
+ * Sequential, not a cross-fade. Two opaque pages at half opacity over a
+ * textured ground ghost badly, so the old one leaves before the new one
+ * arrives: 160 out, then 240 in, which sums to --site-duration-page exactly.
+ * The vocabulary allows 2 to 8px of translation with the opacity; this uses
+ * 4 out and 6 in.
+ */
+::view-transition-old(main-content) {
+  animation: site-vt-leave var(--site-duration-quick) var(--site-ease-exit) both;
+}
+
+::view-transition-new(main-content) {
+  animation: site-vt-enter var(--site-duration-base) var(--site-ease-enter) both;
+  animation-delay: var(--site-duration-quick);
+}
+
+/* The two mains differ in height, so the group resizes. On the same clock. */
+::view-transition-group(main-content) {
+  animation-duration: var(--site-duration-page);
+  animation-timing-function: var(--site-ease-enter);
+}
+
+@keyframes site-vt-leave {
+  to {
+    opacity: 0;
+    translate: 0 -4px;
+  }
+}
+
+@keyframes site-vt-enter {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+@keyframes site-vt-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes site-vt-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/*
+ * Reduced motion has to cancel, not decline to add. The user agent supplies
+ * its own cross-fade on every pseudo it captures, so a rule that merely omits
+ * an animation leaves the browser's default running.
+ *
+ * The (*) rule is the catch-all for pseudos this file has not named, and it is
+ * not enough on its own: a named pseudo out-specifies (*), so the timings set
+ * on main-content above survive it. Measured, not reasoned about; the first
+ * version of this block set only animation-name on the named pair and left
+ * them running at 240ms with a 160ms delay under `reduce`, which reads from
+ * the CSS as though it had been handled. Every named pseudo is therefore
+ * restated here in full shorthand, which also resets the delay.
+ *
+ * root keeps `animation: none` from above: the shorthand set its name to
+ * none, and setting a duration does not bring an animation back.
+ */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-delay: 0s;
+    animation-duration: var(--site-duration-instant);
+    animation-timing-function: linear;
+  }
+
+  ::view-transition-old(main-content) {
+    animation: site-vt-fade-out var(--site-duration-instant) linear both;
+  }
+
+  ::view-transition-new(main-content) {
+    animation: site-vt-fade-in var(--site-duration-instant) linear both;
+  }
+
+  ::view-transition-group(main-content) {
+    animation-name: none;
+  }
+}

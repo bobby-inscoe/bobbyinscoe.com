@@ -25,6 +25,13 @@ export function createAppRouter(history?: RouterHistory) {
   return createRouter({
     routeTree,
     defaultNotFoundComponent: NotFound,
+    /*
+     * Set here rather than per Link so every route change transitions the same
+     * way, including the browser's back button and the project frame's own
+     * back link, which no Link prop would reach. The router feature-detects
+     * document.startViewTransition, so a browser without it navigates plainly.
+     */
+    defaultViewTransition: true,
     ...(history ? { history } : {}),
   });
 }
