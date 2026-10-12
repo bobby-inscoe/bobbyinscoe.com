@@ -7,7 +7,7 @@ import {
   Text,
   Title,
 } from '@mantine/core';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import type {
@@ -24,6 +24,18 @@ import {
 export function ListingPhoto({ listing }: { listing: Listing }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const photo = listing.photo;
+  const [expiryCheckAt, setExpiryCheckAt] = useState(Date.now);
+  useEffect(() => {
+    if (!photo) return;
+    const remaining =
+      Date.parse(photo.expiresAt) - Math.max(Date.now(), expiryCheckAt);
+    if (remaining <= 0) return;
+    const timeout = window.setTimeout(
+      () => setExpiryCheckAt(Date.now()),
+      Math.min(remaining, 2_147_483_647),
+    );
+    return () => window.clearTimeout(timeout);
+  }, [photo, expiryCheckAt]);
   if (
     !photo ||
     failedUrl === photo.url ||

@@ -97,7 +97,7 @@ Deno.serve(async (request: Request) => {
     (!/^\d+$/.test(contentLength) || Number(contentLength) > MAX_BYTES)
   )
     return response(413, { error: 'Request too large' });
-  let body: Uint8Array;
+  let body: Awaited<ReturnType<typeof boundedBody>>;
   try {
     body = await boundedBody(request);
   } catch {

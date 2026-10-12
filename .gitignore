@@ -32,3 +32,6 @@ yarn.lock
 /.env.house-scanner.local
 /supabase/.temp/
 /supabase/.branches/
+
+/.browser-test-results/
+/playwright-report/

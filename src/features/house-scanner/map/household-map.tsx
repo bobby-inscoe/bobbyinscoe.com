@@ -1,10 +1,19 @@
 import { Button, Group, Stack, Text } from '@mantine/core';
-import { Map as MapLibreMap, Marker, NavigationControl } from 'maplibre-gl';
+import {
+  Map as MapLibreMap,
+  Marker,
+  NavigationControl,
+  setWorkerUrl,
+} from 'maplibre-gl';
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import { useEffect, useRef, useState } from 'react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import styles from '@/features/house-scanner/map/household-map.module.css';
 import type { Listing } from '@/features/house-scanner/types/contracts';
+
+// MapLibre resolves its default worker beside import.meta.url, which Vite rewrites.
+setWorkerUrl(workerUrl);
 
 export interface MapPoint {
   id: string;

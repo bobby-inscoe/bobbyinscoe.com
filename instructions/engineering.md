@@ -11,7 +11,7 @@ rule nobody enforces teaches agents that rules are optional.
 - UI components: Mantine Core and Hooks 9; shared theme in `src/app/theme.ts`
 - Runtime and version: Node.js `>=20.19.0`
 - Package manager: npm
-- Test runner: None configured yet
+- Test runners: Vitest for behavior/privacy; Playwright for local browser flows
 - Formatter and linter: Biome
 
 Version constraints that agents keep getting wrong belong here. If a library is
@@ -36,9 +36,13 @@ npm install
 # run locally
 npm run dev
 # test (whole suite)
-# No test runner is configured yet.
+npm test
+# browser flows (installed Microsoft Edge, local server)
+npm run test:browser
+# verification-code typecheck
+npm run test:typecheck
 # test (single file)
-# Not available until a test runner is configured.
+npm test -- path/to/file.test.ts
 # lint and format
 npm run check
 # typecheck
@@ -247,7 +251,7 @@ executed, not behavior checked.
 
 What must be tested in this project:
 
-- There is no automated test runner yet. When tests are introduced, cover
+- Cover
   user-visible behavior and route transitions, including loading, empty, error,
   and not-found states.
 

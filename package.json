@@ -20,6 +20,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",
     "@electric-sql/pglite": "^0.5.9",
+    "@playwright/test": "^1.64.0",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^26.4.1",
     "@types/react": "^19.2.18",
@@ -43,6 +44,8 @@
     "house-scanner:build": "vite build --config tools/house-scanner/vite.config.ts",
     "house-scanner:typecheck": "tsc --noEmit -p tools/house-scanner/tsconfig.json",
     "house-scanner:fixture": "npm run house-scanner:build && node .house-scanner-build/collector.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "test:typecheck": "tsc --noEmit -p tsconfig.verification.json"
   }
 }

@@ -80,8 +80,10 @@ function main() {
         liveCoverage: prepared.liveCoverage,
         notice:
           'No live coverage. Unsigned requests prepared in memory; nothing sent or saved.',
-        observationCount: prepared.priceComparisons.reduce(
-          (count) => count + 1,
+        observationCount: prepared.requests.reduce(
+          (count, request) =>
+            count +
+            (request.action === 'stage' ? request.observations.length : 0),
           0,
         ),
         requestCount: prepared.requests.length,
