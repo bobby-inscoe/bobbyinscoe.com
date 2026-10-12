@@ -32,8 +32,8 @@ its game reducer, countdown, and high-score persistence. Its top five scores use
 `localStorage` under `duck-feed:high-scores`. There is no backend or remote cache.
 
 Libron v0.31 regular and italic WOFF2 files are bundled unchanged from the official
-[release](https://github.com/nicoverbruggen/libron/releases/tag/v0.31) under SIL OFL 1.1. The license is included beside the source fonts and in
-`public/licenses/libron.txt` for deployed copies. CSS uses `font-display: swap`
+[release](https://github.com/nicoverbruggen/libron/releases/tag/v0.31) under SIL OFL 1.1. The license is kept in
+`public/licenses/libron.txt` and is copied into the deployed site. CSS uses `font-display: swap`
 and Georgia as fallback. No font service, stylesheet API, or external font request
 is required. The browser fetches font files from the site's own built assets.
 
