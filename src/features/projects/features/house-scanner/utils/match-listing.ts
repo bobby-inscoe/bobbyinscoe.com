@@ -97,7 +97,8 @@ export function matchListing(
       if (required('glazed') && !f.glazed) {
         exception = true;
         caveats.push(
-          f.largePrivateTerrace === true
+          !listing.conflicts.includes('largePrivateTerrace') &&
+            f.largePrivateTerrace === true
             ? 'Large private unglazed terrace'
             : 'Outdoor space is unglazed',
         );
@@ -140,12 +141,7 @@ export function matchListing(
       ],
     };
   const price = f.askingPriceSek;
-  if (price !== null && price > criteria.stretchPriceSek)
-    return {
-      section: 'outside',
-      reasons: ['Above profile stretch budget'],
-      caveats,
-    };
+
   reasons.push(
     price !== null && price <= criteria.preferredPriceSek
       ? 'Within preferred budget'

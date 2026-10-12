@@ -47,11 +47,14 @@ Original checkout changes are outside this work.
 
 | Task | Dependencies | State | Owner |
 | --- | --- | --- | --- |
-| F0 contracts, route, schema and gates | Approved plan | running | Coordinator, gpt-6.1-sol high |
-| F0 independent security review | Fixed foundation diff | pending | Fresh gpt-6.1-sol high |
-| P1 UI and map | Reviewed contracts | pending | gpt-6.1-sol medium |
-| P1 fixture collector | Reviewed contracts; synthetic only | pending | gpt-6.1-sol medium |
-| P1 session/ingest endpoints | Reviewed security design | pending | gpt-6.1-sol high |
+| F0 contracts, route and source gates | Approved plan | accepted for local consumers; runtime gate pending | Coordinator, gpt-6.1-sol high |
+| F0 independent security review | Fixed foundation diff | findings corrected; design reviewed | /root/foundation_review, gpt-6.1-sol high |
+| P1 UI and map | 757cdff | running | /root/project_ui, gpt-6.1-sol medium |
+| P1 fixture collector | 757cdff; synthetic only | running | /root/fixture_collector, gpt-6.1-sol medium |
+| P1 schema/session/ingest | 757cdff; reviewed design | running | /root/private_backend, gpt-6.1-sol high |
 
 Workers are leaves and use separate managed worktrees at the accepted foundation commit. Record requested model/effort and actual launcher acknowledgment; the launcher does not independently attest the execution model. No worker owns shared files without reassignment.
 
+Worker worktrees are house-scanner-ui, house-scanner-tools and house-scanner-backend under the same managed worktree directory, each based on 757cdff6e2faa39bb8c35da98119b5f4c68668f4. All three explicit model/effort requests were acknowledged by the launcher. No nested workers were launched.
+
+Foundation evidence: npm run check, npm run typecheck and npm run build passed after the contract review corrections. No behavior tests ran. npm audit reported GHSA-68fv-2mgg-jv7q in source-map-js 1.2.1, a development dependency already present in the base lockfile. No broad audit fix was applied.

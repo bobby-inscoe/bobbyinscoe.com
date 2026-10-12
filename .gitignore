@@ -27,3 +27,8 @@ yarn-debug.log*
 yarn-error.log*
 
 yarn.lock
+# House Scanner local tools and private environment
+/.house-scanner-build/
+/.env.house-scanner.local
+/supabase/.temp/
+/supabase/.branches/
