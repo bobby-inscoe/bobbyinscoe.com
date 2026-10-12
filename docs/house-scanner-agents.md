@@ -16,4 +16,3 @@ Claude continuation mapping: claude-sonnet-5-5 medium for normal work, high for 
 Keep at most four active agents including the coordinator. Default workers are leaves. Give each worker a task ID, concrete outcome, base commit/worktree, owned paths, prohibited shared paths, accepted contract version, acceptance examples, permitted checks and stop conditions. Stop dependent edits on contract conflict or absent source rights; report account/secret needs without creating resources.
 
 The coordinator reads each diff, integrates one at a time and records remaining evidence. A worker's report is not verification. Do not add/run behavioral tests unless the user authorizes them. Do not publish, message, spend, delete data or modify unrelated work.
-

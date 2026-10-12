@@ -1,6 +1,8 @@
 import { Button, Group, Stack, Text, Title } from '@mantine/core';
 import { useState } from 'react';
 
+import { HouseScannerAccess } from '@/features/projects/features/house-scanner/components/house-scanner-access';
+import { HouseholdWorkspace } from '@/features/projects/features/house-scanner/components/household-workspace';
 import { SyntheticWorkspace } from '@/features/projects/features/house-scanner/components/synthetic-workspace';
 import { ProjectFrame } from '@/shared/patterns/project-frame';
 
@@ -20,29 +22,21 @@ export function HouseScannerPage() {
             <Title order={1}>House Scanner</Title>
             <Text>A private shared home shortlist.</Text>
           </div>
-          {demo && (
-            <Button variant="default" onClick={() => setDemo(false)}>
-              Leave demo
-            </Button>
-          )}
+          <Button variant="default" onClick={() => setDemo(!demo)}>
+            {demo ? 'Leave demo' : 'Explore the synthetic demo'}
+          </Button>
         </Group>
         {demo ? (
           <SyntheticWorkspace />
         ) : (
-          <Stack align="flex-start">
-            <Title order={2}>Private access is not configured</Title>
-            <Text>
-              Invitation-only sign-in will be available after the backend is
-              configured. No household data is loaded.
-            </Text>
-            <Button onClick={() => setDemo(true)}>
-              Explore the synthetic demo
-            </Button>
-            <Text size="sm">
-              The demo contains fictional homes and people. Changes stay in
-              memory and disappear when you leave.
-            </Text>
-          </Stack>
+          <HouseScannerAccess>
+            {(household) => (
+              <HouseholdWorkspace
+                key={`${household.snapshot.householdId}:${household.userId}`}
+                {...household}
+              />
+            )}
+          </HouseScannerAccess>
         )}
       </Stack>
     </ProjectFrame>

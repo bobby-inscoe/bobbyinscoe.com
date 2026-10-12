@@ -35,6 +35,9 @@
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview --host localhost --port 4173",
-    "prepare": "git config core.hooksPath .githooks"
+    "prepare": "git config core.hooksPath .githooks",
+    "house-scanner:build": "vite build --config tools/house-scanner/vite.config.ts",
+    "house-scanner:typecheck": "tsc --noEmit -p tools/house-scanner/tsconfig.json",
+    "house-scanner:fixture": "npm run house-scanner:build && node .house-scanner-build/collector.mjs"
   }
 }

@@ -20,7 +20,7 @@ Shared favorites are one row per household/listing/authenticated actor. Removing
 
 Use Supabase Auth with invitation-only email OTP, disabled public signup, custom free SMTP and current-membership RLS. Remember off uses sessionStorage; remember on uses namespaced SDK token storage. Never persist a private listing snapshot. Clear private state on session change and sign-out.
 
-The ingestion endpoint accepts bounded signed requests. A revocable credential binds one household, ingest scope and approved source IDs. Signature covers method, endpoint path, timestamp, nonce and SHA-256 body digest. Nonces are atomically consumed after authentication. The server owns keys; the collector never receives a database service key. Request bodies cannot name actors or household IDs.
+The ingestion endpoint accepts bounded signed requests. A revocable credential binds one household, ingest scope and approved source IDs. Signature covers method, canonical /functions/v1/house-scanner-ingest path, timestamp, nonce and SHA-256 body digest. The function accepts the gateway-forwarded path but always signs the public canonical path. Nonces are atomically consumed after authentication. The server owns keys; the collector never receives a database service key. Request bodies cannot name actors or household IDs.
 
 Stage observations per run and publish in one database transaction. Failed sources retain prior facts. A failed or empty-placeholder fetch is not successful empty coverage. Persist source cursors only on publication. Replayed batches must have identical content. Comparable asking prices belong to one source and listing episode; unknown prices are not zero. Source IDs are conservative identity links; cross-source merges require stronger evidence and remain deferred.
 
@@ -49,12 +49,39 @@ Original checkout changes are outside this work.
 | --- | --- | --- | --- |
 | F0 contracts, route and source gates | Approved plan | accepted for local consumers; runtime gate pending | Coordinator, gpt-6.1-sol high |
 | F0 independent security review | Fixed foundation diff | findings corrected; design reviewed | /root/foundation_review, gpt-6.1-sol high |
-| P1 UI and map | 757cdff | running | /root/project_ui, gpt-6.1-sol medium |
-| P1 fixture collector | 757cdff; synthetic only | running | /root/fixture_collector, gpt-6.1-sol medium |
-| P1 schema/session/ingest | 757cdff; reviewed design | running | /root/private_backend, gpt-6.1-sol high |
+| P1 UI and map | 757cdff | integrated as ece7d25; runtime review pending | /root/project_ui, gpt-6.1-sol medium |
+| P1 fixture collector | 757cdff; synthetic only | integrated as 4b0d6c5; runtime review pending | /root/fixture_collector, gpt-6.1-sol medium |
+| P1 schema/session/ingest | 757cdff; reviewed design | integrated as 49beaf9, b467d23 and 8bc0b11; runtime gate pending | /root/private_backend, gpt-6.1-sol high |
+| P1 backend security review | Final backend diff | fixed diff reviewed; no remaining source-review blockers; runtime gate pending | /root/backend_review, gpt-6.1-sol high |
 
 Workers are leaves and use separate managed worktrees at the accepted foundation commit. Record requested model/effort and actual launcher acknowledgment; the launcher does not independently attest the execution model. No worker owns shared files without reassignment.
 
 Worker worktrees are house-scanner-ui, house-scanner-tools and house-scanner-backend under the same managed worktree directory, each based on 757cdff6e2faa39bb8c35da98119b5f4c68668f4. All three explicit model/effort requests were acknowledged by the launcher. No nested workers were launched.
 
 Foundation evidence: npm run check, npm run typecheck and npm run build passed after the contract review corrections. No behavior tests ran. npm audit reported GHSA-68fv-2mgg-jv7q in source-map-js 1.2.1, a development dependency already present in the base lockfile. No broad audit fix was applied.
+
+## Local implementation and remaining work
+
+The public route defaults to the configured private-access state and offers an explicit synthetic demo. The same workspace renders suggestions, an attributed union of favorites, manual bookmarks and existing editable owner profiles. Profile saves use revision checks. Polling refreshes private data without deliberately resetting a same-user workspace. Identity changes remount the workspace and clear its private UI state.
+
+The map loads after Open map, uses the same filtered listings as the list and groups homes sharing an exact coordinate. Approximate and unknown coordinates remain list only. Zoom-based clustering, richer photo overlays and licensed geography/transit enrichment remain future work. No nature or journey estimates are inferred from map coloring.
+
+The collector has one synthetic fixture executor, bounded requests and explicit replay inputs. It prepares begin/stage/publish requests in memory. No sender, real adapter, daily workflow or digest is active. The schema and signed endpoint are local source, not a provisioned service.
+
+Backend notes are actor-owned and revisioned, but their display and editing are not connected to the workspace. The manual form can store an initial note. Manual edit/removal and internationalized manual hostnames are deferred; server bookmark validation currently accepts a conservative ASCII DNS/IP subset. Membership administration, initial profile creation, notifications and source-policy management require a later private administration flow. No live household is seeded with demo criteria.
+
+Before activation, add and verify retention cleanup for source records, run staging, nonces and history while preserving user-authored bookmarks and notes. Read-time redaction limits returned source facts; it does not purge stored data. Review snapshot limits and pagination before exceeding 500 homes, ten member records, twenty profiles or 5,000 attributed saves. Historical member attribution counts toward these bounds.
+
+Verification must cover two-household access denial, revoked membership, actor-owned saves/notes, profile conflicts, sign-out and user-switch races, storage denial, signature/replay rejection, duplicate and contradictory batches, failed-source preservation, empty-fetch rejection, atomic publication, source-rights expiry and price-history retention. Also inspect narrow/wide layouts, keyboard controls, map failure and visual isolation from the portfolio. None of these runtime claims is established by the static builds.
+
+## Integrated static evidence
+
+On integration commit 8bc0b11 plus coordinator page wiring, npm run check passed for 130 files, npm run typecheck passed, npm run house-scanner:typecheck passed, npm run build passed and npm run house-scanner:build passed. The collector was compiled but not executed. The Edge function passed Deno check with --no-remote --no-lock --node-modules-dir=manual and supabase/functions/deno.json. SQL was neither parsed nor executed.
+
+The frontend emits a large-chunk warning for the separately loaded MapLibre module (about 1,051 kB minified, 285 kB gzip). It loads only when the map is opened; the warning remains visible. The pre-existing development dependency advisory recorded above remains unresolved.
+
+The fresh independent reviewer inspected the fixed integrated backend, shared retention gate and page composition. Draft findings on session races, storage denial, nested retention, historical replay, nullable JSON, SQL precedence, URL validation, UTF-16 limits, saved-bookmark redaction and coverage labels were corrected. No concrete source-review blockers remained. This is source review, not migration, privacy or concurrency execution evidence.
+
+The original checkout remains at 5349e2d with its existing homepage edit and .claude directory. Its homepage SHA-256 still matches the value captured before work. Worker worktrees are archived after integration; the house-scanner integration worktree remains active on codex/house-scanner. No changes have been pushed or deployed.
+
+For review, run npm run dev from the integration worktree and open /projects/house-scanner. Enter the synthetic demo explicitly. The active session's local preview uses port 5183. Private access defaults off; configuration alone does not establish acceptance.
