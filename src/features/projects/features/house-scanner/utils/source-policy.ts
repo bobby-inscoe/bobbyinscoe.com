@@ -21,6 +21,8 @@ export function assertObservationAllowed(
   now: Date,
 ): void {
   assertSourceAllowed(policy, now);
+  if (observation.coordinates?.precision === 'user_supplied')
+    throw new Error('Source ingestion cannot claim user-supplied coordinates.');
   if (!policy.listingOrigins.includes(new URL(observation.sourceUrl).origin))
     throw new Error('Listing origin is not approved.');
   if (

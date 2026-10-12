@@ -291,6 +291,7 @@ export const annotationSchema = z.strictObject({
   model: z.string().max(80),
   promptVersion: z.string().max(80),
   inputHash: z.string().regex(/^[a-f0-9]{64}$/),
+  profileId: id,
   profileRevision: z.number().int().positive(),
   summary: z.string().max(1000),
   state: z.enum(['completed', 'deferred', 'invalidated']),

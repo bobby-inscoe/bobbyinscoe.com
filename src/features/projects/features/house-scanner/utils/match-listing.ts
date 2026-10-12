@@ -73,6 +73,12 @@ export function matchListing(
   if (listing.conflicts.includes('tenure')) missing.push('tenure');
   if (listing.conflicts.includes('status')) missing.push('status');
   required('askingPriceSek');
+  if (
+    !listing.conflicts.includes('askingPriceSek') &&
+    f.askingPriceSek !== null &&
+    f.askingPriceSek > criteria.stretchPriceSek
+  )
+    excluded.push('Above profile stretch budget');
   let exception = false;
   if (
     f.propertyType === 'apartment' &&
