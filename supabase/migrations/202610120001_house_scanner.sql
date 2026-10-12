@@ -176,7 +176,7 @@ begin
  if coalesce(substring(u from '^https?://(?:\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(?:[/#?]|$)')::integer,0)>65535 then return false; end if;
  host_name:=substring(u from '^https?://(\[[0-9a-fA-F:]+\]|[^:/?#]+)');
  if left(host_name,1)='[' then address:=btrim(host_name,'[]')::inet; return family(address)=6; end if;
- if host_name ~ '^[0-9.]+$' then address:=host_name::inet; return family(address)=4 and host_name ~ '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; end if;
+ if host_name ~ '^[0-9.]+$' then address:=host_name::inet; return family(address)=4 and host(address)=host_name and host_name ~ '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; end if;
  -- ponytail: accept ASCII DNS names only until server-side IDNA validation is available.
  if host_name ~* '(^|\.)xn--' then return false; end if;
  return host_name ~ '^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)*[a-zA-Z]([a-zA-Z0-9-]*[a-zA-Z0-9])?$';
