@@ -20,6 +20,8 @@ function urgencyTier(remainingMs: number, durationMs: number): UrgencyTier {
 interface GameHudProps {
   score: number;
   comboCount: number;
+  comboExpiresAt: number | null;
+  comboWindowMs: number;
   remainingMs: number;
   durationMs: number;
   isBonusPhase: boolean;
@@ -31,6 +33,8 @@ interface GameHudProps {
 export function GameHud({
   score,
   comboCount,
+  comboExpiresAt,
+  comboWindowMs,
   remainingMs,
   durationMs,
   isBonusPhase,
@@ -39,13 +43,21 @@ export function GameHud({
   bestScore,
 }: GameHudProps): React.JSX.Element {
   const secondsRemaining = Math.max(remainingMs, 0) / 1000;
-  const now = useNow(BONUS_TICK_MS, isBonusPhase && bonusPhaseEndsAt !== null);
+  const isTrackingCombo = !isBonusPhase && comboExpiresAt !== null;
+  const now = useNow(
+    BONUS_TICK_MS,
+    (isBonusPhase && bonusPhaseEndsAt !== null) || isTrackingCombo,
+  );
   const bonusMsRemaining =
     bonusPhaseEndsAt !== null
       ? Math.max(bonusPhaseEndsAt - now, 0)
       : bonusPhaseDurationMs;
   const bonusProgress =
     bonusPhaseDurationMs > 0 ? bonusMsRemaining / bonusPhaseDurationMs : 0;
+  const comboProgress =
+    isTrackingCombo && comboWindowMs > 0
+      ? Math.min(Math.max(comboExpiresAt - now, 0) / comboWindowMs, 1)
+      : 0;
 
   return (
     <Stack className="GameHud" align="center" gap="xs" w="100%" maw={720}>
@@ -101,7 +113,7 @@ export function GameHud({
           </Stack>
         )}
       </Group>
-      {isBonusPhase && (
+      {isBonusPhase ? (
         <Progress
           value={bonusProgress * 100}
           color="grape.4"
@@ -109,6 +121,18 @@ export function GameHud({
           w="100%"
           maw={300}
           aria-label="Bonus phase remaining"
+        />
+      ) : (
+        // Hidden rather than unmounted so the HUD keeps its height as combos
+        // start and lapse.
+        <Progress
+          value={comboProgress * 100}
+          color="flax.3"
+          size={4}
+          w="100%"
+          maw={300}
+          aria-label="Combo time remaining"
+          style={{ visibility: isTrackingCombo ? 'visible' : 'hidden' }}
         />
       )}
     </Stack>

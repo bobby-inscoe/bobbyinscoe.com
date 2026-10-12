@@ -1,6 +1,7 @@
 import { Group, Stack, Text, Title } from '@mantine/core';
+import type { HighScoreEntry } from '@/features/duck-feed/types/game';
 
-export function HighScoreList({ scores }: { scores: number[] }) {
+export function HighScoreList({ scores }: { scores: HighScoreEntry[] }) {
   return (
     <Stack gap={6} align="center" w="100%">
       <Title order={2} ff="inherit" fz={13} tt="uppercase" c="flax.2">
@@ -18,14 +19,19 @@ export function HighScoreList({ scores }: { scores: number[] }) {
           w="100%"
           style={{ listStyle: 'none' }}
         >
-          {scores.map((score, index) => (
+          {scores.map((entry, index) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: rank position is the stable identity, not the score value.
             <Group component="li" key={index} justify="space-between">
+              <Group component="span" gap="sm" wrap="nowrap">
+                <Text component="span" size="sm">
+                  {index + 1}
+                </Text>
+                <Text component="span" size="sm" ff="monospace">
+                  {entry.name}
+                </Text>
+              </Group>
               <Text component="span" size="sm">
-                {index + 1}
-              </Text>
-              <Text component="span" size="sm">
-                {score}
+                {entry.score}
               </Text>
             </Group>
           ))}
