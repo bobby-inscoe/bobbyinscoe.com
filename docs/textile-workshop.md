@@ -20,7 +20,8 @@ frames and limits surface-angle changes. It does not run continuously.
 
 One continuous SVG thread starts beneath the overview's Duck Feed preview and
 passes behind every larger surface, alternating between the left and right edges.
-Uneven slack and occasional loose loops vary its fall.
+Broad, shallow drapes vary where the slack settles. Matching tangents keep
+the visible curves smooth without tight decorative loops.
 A ResizeObserver fits the path to the actual layout. On mobile it leaves each
 surface before the caption, then returns from the same edge at the next surface.
 It has no scroll progress animation and does not intercept input.

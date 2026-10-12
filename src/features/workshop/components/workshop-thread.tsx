@@ -47,18 +47,18 @@ export function WorkshopThread({ roomRef }: WorkshopThreadProps) {
         if (previousArea) {
           const previousRect = surfaces[index - 1].getBoundingClientRect();
           const hemY = previousRect.bottom - bounds.top;
-          const slack = [26, 42, 32, 48][index % 4];
-          const loopX = previousX + (edge - previousX) * 0.58;
-          const loopWidth = Math.min(52, bounds.width * 0.065);
-          d += ` C ${previousX + direction * 65} ${previousY + 90}, ${loopX - direction * 80} ${hemY + slack}, ${loopX} ${hemY + 24}`;
-          if (index % 2 === 1) {
-            d += ` C ${loopX + direction * loopWidth} ${hemY - 20}, ${loopX - direction * loopWidth} ${hemY - 18}, ${loopX - direction * 12} ${hemY + 22}`;
-            d += ` C ${loopX + direction * 14} ${hemY + 54}, ${edge - direction * 65} ${exitY - 10}, ${edge} ${exitY}`;
-          } else {
-            d += ` C ${loopX + direction * 48} ${hemY - 2}, ${edge - direction * 85} ${exitY + 46}, ${edge} ${exitY}`;
-          }
+          const span = Math.abs(edge - previousX);
+          const lowX =
+            previousX +
+            (edge - previousX) * [0.62, 0.68, 0.55, 0.73][index % 4];
+          const lowY = hemY + [32, 46, 38, 27][index % 4];
+          const tangent = direction * span * 0.2;
+          // A shared horizontal tangent lets the slack settle without a kink or curl.
+          d += ` C ${previousX + direction * span * 0.12} ${previousY + 110}, ${lowX - tangent} ${lowY}, ${lowX} ${lowY}`;
+          d += ` C ${lowX + tangent} ${lowY}, ${edge - direction * span * 0.14} ${exitY - 8}, ${edge} ${exitY}`;
         } else {
-          d += ` C ${previousX - 140} ${previousY + 90}, 130 ${exitY + 38}, ${edge} ${exitY}`;
+          const span = previousX - edge;
+          d += ` C ${previousX - span * 0.22} ${previousY + 90}, ${edge + span * 0.4} ${exitY + 28}, ${edge} ${exitY}`;
         }
         if (previousArea) {
           d += ` C ${edge + direction * 80} ${exitY + 60}, ${edge + direction * 55} ${bendY - 60}, ${edge} ${bendY}`;
@@ -70,7 +70,9 @@ export function WorkshopThread({ roomRef }: WorkshopThreadProps) {
       const lastBottom =
         surfaces[surfaces.length - 1].getBoundingClientRect().bottom -
         bounds.top;
-      d += ` C ${previousX - 100} ${previousY + 45}, 25 ${lastBottom - 30}, -35 ${lastBottom + 18}`;
+      const tailX = previousX * 0.35;
+      d += ` C ${previousX - 60} ${previousY + 110}, ${tailX + 65} ${lastBottom + 34}, ${tailX} ${lastBottom + 34}`;
+      d += ` C ${tailX - 65} ${lastBottom + 34}, 15 ${lastBottom + 8}, -35 ${lastBottom + 14}`;
       setPath(d);
     }
 
