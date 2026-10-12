@@ -1,3 +1,4 @@
+import { Group } from '@mantine/core';
 import { Leaf, Snail } from 'lucide-react';
 import type React from 'react';
 import { DuckIcon } from '@/features/duck-feed/components/icons/duck-icon';
@@ -17,17 +18,17 @@ interface AvatarArtProps {
 export function AvatarArt({ avatar }: AvatarArtProps): React.JSX.Element {
   if (avatar === 'snail') {
     return (
-      <div className="AvatarArt" aria-hidden="true">
+      <Group className="AvatarArt" justify="center" gap="xs" aria-hidden="true">
         <Snail size={48} strokeWidth={1.5} color={SNAIL_COLOR} />
         <Leaf size={40} strokeWidth={1.5} color={LEAF_COLOR} />
-      </div>
+      </Group>
     );
   }
 
   return (
-    <div className="AvatarArt" aria-hidden="true">
+    <Group className="AvatarArt" justify="center" gap="xs" aria-hidden="true">
       <DuckIcon useOriginalArt size={48} strokeWidth={1.5} color={DUCK_COLOR} />
       <WheatIcon size={40} strokeWidth={1.5} color={WHEAT_COLOR} />
-    </div>
+    </Group>
   );
 }

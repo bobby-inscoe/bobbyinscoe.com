@@ -1,3 +1,4 @@
+import { UnstyledButton } from '@mantine/core';
 import { Leaf } from 'lucide-react';
 import type React from 'react';
 
@@ -34,7 +35,7 @@ export function FeedItem({
   onActivate,
 }: FeedItemProps): React.JSX.Element {
   return (
-    <button
+    <UnstyledButton
       type="button"
       aria-label={ariaLabel(item.kind, avatar)}
       tabIndex={muted ? -1 : 0}
@@ -52,6 +53,6 @@ export function FeedItem({
       ) : (
         <WheatIcon size={32} strokeWidth={1.75} color={WHEAT_COLOR} />
       )}
-    </button>
+    </UnstyledButton>
   );
 }

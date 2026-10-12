@@ -1,3 +1,4 @@
+import { Group, Progress, Stack, Text } from '@mantine/core';
 import type React from 'react';
 
 import { useNow } from '@/features/duck-feed/hooks/use-now';
@@ -47,49 +48,69 @@ export function GameHud({
     bonusPhaseDurationMs > 0 ? bonusMsRemaining / bonusPhaseDurationMs : 0;
 
   return (
-    <div className="GameHud">
-      <div className="GameHud-row">
-        <div className="GameHud-stat">
-          <span className="GameHud-label">Score</span>
-          <span className="GameHud-value">{score}</span>
-        </div>
+    <Stack className="GameHud" align="center" gap="xs" w="100%" maw={720}>
+      <Group justify="center" gap="xl">
+        <Stack align="center" gap={2}>
+          <Text component="span" className="GameHud-label">
+            Score
+          </Text>
+          <Text component="span" className="GameHud-value">
+            {score}
+          </Text>
+        </Stack>
         {comboCount > 1 && (
-          <div className="GameHud-stat GameHud-combo">
-            <span className="GameHud-label">Combo</span>
-            <span className="GameHud-value">x{comboCount}</span>
-          </div>
+          <Stack className="GameHud-combo" align="center" gap={2}>
+            <Text component="span" className="GameHud-label">
+              Combo
+            </Text>
+            <Text component="span" className="GameHud-value">
+              x{comboCount}
+            </Text>
+          </Stack>
         )}
-        <div
+        <Stack
+          align="center"
+          gap={2}
           className={`GameHud-stat GameHud-timer GameHud-timer--${urgencyTier(remainingMs, durationMs)}${isBonusPhase ? ' GameHud-timer--paused' : ''}`}
         >
-          <span className="GameHud-label">
+          <Text component="span" className="GameHud-label">
             {isBonusPhase ? 'Time (paused)' : 'Time'}
-          </span>
-          <span className="GameHud-value">{secondsRemaining.toFixed(1)}s</span>
-        </div>
+          </Text>
+          <Text component="span" className="GameHud-value">
+            {secondsRemaining.toFixed(1)}s
+          </Text>
+        </Stack>
         {isBonusPhase && (
-          <div className="GameHud-stat GameHud-bonus">
-            <span className="GameHud-label">Bonus phase</span>
-            <span className="GameHud-value">
+          <Stack className="GameHud-bonus" align="center" gap={2}>
+            <Text component="span" className="GameHud-label">
+              Bonus phase
+            </Text>
+            <Text component="span" className="GameHud-value">
               {(bonusMsRemaining / 1000).toFixed(1)}s
-            </span>
-          </div>
+            </Text>
+          </Stack>
         )}
         {bestScore !== null && (
-          <div className="GameHud-stat">
-            <span className="GameHud-label">Best</span>
-            <span className="GameHud-value">{bestScore}</span>
-          </div>
+          <Stack align="center" gap={2}>
+            <Text component="span" className="GameHud-label">
+              Best
+            </Text>
+            <Text component="span" className="GameHud-value">
+              {bestScore}
+            </Text>
+          </Stack>
         )}
-      </div>
+      </Group>
       {isBonusPhase && (
-        <div className="GameHud-bonusBar">
-          <div
-            className="GameHud-bonusBar-fill"
-            style={{ width: `${bonusProgress * 100}%` }}
-          />
-        </div>
+        <Progress
+          value={bonusProgress * 100}
+          color="grape.4"
+          size={4}
+          w="100%"
+          maw={300}
+          aria-label="Bonus phase remaining"
+        />
       )}
-    </div>
+    </Stack>
   );
 }

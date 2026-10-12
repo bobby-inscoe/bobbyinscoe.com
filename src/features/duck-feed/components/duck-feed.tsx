@@ -1,3 +1,4 @@
+import { Box, Paper, Stack, Title } from '@mantine/core';
 import type React from 'react';
 import { useState } from 'react';
 
@@ -37,8 +38,10 @@ export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
   });
 
   return (
-    <div className={`${className ?? ''} DuckFeed`}>
-      <h1>Feed the Duck!</h1>
+    <Stack className={`${className ?? ''} DuckFeed`} align="center" gap="md">
+      <Title order={1} fz={{ base: 32, sm: 42 }}>
+        Feed the Duck!
+      </Title>
       {game.status !== 'idle' && (
         <GameHud
           score={game.score}
@@ -51,7 +54,7 @@ export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
           bestScore={highScores.scores[0] ?? null}
         />
       )}
-      <div className="DuckFeed-boardFrame">
+      <Box className="DuckFeed-boardFrame">
         <GameBoard
           ref={boardRef}
           avatar={avatar}
@@ -81,12 +84,20 @@ export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
             onChangeSettings={game.returnToMenu}
           />
         )}
-      </div>
+      </Box>
       {game.status === 'idle' && (
-        <div className="DuckFeed-highScores">
+        <Paper
+          w="100%"
+          maw={260}
+          px="md"
+          py="sm"
+          radius="md"
+          bg="var(--secondary-dark)"
+          c="inherit"
+        >
           <HighScoreList scores={highScores.scores} />
-        </div>
+        </Paper>
       )}
-    </div>
+    </Stack>
   );
 }

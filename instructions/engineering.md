@@ -8,6 +8,7 @@ rule nobody enforces teaches agents that rules are optional.
 
 - Language and version: TypeScript
 - Framework and bundler: React, bundled with Vite
+- UI components: Mantine Core and Hooks 9; shared theme in `src/app/theme.ts`
 - Runtime and version: Node.js `>=20.19.0`
 - Package manager: npm
 - Test runner: None configured yet
@@ -69,17 +70,21 @@ src/
       routes/          route modules and route-tree owned by the feature
       types/           types used by the feature or its sub-features
       utils/           utility functions used by the feature
-  shared/              used by two or more features
+  assets/              shared images and bundled fonts
+  components/          shared UI, when needed
+  hooks/               shared hooks, when needed
+  types/               shared types, when needed
+  utils/               shared utilities, when needed
   lib/                 third-party wrappers and adapters
 ```
 
-Dependencies point one way. Features may use `shared` and `lib`. Nothing in
-`shared` may import a feature. When two features need the same thing, move it to
+Dependencies point one way. Features may use shared top-level folders and `lib`. Shared code must not
+import a feature or the application layer. When two features need the same thing, move it to
 `shared` in its own change, before the change that needs it.
 
 Feature-to-feature imports are the thing to watch. One is a shortcut, five is a
 tangle that cannot be unpicked. If feature A needs feature B, either the shared
-part moves to `shared` or A and B are one feature.
+part moves to a shared top-level folder or A and B are one feature.
 
 Project-specific boundaries go here:
 
@@ -88,7 +93,7 @@ Project-specific boundaries go here:
 - Components do not call network APIs directly. They use feature hooks or API
   modules, and remote data/cache state belongs to the owning feature.
 - Features must not import another feature directly. Move shared code to
-  `shared/` instead.
+  the appropriate top-level folder instead.
 
 ## Routing
 
@@ -200,6 +205,9 @@ agent with no context at all.
 - Keep state close to where it is used. Handle loading, empty, and error
   states explicitly — do not let a component silently render nothing for any
   of them.
+- Use Mantine components and style props for ordinary UI. Prefer `Stack`,
+  `Group`, and `Flex` for layout, and the shared theme for colours and typography.
+  Custom CSS remains appropriate for the workshop scene and game animations.
 - Prefer flexbox and `gap` for layout. Do not use CSS `margin`; use parent
   layout, `gap`, and padding instead.
 
