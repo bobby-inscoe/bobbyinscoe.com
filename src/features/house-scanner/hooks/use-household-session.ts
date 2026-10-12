@@ -52,13 +52,18 @@ export function useHouseholdSession() {
   const userId = useRef<string | null>(null);
   const householdId = useRef<string | null>(null);
   const generation = useRef(0);
+  const sessionGeneration = useRef(0);
+  const signedOut = useRef(false);
   const mounted = useRef(false);
   const fail = useCallback((message: string) => {
     generation.current += 1;
+    sessionGeneration.current += 1;
+    userId.current = null;
+    householdId.current = null;
     if (mounted.current) setState({ status: 'error', message });
   }, []);
   const refresh = useCallback(async () => {
-    if (!client) return;
+    if (!client || signedOut.current) return;
     const ticket = ++generation.current;
     if (mounted.current)
       setState((previous) =>
@@ -72,11 +77,16 @@ export function useHouseholdSession() {
       const { data, error } = await client.auth.getUser();
       if (!mounted.current || ticket !== generation.current) return;
       if (error || !data.user) {
+        sessionGeneration.current += 1;
+        userId.current = null;
+        householdId.current = null;
         if (mounted.current && ticket === generation.current)
           setState({ status: 'signed-out' });
         return;
       }
       if (userId.current && userId.current !== data.user.id) {
+        sessionGeneration.current += 1;
+        signedOut.current = true;
         householdId.current = null;
         setState({ status: 'loading' });
         clearOwnedSessionStorage();
@@ -86,6 +96,8 @@ export function useHouseholdSession() {
       userId.current = data.user.id;
       const own = await memberships(client);
       if (!mounted.current || ticket !== generation.current) return;
+      if (own.some((member) => member.userId !== data.user.id))
+        throw new Error('Membership belongs to another account.');
       if (own.length === 0) {
         householdId.current = null;
         setState({ status: 'nonmember' });
@@ -118,6 +130,8 @@ export function useHouseholdSession() {
     } = client.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
         generation.current += 1;
+        sessionGeneration.current += 1;
+        signedOut.current = true;
         userId.current = null;
         householdId.current = null;
         if (mounted.current) setState({ status: 'signed-out' });
@@ -134,6 +148,8 @@ export function useHouseholdSession() {
         userId.current !== session.user.id
       ) {
         generation.current += 1;
+        sessionGeneration.current += 1;
+        signedOut.current = true;
         householdId.current = null;
         if (mounted.current)
           setState((previous) =>
@@ -155,7 +171,12 @@ export function useHouseholdSession() {
             if (error) fail('Session changed. Sign out and try again.');
           });
         });
-      } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+      } else if (
+        event === 'SIGNED_IN' ||
+        event === 'INITIAL_SESSION' ||
+        event === 'TOKEN_REFRESHED'
+      ) {
+        if (event === 'SIGNED_IN') signedOut.current = false;
         queueMicrotask(() => {
           if (mounted.current) void refresh();
         });
@@ -201,6 +222,8 @@ export function useHouseholdSession() {
   }
   async function signOut() {
     generation.current += 1;
+    sessionGeneration.current += 1;
+    signedOut.current = true;
     householdId.current = null;
     userId.current = null;
     setState({ status: client ? 'signed-out' : 'unconfigured' });
@@ -229,11 +252,18 @@ export function useHouseholdSession() {
       householdId.current !== state.snapshot.householdId
     )
       throw new Error('Reload your household before making a change.');
+    const ticket = sessionGeneration.current;
+    const active = () =>
+      mounted.current &&
+      ticket === sessionGeneration.current &&
+      userId.current === state.userId &&
+      householdId.current === state.snapshot.householdId;
     try {
       await action(client, state.snapshot.householdId);
-      await refresh();
+      if (active()) await refresh();
     } catch (error) {
-      fail('The change could not be saved. Reload before trying again.');
+      if (active())
+        fail('The change could not be saved. Reload before trying again.');
       throw error;
     }
   }
