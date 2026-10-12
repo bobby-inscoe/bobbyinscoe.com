@@ -1,5 +1,7 @@
 # House Scanner implementation
 
+For continuation, read the [12 October 2026 handoff](house-scanner-handoff-2026-10-12.md) alongside the canonical private specifications and this work record.
+
 This guide is public-safe. The canonical private product plan remains outside this repository. Do not add household preferences, identities, reference properties, real listing snapshots or credentials here.
 
 ## Goal and acceptance
