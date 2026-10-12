@@ -327,6 +327,11 @@ begin
    else
     lid:=existing.id;
     if exists(select 1 from hs.observations h where h.household_id=c.household_id and h.listing_id=lid and (h.value->>'observedAt')::timestamptz=obs.observed_at and hs.observation_content(h.value) is distinct from hs.observation_content(o)) then raise exception 'Conflicting historical same-time observation'; end if;
+    -- Published staging rows also retain unchanged-time fingerprints without creating listing revisions.
+    if exists(select 1 from hs.staged_observations prior join hs.runs published on published.id=prior.run_id and published.household_id=prior.household_id
+     where published.state='published' and prior.household_id=c.household_id and prior.source_id=s and prior.source_listing_id=obs.source_listing_id and prior.episode_id=obs.episode_id and prior.observed_at=obs.observed_at
+     and exists(select 1 from jsonb_array_elements(published.results) status where status->>'sourceId'=s and status->>'status' in ('success','partial'))
+     and hs.observation_content(prior.value) is distinct from hs.observation_content(o)) then raise exception 'Conflicting published observation fingerprint'; end if;
     if obs.observed_at=existing.observed_at and hs.observation_content(existing.value) is distinct from hs.observation_content(o) then raise exception 'Conflicting same-time observation across runs'; end if;
     if obs.observed_at<=existing.observed_at then continue; end if;
     meaningful:=hs.observation_content(existing.value) is distinct from hs.observation_content(o);
