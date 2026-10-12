@@ -97,7 +97,7 @@ create function hs.policy_current(p jsonb) returns boolean language sql stable s
  select coalesce(p->>'status'='approved' and (p->>'freeOnly')::boolean and (p->>'automatedCollection')::boolean and (p->>'privateDisplay')::boolean and
  (p->>'reviewedAt')::timestamptz<=now() and (p->>'reviewDueAt')::timestamptz>now() and (p->>'retentionDays')::int between 1 and 180,false);
 $$;
-create function hs.assert_observation(p jsonb,o jsonb) returns void language plpgsql set search_path=pg_catalog,hs as $$ declare f record; e jsonb; at_time timestamptz; begin
+create function hs.assert_observation(p jsonb,o jsonb) returns void language plpgsql set search_path=pg_catalog,hs as $$ declare f record; evidence_item jsonb; at_time timestamptz; begin
  if not hs.policy_current(p) or not(p->'listingOrigins' ? hs.origin(o->>'sourceUrl')) or (o->>'observedAt')::timestamptz>now()+interval '5 minutes' or
  (o->>'observedAt')::timestamptz<now()-make_interval(days=>(p->>'retentionDays')::int) or o->'coordinates'->>'precision'='user_supplied' then raise exception 'Source permission or observation time invalid'; end if;
  for at_time in
@@ -111,8 +111,8 @@ create function hs.assert_observation(p jsonb,o jsonb) returns void language plp
   if f.value<>'null'::jsonb and f.value<>'"unknown"'::jsonb and not(p->'allowedFactFields' ? f.key) then raise exception 'Fact field not permitted'; end if;
  end loop;
  if o->'photo'<>'null'::jsonb and (not coalesce((p->>'imageDisplay')::boolean,false) or not coalesce((p->>'imageHotlink')::boolean,false) or not(p->'imageOrigins' ? hs.origin(o->'photo'->>'url')) or (o->'photo'->>'expiresAt')::timestamptz<=now()) then raise exception 'Photo not permitted'; end if;
- for e in select * from jsonb_array_elements(o->'evidence') loop
-  if e->>'kind' not in ('source_claim','measurement') or not(p->'allowedEvidenceSubjects' ? (e->>'subject')) or (e->>'sourceUrl' is not null and not(p->'listingOrigins' ? hs.origin(e->>'sourceUrl'))) then raise exception 'Evidence not permitted'; end if;
+ for evidence_item in select * from jsonb_array_elements(o->'evidence') loop
+  if evidence_item->>'kind' not in ('source_claim','measurement') or not(p->'allowedEvidenceSubjects' ? (evidence_item->>'subject')) or (evidence_item->>'sourceUrl' is not null and not(p->'listingOrigins' ? hs.origin(evidence_item->>'sourceUrl'))) then raise exception 'Evidence not permitted'; end if;
  end loop;
 end; $$;
 -- Membership and role mutation have no browser entry point.
