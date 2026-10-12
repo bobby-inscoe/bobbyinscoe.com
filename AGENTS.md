@@ -126,3 +126,4 @@ that enforces itself for free.
 
 A realistic steady state is this set of files, slowly getting sharper. If you are
 at thirty, something went wrong.
+For House Scanner implementation, also read [docs/house-scanner.md](docs/house-scanner.md) and [docs/house-scanner-agents.md](docs/house-scanner-agents.md). Keep private planning data out of this repository.

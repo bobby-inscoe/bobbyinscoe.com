@@ -61,3 +61,11 @@ trigger down is what makes that happen.
 **Instead of.** Centralized file-based routing would make route discovery simpler but would separate routes from their features; a centralized code-based tree would preserve type safety but make the application layer own feature details.
 **Costs.** The application route tree must import and compose each feature route module, and new features need an explicit composition step.
 **Revisit if.** The number of routes makes manual composition materially harder to maintain or the project adopts TanStack's file-based routing tooling.
+
+## 2026-10-12: House Scanner privacy foundation
+
+House Scanner adds an invitation-only shortlist beside the static portfolio. The public route and demo contain only fictional data. Live household facts and shared edits belong in a Supabase database with current-membership RLS and actor-owned writes. Static JSON cannot protect private data or safely merge concurrent saves; local-only hosting makes household access depend on a personal computer.
+
+The feature owns its UI, network and matching code. Shared registry metadata stays data-only. Collector tooling is separate from the Vite graph. Signed ingest credentials bind one household and approved source scope; stage observations before atomic publication, preserving favorites and notes. No real source is cleared and no live endpoint is activated by this local change.
+
+Rollback removes route/registry exposure and disables jobs first. Preserve the last good edition and user-authored records; revoke compromised keys or membership independently of the frontend. Export privately before destructive database changes. Behavioral privacy/replay evidence is pending user authorization and a local backend runtime.
