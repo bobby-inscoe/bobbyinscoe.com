@@ -5,8 +5,8 @@ import {
   type ManualSubmission,
   manualSubmissionSchema,
   type Snapshot,
-} from '@/features/projects/features/house-scanner/types/contracts';
-import { normalizeManualUrl } from '@/features/projects/features/house-scanner/utils/workspace-view';
+} from '@/features/house-scanner/types/contracts';
+import { normalizeManualUrl } from '@/features/house-scanner/utils/workspace-view';
 
 export function ManualListingForm({
   snapshot,

@@ -8,7 +8,7 @@ import {
   profileSchema,
   type SearchProfile,
   snapshotSchema,
-} from '@/features/projects/features/house-scanner/types/contracts';
+} from '@/features/house-scanner/types/contracts';
 
 const STORAGE_PREFIX = 'house-scanner.auth.';
 const REMEMBER_KEY = 'house-scanner.remember';

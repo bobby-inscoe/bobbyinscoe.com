@@ -3,8 +3,8 @@ import {
   factsSchema,
   type SourcePolicy,
   sourcePolicySchema,
-} from '@/features/projects/features/house-scanner/types/contracts';
-import { assertSourceAllowed } from '@/features/projects/features/house-scanner/utils/source-policy';
+} from '@/features/house-scanner/types/contracts';
+import { assertSourceAllowed } from '@/features/house-scanner/utils/source-policy';
 
 export const DEMO_SOURCE_ID = 'synthetic-demo';
 export const capabilitySchema = z.strictObject({

@@ -14,8 +14,8 @@ import {
   ingestRequestSchema,
   type Observation,
   observationSchema,
-} from '@/features/projects/features/house-scanner/types/contracts';
-import { assertObservationAllowed } from '@/features/projects/features/house-scanner/utils/source-policy';
+} from '@/features/house-scanner/types/contracts';
+import { assertObservationAllowed } from '@/features/house-scanner/utils/source-policy';
 
 export const MAX_RUN_OBSERVATIONS = 100;
 export const MAX_REQUEST_BYTES = 256 * 1024;

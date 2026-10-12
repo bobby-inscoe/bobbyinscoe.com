@@ -3,8 +3,8 @@ import { Map as MapLibreMap, Marker, NavigationControl } from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import styles from '@/features/projects/features/house-scanner/map/household-map.module.css';
-import type { Listing } from '@/features/projects/features/house-scanner/types/contracts';
+import styles from '@/features/house-scanner/map/household-map.module.css';
+import type { Listing } from '@/features/house-scanner/types/contracts';
 
 export interface MapPoint {
   id: string;

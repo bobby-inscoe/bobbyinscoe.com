@@ -10,12 +10,12 @@ import {
 } from '@mantine/core';
 import { type ReactNode, useState } from 'react';
 
-import { useHouseholdSession } from '@/features/projects/features/house-scanner/hooks/use-household-session';
+import { useHouseholdSession } from '@/features/house-scanner/hooks/use-household-session';
 import type {
   ManualSubmission,
   SearchProfile,
   Snapshot,
-} from '@/features/projects/features/house-scanner/types/contracts';
+} from '@/features/house-scanner/types/contracts';
 
 export interface AuthenticatedHousehold {
   snapshot: Snapshot;

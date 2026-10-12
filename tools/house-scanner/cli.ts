@@ -5,7 +5,7 @@ import {
   sourceRegistry,
 } from '@house-scanner-tools/source-registry';
 import { z } from 'zod';
-import { criteriaSchema } from '@/features/projects/features/house-scanner/types/contracts';
+import { criteriaSchema } from '@/features/house-scanner/types/contracts';
 
 function main() {
   const { values } = parseArgs({

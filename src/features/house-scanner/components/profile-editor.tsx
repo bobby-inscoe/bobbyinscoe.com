@@ -15,8 +15,8 @@ import {
   type Criteria,
   criteriaSchema,
   type SearchProfile,
-} from '@/features/projects/features/house-scanner/types/contracts';
-import { formatDate } from '@/features/projects/features/house-scanner/utils/workspace-view';
+} from '@/features/house-scanner/types/contracts';
+import { formatDate } from '@/features/house-scanner/utils/workspace-view';
 
 export function ProfileEditor({
   profile,

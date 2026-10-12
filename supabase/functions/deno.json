@@ -1,7 +1,7 @@
 {
   "imports": {
     "@/": "../../src/",
-    "@/features/projects/features/house-scanner/types/contracts": "../../src/features/projects/features/house-scanner/types/contracts.ts",
+    "@/features/house-scanner/types/contracts": "../../src/features/house-scanner/types/contracts.ts",
     "@supabase/supabase-js": "npm:@supabase/supabase-js@2.117.3",
     "zod": "npm:zod@4.6.6"
   },

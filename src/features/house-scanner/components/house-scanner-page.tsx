@@ -1,22 +1,24 @@
-import { Button, Group, Stack, Text, Title } from '@mantine/core';
+import { Anchor, Button, Flex, Group, Stack, Text, Title } from '@mantine/core';
+import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 
-import { HouseScannerAccess } from '@/features/projects/features/house-scanner/components/house-scanner-access';
-import { HouseholdWorkspace } from '@/features/projects/features/house-scanner/components/household-workspace';
-import { SyntheticWorkspace } from '@/features/projects/features/house-scanner/components/synthetic-workspace';
-import { ProjectFrame } from '@/shared/patterns/project-frame';
+import { HouseScannerAccess } from '@/features/house-scanner/components/house-scanner-access';
+import { HouseholdWorkspace } from '@/features/house-scanner/components/household-workspace';
+import { SyntheticWorkspace } from '@/features/house-scanner/components/synthetic-workspace';
 
 export function HouseScannerPage() {
   const [demo, setDemo] = useState(false);
   return (
-    <ProjectFrame
-      mode="application"
-      title="House Scanner"
-      accent={null}
-      accentLight={null}
-      backTo="/projects"
+    <Flex
+      component="main"
+      justify="center"
+      p={{ base: 'md', md: 'xl' }}
+      mih="100svh"
     >
-      <Stack p="lg" gap="lg">
+      <Stack w="100%" maw={1440} gap="lg">
+        <Anchor component={Link} to="/" style={{ alignSelf: 'flex-start' }}>
+          ← Back to the workshop
+        </Anchor>
         <Group justify="space-between">
           <div>
             <Title order={1}>House Scanner</Title>
@@ -39,6 +41,6 @@ export function HouseScannerPage() {
           </HouseScannerAccess>
         )}
       </Stack>
-    </ProjectFrame>
+    </Flex>
   );
 }

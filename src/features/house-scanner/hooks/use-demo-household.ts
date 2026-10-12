@@ -3,13 +3,13 @@ import { useState } from 'react';
 import {
   DEMO_USER_ID,
   SYNTHETIC_SNAPSHOT,
-} from '@/features/projects/features/house-scanner/mock/synthetic-household';
+} from '@/features/house-scanner/mock/synthetic-household';
 import type {
   ManualSubmission,
   SearchProfile,
   Snapshot,
-} from '@/features/projects/features/house-scanner/types/contracts';
-import { normalizeManualUrl } from '@/features/projects/features/house-scanner/utils/workspace-view';
+} from '@/features/house-scanner/types/contracts';
+import { normalizeManualUrl } from '@/features/house-scanner/utils/workspace-view';
 
 export function useDemoHousehold() {
   const [snapshot, setSnapshot] = useState<Snapshot>(() =>

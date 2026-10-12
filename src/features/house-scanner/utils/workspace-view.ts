@@ -1,8 +1,8 @@
 import type {
   Listing,
   Snapshot,
-} from '@/features/projects/features/house-scanner/types/contracts';
-import { matchListing } from '@/features/projects/features/house-scanner/utils/match-listing';
+} from '@/features/house-scanner/types/contracts';
+import { matchListing } from '@/features/house-scanner/utils/match-listing';
 
 export const SECTION_LABELS = {
   preferred: 'Preferred budget',

@@ -9,12 +9,9 @@ export function createHouseScannerRoute<TParent extends AnyRoute>(
 ) {
   return createRoute({
     getParentRoute: () => parentRoute,
-    path: 'house-scanner',
+    path: 'projects/house-scanner',
     component: lazyRouteComponent(
-      () =>
-        import(
-          '@/features/projects/features/house-scanner/components/house-scanner-page'
-        ),
+      () => import('@/features/house-scanner/components/house-scanner-page'),
       'HouseScannerPage',
     ),
   });

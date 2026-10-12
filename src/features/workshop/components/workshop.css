@@ -951,3 +951,48 @@ h1 em {
 .entrance h1 {
   font-size: clamp(48px, 5vw, 72px);
 }
+
+.workshop .room-overview {
+  height: 780px;
+}
+.overview-house-scanner {
+  width: 30%;
+  top: 520px;
+  left: 43%;
+  transform: rotate(-4deg);
+}
+.surface-house-scanner {
+  background: #cdd1b9;
+}
+.scanner-art {
+  position: relative;
+  aspect-ratio: 1.48;
+  width: 100%;
+  overflow: hidden;
+  container-type: inline-size;
+  background: #f3eddf;
+  color: #526044;
+}
+.scanner-art svg {
+  display: block;
+  width: 100%;
+}
+.scanner-art-caption {
+  position: absolute;
+  left: 6%;
+  bottom: 8%;
+  font:
+    400 4.5cqw / 1.1 Libron,
+    Georgia,
+    serif;
+}
+@media (max-width: 700px) {
+  .workshop .room-overview {
+    height: 620px;
+  }
+  .overview-house-scanner {
+    width: 46%;
+    top: 440px;
+    left: 28%;
+  }
+}

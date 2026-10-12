@@ -1,11 +1,10 @@
 .scope {
-  --scanner-surface: var(--site-surface);
-  --scanner-ink: var(--site-mark);
-  --scanner-line: var(--site-line);
-  --scanner-accent: var(--site-accent);
-  --scanner-accent-strong: var(--site-accent-strong);
-  --scanner-accent-wash: var(--site-accent-wash);
-  --mantine-color-text: var(--scanner-ink);
+  --scanner-surface: var(--mantine-color-flax-0);
+  --scanner-ink: var(--mantine-color-text);
+  --scanner-line: var(--mantine-color-flax-3);
+  --scanner-accent: var(--mantine-color-moss-7);
+  --scanner-accent-strong: var(--mantine-color-moss-8);
+  --scanner-accent-wash: var(--mantine-color-moss-0);
   --mantine-color-anchor: var(--scanner-accent);
   --mantine-color-default: var(--scanner-surface);
   --mantine-color-default-color: var(--scanner-ink);
@@ -19,14 +18,14 @@
   --mantine-primary-color-light-color: var(--scanner-accent);
   display: flex;
   flex-direction: column;
-  gap: var(--site-space-lg);
+  gap: var(--mantine-spacing-lg);
   color: var(--scanner-ink);
   min-width: 0;
 }
 .panels {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--site-space-lg);
+  gap: var(--mantine-spacing-lg);
 }
 .withMap {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -34,16 +33,16 @@
 .list {
   display: flex;
   flex-direction: column;
-  gap: var(--site-space-md);
+  gap: var(--mantine-spacing-md);
   min-width: 0;
 }
 .card {
   background: var(--scanner-surface);
   border: 1px solid var(--scanner-line);
-  padding: var(--site-space-md);
+  padding: var(--mantine-spacing-md);
   display: flex;
   flex-direction: column;
-  gap: var(--site-space-sm);
+  gap: var(--mantine-spacing-sm);
 }
 .selected {
   border-color: var(--scanner-accent);
@@ -58,20 +57,20 @@
   display: grid;
   place-items: center;
   min-height: 120px;
-  background: var(--site-raised);
-  color: var(--site-mark-muted);
-  padding: var(--site-space-md);
+  background: var(--mantine-color-flax-1);
+  color: var(--mantine-color-dimmed);
+  padding: var(--mantine-spacing-md);
 }
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--site-space-sm);
+  gap: var(--mantine-spacing-sm);
 }
 .mapPanel {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--site-space-md);
+  gap: var(--mantine-spacing-md);
 }
 .viewSwitch {
   display: none;
@@ -82,7 +81,7 @@
   }
   .viewSwitch {
     display: flex;
-    gap: var(--site-space-xs);
+    gap: var(--mantine-spacing-xs);
   }
   .hideNarrow {
     display: none;

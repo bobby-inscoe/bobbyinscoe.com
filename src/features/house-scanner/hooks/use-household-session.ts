@@ -11,13 +11,13 @@ import {
   saveProfile,
   setFavorite,
   setRememberDevice,
-} from '@/features/projects/features/house-scanner/api/household-client';
+} from '@/features/house-scanner/api/household-client';
 import type {
   ManualSubmission,
   Member,
   SearchProfile,
   Snapshot,
-} from '@/features/projects/features/house-scanner/types/contracts';
+} from '@/features/house-scanner/types/contracts';
 
 export type HouseholdSessionState =
   | { status: 'unconfigured' }

@@ -10,7 +10,7 @@ Foundation acceptance requires route/build checks, a fresh independent auth/inge
 
 ## Contracts and ownership
 
-Contract version 1 lives in src/features/projects/features/house-scanner/types/contracts.ts. Zod validates untrusted inputs. Profiles carry revisions; the database owns live criteria. Demo criteria are fictional and must never seed a live household. Null means unknown and conflicts remain explicit. Hard exclusions use confirmed facts only. Buyer notes, source observations and optional model interpretations have distinct ownership.
+Contract version 1 lives in src/features/house-scanner/types/contracts.ts. Zod validates untrusted inputs. Profiles carry revisions; the database owns live criteria. Demo criteria are fictional and must never seed a live household. Null means unknown and conflicts remain explicit. Hard exclusions use confirmed facts only. Buyer notes, source observations and optional model interpretations have distinct ownership.
 
 The coordinator owns contracts, migrations allocation, package files, route/registry wiring and workflows. Features own UI, hooks, network modules and scoped styles. Tools and Supabase code are not imported into the browser. Keep one root MantineProvider; feature portals stay inside the feature scope.
 
@@ -40,7 +40,7 @@ Optional inference, digests and live scheduling remain disabled. Model failure m
 
 ## Work record
 
-Base website commit: 5349e2d033e5ab965c70f08450e720af46928722.
+Base website commit: cf079861fae0fccd0a8386b737eb30e2292bdcf8 (latest main fetched on 12 October 2026). It contains the textile workshop branch through ab15dbad33e060aaf0c59f1bfc8e7f3b883a9c60.
 Private planning reference: 8dc5455, specification v2.6 / agent guide v1.1.
 Integration worktree: C:\Users\bhobb\.codex\worktrees\house-scanner\bobbyinscoe.
 Original checkout changes are outside this work.
@@ -49,9 +49,9 @@ Original checkout changes are outside this work.
 | --- | --- | --- | --- |
 | F0 contracts, route and source gates | Approved plan | accepted for local consumers; runtime gate pending | Coordinator, gpt-6.1-sol high |
 | F0 independent security review | Fixed foundation diff | findings corrected; design reviewed | /root/foundation_review, gpt-6.1-sol high |
-| P1 UI and map | 757cdff | integrated as ece7d25; runtime review pending | /root/project_ui, gpt-6.1-sol medium |
-| P1 fixture collector | 757cdff; synthetic only | integrated as 4b0d6c5; runtime review pending | /root/fixture_collector, gpt-6.1-sol medium |
-| P1 schema/session/ingest | 757cdff; reviewed design | integrated as 49beaf9, b467d23 and 8bc0b11; runtime gate pending | /root/private_backend, gpt-6.1-sol high |
+| P1 UI and map | ffbc326 | integrated as 346403b; runtime review pending | /root/project_ui, gpt-6.1-sol medium |
+| P1 fixture collector | ffbc326; synthetic only | integrated as 17d3567; runtime review pending | /root/fixture_collector, gpt-6.1-sol medium |
+| P1 schema/session/ingest | ffbc326; reviewed design | integrated as 4a655a5, 8ca9cf1 and 1dcd2a2; runtime gate pending | /root/private_backend, gpt-6.1-sol high |
 | P1 backend security review | Final backend diff | fixed diff reviewed; no remaining source-review blockers; runtime gate pending | /root/backend_review, gpt-6.1-sol high |
 
 Workers are leaves and use separate managed worktrees at the accepted foundation commit. Record requested model/effort and actual launcher acknowledgment; the launcher does not independently attest the execution model. No worker owns shared files without reassignment.
@@ -74,7 +74,7 @@ Before activation, add and verify retention cleanup for source records, run stag
 
 Verification must cover two-household access denial, revoked membership, actor-owned saves/notes, profile conflicts, sign-out and user-switch races, storage denial, signature/replay rejection, duplicate and contradictory batches, failed-source preservation, empty-fetch rejection, atomic publication, source-rights expiry and price-history retention. Also inspect narrow/wide layouts, keyboard controls, map failure and visual isolation from the portfolio. None of these runtime claims is established by the static builds.
 
-## Integrated static evidence
+## Original static evidence before rebase
 
 On integration commit 8bc0b11 plus coordinator page wiring, npm run check passed for 130 files, npm run typecheck passed, npm run house-scanner:typecheck passed, npm run build passed and npm run house-scanner:build passed. The collector was compiled but not executed. The Edge function passed Deno check with --no-remote --no-lock --node-modules-dir=manual and supabase/functions/deno.json. SQL was neither parsed nor executed.
 
@@ -85,3 +85,15 @@ The fresh independent reviewer inspected the fixed integrated backend, shared re
 The original checkout remains at 5349e2d with its existing homepage edit and .claude directory. Its homepage SHA-256 still matches the value captured before work. Worker worktrees are archived after integration; the house-scanner integration worktree remains active on codex/house-scanner. No changes have been pushed or deployed.
 
 For review, run npm run dev from the integration worktree and open /projects/house-scanner. Enter the synthetic demo explicitly. The active session's local preview uses port 5183. Private access defaults off; configuration alone does not establish acceptance.
+
+## Main integration correction
+
+The initial implementation used the redesign checkout at 5349e2d. The user corrected the starting branch. Rebase only the House Scanner commits onto fetched main at cf07986; do not carry the redesign-only history. The prior tip is preserved locally as codex/house-scanner-before-main-rebase for recovery. Local main was fast-forwarded to the fetched commit without checking it out over the user's edits.
+
+Goal: retain main's textile workshop and expose House Scanner with its existing public URL. Done when main and the textile branch are ancestors, the route and workshop folio compile, removed redesign imports/tokens are absent, and static checks pass. Reuse main's Mantine provider, moss/flax colors and Libron headings. No backend behavior, source activation, deployment or unrelated homepage edits are part of this correction.
+
+House Scanner now owns src/features/house-scanner. The app composes its route tree at /projects/house-scanner. Its Mantine page returns to the workshop at /. The workshop's data-only works list, folio link and scene artwork expose the project. Its fifth overview plane has room at desktop and narrow breakpoints. No ProjectFrame, old project registry or --site-* variable is required. Main's provider, theme, global stylesheet, bundled Libron files, Duck Feed and thread geometry remain intact.
+
+The rebased manifest preserves main's Mantine 9.7 dependency ranges and existing toolchain. Only Supabase, MapLibre, Zod and collector scripts are added. Existing locked package versions match main; old redesign font and test packages are not carried over. The migration is byte-for-byte unchanged from the reviewed pre-rebase implementation. Only shared import paths changed in the Edge function and collector.
+
+Fresh static evidence after integration: npm run check passed (78 files), npm run typecheck passed, npm run house-scanner:typecheck passed, npm run build passed, npm run house-scanner:build passed, and the offline Deno Edge check passed. The map chunk warning and pre-existing source-map-js advisory remain. No behavior tests, visual interaction tests or database execution ran. The local preview uses port 5183 and must be restarted after rebasing.

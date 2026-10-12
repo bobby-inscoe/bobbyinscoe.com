@@ -16,26 +16,26 @@ import {
   useState,
 } from 'react';
 
-import styles from '@/features/projects/features/house-scanner/components/household-workspace.module.css';
-import { ListingCard } from '@/features/projects/features/house-scanner/components/listing-card';
-import { ManualListingForm } from '@/features/projects/features/house-scanner/components/manual-listing-form';
-import { ProfileEditor } from '@/features/projects/features/house-scanner/components/profile-editor';
+import styles from '@/features/house-scanner/components/household-workspace.module.css';
+import { ListingCard } from '@/features/house-scanner/components/listing-card';
+import { ManualListingForm } from '@/features/house-scanner/components/manual-listing-form';
+import { ProfileEditor } from '@/features/house-scanner/components/profile-editor';
 import type {
   ManualSubmission,
   SearchProfile,
   Snapshot,
-} from '@/features/projects/features/house-scanner/types/contracts';
+} from '@/features/house-scanner/types/contracts';
 import {
   formatDate,
   formatPrice,
   listingMatches,
   SECTION_LABELS,
-} from '@/features/projects/features/house-scanner/utils/workspace-view';
+} from '@/features/house-scanner/utils/workspace-view';
 
 const LazyMap = lazy(() =>
-  import('@/features/projects/features/house-scanner/map/household-map').then(
-    (module) => ({ default: module.HouseholdMap }),
-  ),
+  import('@/features/house-scanner/map/household-map').then((module) => ({
+    default: module.HouseholdMap,
+  })),
 );
 
 class MapLoadBoundary extends Component<

@@ -1,7 +1,7 @@
 import type {
   Observation,
   SourcePolicy,
-} from '@/features/projects/features/house-scanner/types/contracts';
+} from '@/features/house-scanner/types/contracts';
 
 export function assertSourceAllowed(policy: SourcePolicy, now: Date): void {
   if (

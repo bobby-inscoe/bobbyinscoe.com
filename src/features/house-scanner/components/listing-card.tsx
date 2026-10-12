@@ -9,17 +9,17 @@ import {
 } from '@mantine/core';
 import { useState } from 'react';
 
-import styles from '@/features/projects/features/house-scanner/components/household-workspace.module.css';
+import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import type {
   Listing,
   Snapshot,
-} from '@/features/projects/features/house-scanner/types/contracts';
+} from '@/features/house-scanner/types/contracts';
 import {
   formatDate,
   formatPrice,
   listingMatches,
   SECTION_LABELS,
-} from '@/features/projects/features/house-scanner/utils/workspace-view';
+} from '@/features/house-scanner/utils/workspace-view';
 
 export function ListingPhoto({ listing }: { listing: Listing }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);

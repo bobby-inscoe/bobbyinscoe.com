@@ -4,11 +4,11 @@ import { z } from 'zod';
 import {
   ingestRequestSchema,
   sourcePolicySchema,
-} from '@/features/projects/features/house-scanner/types/contracts.ts';
+} from '@/features/house-scanner/types/contracts.ts';
 import {
   assertObservationAllowed,
   assertSourceAllowed,
-} from '@/features/projects/features/house-scanner/utils/source-policy.ts';
+} from '@/features/house-scanner/utils/source-policy.ts';
 
 const MAX_BYTES = 1024 * 1024;
 const encoder = new TextEncoder();

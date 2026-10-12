@@ -48,6 +48,10 @@ trigger down is what makes that happen.
 
 <!-- Add new entries directly below this line, newest first. -->
 
+## 2026-10-12 House Scanner follows main's textile workshop
+
+The House Scanner integration uses main at cf07986, including the merged textile workshop experiment. This supersedes the earlier foundation's assumptions about ProjectFrame, shared registry metadata and --site-* tokens. House Scanner is a top-level feature with its existing /projects/house-scanner URL; the app composes its route and the workshop exposes a data-only folio entry. It inherits the existing Mantine provider, moss/flax palette and Libron headings. Restoring the redesign shell would replace the selected website styling, so only House Scanner commits were replayed onto main. A local pre-rebase branch preserves the earlier tip for recovery.
+
 ## 2026-09-05 Recursive feature route-tree composition
 **Decision.** Supersedes the entry below. Every routed feature exports a `routes/route-tree.ts` composed from its own route plus the route trees of its *immediate* child features only; `src/app/router.ts` composes just the top-level features. Route factories take the parent as a generic `<TParent extends AnyRoute>`.
 **Why.** The feature layout is recursive, so route composition must be too, or a subfeature and a top-level feature look identical on disk and behave differently. Recursion keeps "deleting a feature is deleting a directory" true, keeps a subfeature's exposure switch next to the subfeature, and makes any subtree independently mountable for tests. The generic parent is not cosmetic: with a bare `AnyRoute` parameter, `<Link to="/definitely-not-a-route" />` typechecks clean — verified both directions before adopting this.

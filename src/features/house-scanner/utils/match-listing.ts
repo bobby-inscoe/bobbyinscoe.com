@@ -1,7 +1,7 @@
 import type {
   Criteria,
   Listing,
-} from '@/features/projects/features/house-scanner/types/contracts';
+} from '@/features/house-scanner/types/contracts';
 
 export interface MatchResult {
   section: 'preferred' | 'stretch' | 'exceptions' | 'needs-details' | 'outside';
