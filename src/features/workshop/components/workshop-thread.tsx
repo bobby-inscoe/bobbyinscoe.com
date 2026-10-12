@@ -70,9 +70,8 @@ export function WorkshopThread({ roomRef }: WorkshopThreadProps) {
       const lastBottom =
         surfaces[surfaces.length - 1].getBoundingClientRect().bottom -
         bounds.top;
-      const tailX = previousX * 0.35;
-      d += ` C ${previousX - 60} ${previousY + 110}, ${tailX + 65} ${lastBottom + 34}, ${tailX} ${lastBottom + 34}`;
-      d += ` C ${tailX - 65} ${lastBottom + 34}, 15 ${lastBottom + 8}, -35 ${lastBottom + 14}`;
+      // One cubic keeps the final drape's curvature continuous beneath the caption.
+      d += ` C ${previousX * 0.75} ${lastBottom + 72}, ${previousX * 0.3} ${lastBottom + 40}, -35 ${lastBottom + 14}`;
       setPath(d);
     }
 
