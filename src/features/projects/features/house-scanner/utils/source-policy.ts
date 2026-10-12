@@ -25,10 +25,18 @@ export function assertObservationAllowed(
     throw new Error('Source ingestion cannot claim user-supplied coordinates.');
   if (!policy.listingOrigins.includes(new URL(observation.sourceUrl).origin))
     throw new Error('Listing origin is not approved.');
+  const observedTimes = [
+    observation.observedAt,
+    ...(observation.photo ? [observation.photo.observedAt] : []),
+    ...(observation.coordinates ? [observation.coordinates.observedAt] : []),
+    ...observation.evidence.map((evidence) => evidence.observedAt),
+  ];
   if (
-    Date.parse(observation.observedAt) > now.getTime() + 300000 ||
-    Date.parse(observation.observedAt) <
-      now.getTime() - policy.retentionDays * 86400000
+    observedTimes.some(
+      (timestamp) =>
+        Date.parse(timestamp) > now.getTime() + 300000 ||
+        Date.parse(timestamp) < now.getTime() - policy.retentionDays * 86400000,
+    )
   )
     throw new Error('Observation is outside the permitted time window.');
   for (const [key, value] of Object.entries(observation.facts)) {
