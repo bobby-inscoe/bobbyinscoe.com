@@ -1,76 +1,6 @@
 /* --------------------------------- */
-/* Styles for Feed the Duck           */
-/* --------------------------------- */
-
-.DuckFeed {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.Button {
-  padding: 0.5rem 1.25rem;
-  border: 1px solid var(--secondary);
-  border-radius: 8px;
-  background-color: var(--secondary-dark);
-  color: var(--primary);
-  cursor: pointer;
-}
-
-.Button:hover:not(:disabled) {
-  background-color: var(--secondary);
-}
-
-.Button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.Button:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-.Button--secondary {
-  background-color: transparent;
-  border-color: var(--secondary-dark);
-  color: var(--secondary);
-}
-
-.Button--secondary:hover:not(:disabled) {
-  background-color: var(--secondary-dark);
-  color: var(--primary);
-}
-
-/* --------------------------------- */
 /* HUD                                */
 /* --------------------------------- */
-
-.GameHud {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  max-width: 720px;
-}
-
-.GameHud-row {
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-}
-
-.GameHud-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.15rem;
-}
 
 .GameHud-label {
   font-size: 0.7rem;
@@ -103,21 +33,6 @@
 
 .GameHud-bonus .GameHud-value {
   color: #e879f9;
-}
-
-.GameHud-bonusBar {
-  width: 100%;
-  max-width: 300px;
-  height: 4px;
-  border-radius: 2px;
-  background-color: var(--secondary-dark);
-  overflow: hidden;
-}
-
-.GameHud-bonusBar-fill {
-  height: 100%;
-  background-color: #e879f9;
-  transition: width 0.1s linear;
 }
 
 /* --------------------------------- */
@@ -216,134 +131,15 @@
 .GameOverScreen {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  padding: 1.5rem;
   text-align: center;
   background-color: var(--primary-dark);
-  border-radius: 12px;
+  border-radius: var(--mantine-radius-md);
   overflow: auto;
 }
-
-.AvatarArt {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  color: var(--primary);
-}
-
-.StartScreen-field {
-  border: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.StartScreen-legend {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-}
-
-.StartScreen-info {
-  display: inline-flex;
-  align-items: center;
-  color: var(--secondary);
-  cursor: help;
-}
-
-.StartScreen-option {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.StartScreen-avatarIcon {
-  flex-shrink: 0;
-}
-
-.DuckFeed-highScores {
-  width: 100%;
-  max-width: 260px;
-  padding: 0.75rem 1rem;
-  border-radius: 10px;
-  background-color: var(--secondary-dark);
-}
-
-.GameOverScreen-score {
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-
-.GameOverScreen-badge {
-  color: #f4c96b;
-  font-weight: 600;
-}
-
-.GameOverScreen-stats {
-  display: flex;
-  flex-direction: row;
-  gap: 1.5rem;
-}
-
-.GameOverScreen-stats > div {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.15rem;
-}
-
-.GameOverScreen-actions {
-  display: flex;
-  flex-direction: row;
-  gap: 0.75rem;
-}
-
-/* --------------------------------- */
-/* High scores                        */
-/* --------------------------------- */
-
-.HighScoreList {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.35rem;
-  width: 100%;
-}
-
-.HighScoreList h2 {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--secondary);
-}
-
-.HighScoreList-empty {
-  font-size: 0.85rem;
-  color: var(--secondary);
-}
-
-.HighScoreList-items {
-  list-style: none;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  width: 100%;
-}
-
-.HighScoreList-items li {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  gap: 1rem;
+.game-field-label {
+  color: inherit;
+  display: block;
+  text-align: center;
 }
 
 /* --------------------------------- */

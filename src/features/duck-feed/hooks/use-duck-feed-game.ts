@@ -42,7 +42,7 @@ interface GameState {
   comboCount: number;
   bestCombo: number;
   bonusTimeGainedMs: number;
-  feed: FeedItem | null;
+  feed: FeedItem[];
   bonusPickup: FeedItem | null;
   crumbs: FeedItem[];
   bonusPhaseEndsAt: number | null;
@@ -56,7 +56,7 @@ const initialState: GameState = {
   comboCount: 0,
   bestCombo: 0,
   bonusTimeGainedMs: 0,
-  feed: null,
+  feed: [],
   bonusPickup: null,
   crumbs: [],
   bonusPhaseEndsAt: null,
@@ -74,9 +74,10 @@ function spawnCrumb(board: BoardSize, avoid: Position, now: number): FeedItem {
 }
 
 type Action =
-  | { type: 'start'; feed: FeedItem }
+  | { type: 'start'; feed: FeedItem[] }
   | {
       type: 'relocate-feed';
+      id: string;
       position: Position;
       now: number;
       points: number;
@@ -101,14 +102,14 @@ function gameReducer(state: GameState, action: Action): GameState {
     case 'start':
       return { ...initialState, status: 'playing', feed: action.feed };
     case 'relocate-feed': {
-      if (!state.feed) return state;
+      if (!state.feed.some((item) => item.id === action.id)) return state;
       return {
         ...state,
-        feed: {
-          ...state.feed,
-          position: action.position,
-          lastMovedAt: action.now,
-        },
+        feed: state.feed.map((item) =>
+          item.id === action.id
+            ? { ...item, position: action.position, lastMovedAt: action.now }
+            : item,
+        ),
         score: state.score + action.points,
         comboCount: action.comboCount,
         bestCombo: Math.max(state.bestCombo, action.comboCount),
@@ -230,12 +231,25 @@ export function useDuckFeedGame(
 
   const start = useCallback(() => {
     const now = Date.now();
-    const feed: FeedItem = {
+    const first: FeedItem = {
       id: crypto.randomUUID(),
       kind: 'normal',
       position: randomPosition(boardSizeRef.current),
       lastMovedAt: now,
     };
+    const feed: FeedItem[] = [
+      first,
+      {
+        id: crypto.randomUUID(),
+        kind: 'normal',
+        position: randomPositionAwayFrom(
+          boardSizeRef.current,
+          itemCenter(first.position),
+          FEED_ITEM_SIZE_PX,
+        ),
+        lastMovedAt: now,
+      },
+    ];
     lastFleeAtRef.current = 0;
     nextBonusPickupAtRef.current =
       now + randomDelayMs(BONUS_PICKUP_MIN_DELAY_MS, BONUS_PICKUP_MAX_DELAY_MS);
@@ -247,112 +261,135 @@ export function useDuckFeedGame(
     dispatch({ type: 'return-to-idle' });
   }, []);
 
-  const evaluateProximity = useCallback((pointer: Position) => {
-    const current = stateRef.current;
-    const now = Date.now();
+  const evaluateProximity = useCallback(
+    (pointer: Position, activatedId?: string) => {
+      const current = stateRef.current;
+      const now = Date.now();
 
-    if (current.status === 'playing' && current.feed) {
-      const settings = DIFFICULTY_SETTINGS[difficultyRef.current];
-      const elapsedMs = Math.max(
-        durationMsRef.current - countdownRef.current.remainingMs,
-        0,
-      );
-      const radius = escalatedFleeRadius(
-        settings,
-        elapsedMs,
-        durationMsRef.current,
-      );
-      const canFlee =
-        now - current.feed.lastMovedAt >= settings.retriggerCooldownMs;
-
-      if (
-        canFlee &&
-        distance(pointer, itemCenter(current.feed.position)) <= radius
-      ) {
-        const withinComboWindow =
-          lastFleeAtRef.current > 0 &&
-          now - lastFleeAtRef.current <= settings.comboWindowMs;
-        const comboCount = withinComboWindow ? current.comboCount + 1 : 1;
-        const position = randomPositionAwayFrom(
-          boardSizeRef.current,
-          pointer,
-          radius,
+      if (current.status === 'playing') {
+        const settings = DIFFICULTY_SETTINGS[difficultyRef.current];
+        const elapsedMs = Math.max(
+          durationMsRef.current - countdownRef.current.remainingMs,
+          0,
         );
-        lastFleeAtRef.current = now;
-        dispatch({
-          type: 'relocate-feed',
-          position,
-          now,
-          points: comboAward(comboCount),
-          comboCount,
-        });
-        dispatch({
-          type: 'add-popup',
-          popup: {
-            id: crypto.randomUUID(),
-            kind: 'catch',
-            position: pointer,
-            createdAt: now,
-          },
-        });
+        const radius = escalatedFleeRadius(
+          settings,
+          elapsedMs,
+          durationMsRef.current,
+        );
+        const nearbyFeed = current.feed
+          .filter(
+            (item) =>
+              (!activatedId || item.id === activatedId) &&
+              now - item.lastMovedAt >= settings.retriggerCooldownMs &&
+              distance(pointer, itemCenter(item.position)) <= radius,
+          )
+          .sort(
+            (a, b) =>
+              distance(pointer, itemCenter(a.position)) -
+              distance(pointer, itemCenter(b.position)),
+          )[0];
+
+        if (nearbyFeed) {
+          const withinComboWindow =
+            lastFleeAtRef.current > 0 &&
+            now - lastFleeAtRef.current <= settings.comboWindowMs;
+          const comboCount = withinComboWindow ? current.comboCount + 1 : 1;
+          const position = randomPositionAwayFrom(
+            boardSizeRef.current,
+            [
+              pointer,
+              ...current.feed
+                .filter((item) => item.id !== nearbyFeed.id)
+                .map((item) => itemCenter(item.position)),
+              ...(current.bonusPickup
+                ? [itemCenter(current.bonusPickup.position)]
+                : []),
+            ],
+            Math.max(radius, FEED_ITEM_SIZE_PX),
+          );
+          lastFleeAtRef.current = now;
+          dispatch({
+            type: 'relocate-feed',
+            id: nearbyFeed.id,
+            position,
+            now,
+            points: comboAward(comboCount),
+            comboCount,
+          });
+          dispatch({
+            type: 'add-popup',
+            popup: {
+              id: crypto.randomUUID(),
+              kind: 'catch',
+              position: pointer,
+              createdAt: now,
+            },
+          });
+          return;
+        }
+
+        if (
+          current.bonusPickup &&
+          distance(pointer, itemCenter(current.bonusPickup.position)) <=
+            BONUS_PICKUP_RADIUS_PX
+        ) {
+          const crumbs = Array.from({ length: FLURRY_CRUMB_COUNT }, () =>
+            spawnCrumb(boardSizeRef.current, pointer, now),
+          );
+          countdownRef.current.pause();
+          dispatch({
+            type: 'collect-bonus-pickup',
+            crumbs,
+            bonusPhaseEndsAt: now + BONUS_PHASE_DURATION_MS,
+          });
+        }
         return;
       }
 
-      if (
-        current.bonusPickup &&
-        distance(pointer, itemCenter(current.bonusPickup.position)) <=
-          BONUS_PICKUP_RADIUS_PX
-      ) {
-        const crumbs = Array.from({ length: FLURRY_CRUMB_COUNT }, () =>
+      if (current.status === 'bonus-phase' && current.crumbs.length > 0) {
+        const caught = current.crumbs.filter(
+          (crumb) =>
+            distance(pointer, itemCenter(crumb.position)) <=
+            CRUMB_PICKUP_RADIUS_PX,
+        );
+        if (caught.length === 0) return;
+
+        const replacements = caught.map(() =>
           spawnCrumb(boardSizeRef.current, pointer, now),
         );
-        countdownRef.current.pause();
+        countdownRef.current.addTime(CRUMB_TIME_BONUS_MS * caught.length);
         dispatch({
-          type: 'collect-bonus-pickup',
-          crumbs,
-          bonusPhaseEndsAt: now + BONUS_PHASE_DURATION_MS,
+          type: 'collect-crumbs',
+          caughtIds: caught.map((crumb) => crumb.id),
+          replacements,
         });
+        for (const crumb of caught) {
+          dispatch({
+            type: 'add-popup',
+            popup: {
+              id: crypto.randomUUID(),
+              kind: 'time-bonus',
+              position: itemCenter(crumb.position),
+              createdAt: now,
+            },
+          });
+        }
       }
-      return;
-    }
-
-    if (current.status === 'bonus-phase' && current.crumbs.length > 0) {
-      const caught = current.crumbs.filter(
-        (crumb) =>
-          distance(pointer, itemCenter(crumb.position)) <=
-          CRUMB_PICKUP_RADIUS_PX,
-      );
-      if (caught.length === 0) return;
-
-      const replacements = caught.map(() =>
-        spawnCrumb(boardSizeRef.current, pointer, now),
-      );
-      countdownRef.current.addTime(CRUMB_TIME_BONUS_MS * caught.length);
-      dispatch({
-        type: 'collect-crumbs',
-        caughtIds: caught.map((crumb) => crumb.id),
-        replacements,
-      });
-      for (const crumb of caught) {
-        dispatch({
-          type: 'add-popup',
-          popup: {
-            id: crypto.randomUUID(),
-            kind: 'time-bonus',
-            position: itemCenter(crumb.position),
-            createdAt: now,
-          },
-        });
-      }
-    }
-  }, []);
+    },
+    [],
+  );
 
   const handleItemActivate = useCallback(
     (id: string) => {
       const current = stateRef.current;
-      const candidates = [current.feed, current.bonusPickup, ...current.crumbs];
+      const candidates = [
+        ...current.feed,
+        current.bonusPickup,
+        ...current.crumbs,
+      ];
       const item = candidates.find((candidate) => candidate?.id === id);
-      if (item) evaluateProximity(itemCenter(item.position));
+      if (item) evaluateProximity(itemCenter(item.position), id);
     },
     [evaluateProximity],
   );
@@ -384,9 +421,7 @@ export function useDuckFeedGame(
           dispatch({ type: 'reset-combo' });
         }
         if (!current.bonusPickup && now >= nextBonusPickupAtRef.current) {
-          const avoid = current.feed
-            ? itemCenter(current.feed.position)
-            : { x: 0, y: 0 };
+          const avoid = current.feed.map((item) => itemCenter(item.position));
           const item: FeedItem = {
             id: crypto.randomUUID(),
             kind: 'bonus-pickup',
@@ -422,8 +457,7 @@ export function useDuckFeedGame(
   }, [state.status]);
 
   const feedItems = useMemo(() => {
-    const items: FeedItem[] = [];
-    if (state.feed) items.push(state.feed);
+    const items: FeedItem[] = [...state.feed];
     if (state.bonusPickup) items.push(state.bonusPickup);
     items.push(...state.crumbs);
     return items;

@@ -1,9 +1,9 @@
 import type React from 'react';
-import ducky from '@/features/duck-feed/assets/ducky.png';
+import ducky from '@/assets/duck.svg';
 
 interface DuckIconProps extends Omit<React.SVGProps<SVGSVGElement>, 'size'> {
   size?: number | string;
-  /** Renders the original ducky.png artwork instead of the line-art icon. */
+  /** Renders the full-colour duck instead of the line-art icon. */
   useOriginalArt?: boolean;
 }
 

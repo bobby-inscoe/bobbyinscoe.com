@@ -7,6 +7,8 @@
     "node": ">=20.19.0"
   },
   "dependencies": {
+    "@mantine/core": "^9.7.2",
+    "@mantine/hooks": "^9.7.2",
     "@tanstack/react-router": "^1.170.32",
     "lucide-react": "^1.41.0",
     "react": "^19.2.8",

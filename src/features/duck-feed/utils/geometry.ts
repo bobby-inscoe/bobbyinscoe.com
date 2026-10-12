@@ -35,13 +35,18 @@ const MAX_PLACEMENT_ATTEMPTS = 8;
 /** Picks a random in-bounds position whose center is at least `minDistance` from `avoid`. */
 export function randomPositionAwayFrom(
   board: BoardSize,
-  avoid: Position,
+  avoid: Position | Position[],
   minDistance: number,
   itemSize: number = FEED_ITEM_SIZE_PX,
 ): Position {
+  const points = Array.isArray(avoid) ? avoid : [avoid];
+  const clearance = (position: Position) =>
+    Math.min(
+      ...points.map((point) => distance(itemCenter(position, itemSize), point)),
+    );
   for (let attempt = 0; attempt < MAX_PLACEMENT_ATTEMPTS; attempt++) {
     const candidate = randomPosition(board, itemSize);
-    if (distance(itemCenter(candidate, itemSize), avoid) >= minDistance) {
+    if (clearance(candidate) >= minDistance) {
       return candidate;
     }
   }
@@ -54,9 +59,6 @@ export function randomPositionAwayFrom(
     { x: bounds.width, y: bounds.height },
   ];
   return corners.reduce((farthest, corner) =>
-    distance(itemCenter(corner, itemSize), avoid) >
-    distance(itemCenter(farthest, itemSize), avoid)
-      ? corner
-      : farthest,
+    clearance(corner) > clearance(farthest) ? corner : farthest,
   );
 }
