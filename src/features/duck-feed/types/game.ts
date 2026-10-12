@@ -14,13 +14,28 @@ export interface BoardSize {
   height: number;
 }
 
-export type FeedItemKind = 'normal' | 'bonus-pickup' | 'crumb';
+export type FeedItemKind = 'normal' | 'bonus-pickup' | 'fan-pickup' | 'crumb';
 
 export interface FeedItem {
   id: string;
   kind: FeedItemKind;
   position: Position;
   lastMovedAt: number;
+}
+
+/** A small duck released by a fan pickup; `position` is its top-left, like a feed item's. */
+export interface SmallDuck {
+  id: string;
+  position: Position;
+  /** Pixels per second. */
+  velocity: Position;
+  /** Wall ricochets left; once spent it flies off the board instead of bouncing. */
+  bouncesLeft: number;
+}
+
+export interface HighScoreEntry {
+  name: string;
+  score: number;
 }
 
 export interface RoundResult {

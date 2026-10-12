@@ -20,6 +20,17 @@ export const CRUMB_PICKUP_RADIUS_PX = 40;
 export const CRUMB_MIN_SEPARATION_PX = 40;
 export const CRUMB_TIME_BONUS_MS = 100;
 
+/** Ducks released by a fan pickup, spaced evenly around the full circle. */
+export const SMALL_DUCK_COUNT = 8;
+export const SMALL_DUCK_SIZE_PX = 24;
+export const SMALL_DUCK_SPEED_PX_PER_S = 280;
+/** Wall ricochets before a small duck flies off the board. */
+export const SMALL_DUCK_MAX_BOUNCES = 2;
+/** Center-to-center distance at which a small duck eats a feed item. */
+export const SMALL_DUCK_CATCH_RADIUS_PX = 32;
+/** Flat award, deliberately outside the combo so only the cursor feeds a streak. */
+export const SMALL_DUCK_CATCH_POINTS = BASE_FLEE_POINTS;
+
 /** How long a catch/time-bonus popup stays on screen before it's pruned. */
 export const POPUP_LIFETIME_MS = 700;
 

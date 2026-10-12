@@ -5,11 +5,13 @@ import { useState } from 'react';
 import { CatchPopup } from '@/features/duck-feed/components/catch-popup';
 import { FeedItem } from '@/features/duck-feed/components/feed-item';
 import { DuckIcon } from '@/features/duck-feed/components/icons/duck-icon';
+import { SmallDuck } from '@/features/duck-feed/components/small-duck';
 import type {
   Avatar,
   FeedItem as FeedItemModel,
   Popup,
   Position,
+  SmallDuck as SmallDuckModel,
 } from '@/features/duck-feed/types/game';
 import { DUCK_COLOR, SNAIL_COLOR } from '@/features/duck-feed/utils/avatars';
 
@@ -17,6 +19,7 @@ interface GameBoardProps {
   ref: React.Ref<HTMLDivElement>;
   avatar: Avatar;
   feedItems: FeedItemModel[];
+  smallDucks: SmallDuckModel[];
   popups: Popup[];
   isBonusPhase: boolean;
   onPointerMove: (position: Position) => void;
@@ -27,6 +30,7 @@ export function GameBoard({
   ref,
   avatar,
   feedItems,
+  smallDucks,
   popups,
   isBonusPhase,
   onPointerMove,
@@ -58,6 +62,9 @@ export function GameBoard({
           muted={isBonusPhase && item.kind === 'normal'}
           onActivate={onItemActivate}
         />
+      ))}
+      {smallDucks.map((duck) => (
+        <SmallDuck key={duck.id} duck={duck} />
       ))}
       {popups.map((popup) => (
         <CatchPopup key={popup.id} popup={popup} />

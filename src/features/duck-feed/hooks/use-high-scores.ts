@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import type { HighScoreEntry } from '@/features/duck-feed/types/game';
 import {
   HIGH_SCORES_STORAGE_KEY,
   insertHighScore,
@@ -7,7 +8,7 @@ import {
   wouldBeNewHighScore,
 } from '@/features/duck-feed/utils/high-scores';
 
-function readStoredHighScores(): number[] {
+function readStoredHighScores(): HighScoreEntry[] {
   try {
     return parseHighScores(
       window.localStorage.getItem(HIGH_SCORES_STORAGE_KEY),
@@ -18,13 +19,15 @@ function readStoredHighScores(): number[] {
 }
 
 export interface UseHighScoresResult {
-  scores: number[];
-  /** Records a finished round's score and reports whether it made the top 5. */
-  recordScore: (score: number) => boolean;
+  scores: HighScoreEntry[];
+  /** Whether a finished round's score earns a place in the top 5. */
+  qualifies: (score: number) => boolean;
+  /** Adds a qualifying round to the table under the player's initials. */
+  saveScore: (name: string, score: number) => void;
 }
 
 export function useHighScores(): UseHighScoresResult {
-  const [scores, setScores] = useState<number[]>(readStoredHighScores);
+  const [scores, setScores] = useState<HighScoreEntry[]>(readStoredHighScores);
   const scoresRef = useRef(scores);
   scoresRef.current = scores;
 
@@ -39,15 +42,16 @@ export function useHighScores(): UseHighScoresResult {
     }
   }, [scores]);
 
-  const recordScore = useCallback((score: number): boolean => {
-    const isNewHighScore = wouldBeNewHighScore(scoresRef.current, score);
-    if (isNewHighScore) {
-      const updated = insertHighScore(scoresRef.current, score);
-      scoresRef.current = updated;
-      setScores(updated);
-    }
-    return isNewHighScore;
+  const qualifies = useCallback(
+    (score: number): boolean => wouldBeNewHighScore(scoresRef.current, score),
+    [],
+  );
+
+  const saveScore = useCallback((name: string, score: number): void => {
+    const updated = insertHighScore(scoresRef.current, { name, score });
+    scoresRef.current = updated;
+    setScores(updated);
   }, []);
 
-  return { scores, recordScore };
+  return { scores, qualifies, saveScore };
 }

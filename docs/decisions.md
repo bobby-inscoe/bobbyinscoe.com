@@ -48,6 +48,13 @@ trigger down is what makes that happen.
 
 <!-- Add new entries directly below this line, newest first. -->
 
+## 2026-10-12 Duck Feed high scores store entries, read old numbers in place
+**Decision.** `duck-feed:high-scores` now holds `{ name, score }` objects, where `name` is three letters A-Z. The parser also accepts the previous bare-number array and maps each number to the name `---`. There is no migration step and no new storage key; the first write after load rewrites the array in the new shape.
+**Why.** The key is a player's only record of past rounds and lives in their browser, so a new key would silently orphan it and a one-shot migration would have to run exactly once to be safe. Reading both shapes at the existing boundary is a few lines and cannot lose data. Names are re-sanitised on read because localStorage is untrusted.
+**Instead of.** A versioned envelope (`{ version, entries }`) was rejected as machinery for a two-field shape with one past version. A new key was rejected because it drops existing scores.
+**Costs.** Rolling the code back after new-format scores are saved makes the old parser discard them, since it keeps only bare numbers. That loses a local top five, not user data that exists anywhere else. `---` rows are indistinguishable from a player who never entered initials.
+**Revisit if.** The shape grows a third field or a second shape appears; at that point a versioned envelope earns its cost.
+
 ## 2026-09-05 Recursive feature route-tree composition
 **Decision.** Supersedes the entry below. Every routed feature exports a `routes/route-tree.ts` composed from its own route plus the route trees of its *immediate* child features only; `src/app/router.ts` composes just the top-level features. Route factories take the parent as a generic `<TParent extends AnyRoute>`.
 **Why.** The feature layout is recursive, so route composition must be too, or a subfeature and a top-level feature look identical on disk and behave differently. Recursion keeps "deleting a feature is deleting a directory" true, keeps a subfeature's exposure switch next to the subfeature, and makes any subtree independently mountable for tests. The generic parent is not cosmetic: with a bare `AnyRoute` parameter, `<Link to="/definitely-not-a-route" />` typechecks clean — verified both directions before adopting this.

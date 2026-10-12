@@ -89,6 +89,10 @@
   filter: hue-rotate(200deg) saturate(1.6) brightness(1.2);
 }
 
+.FeedItem--fan-pickup {
+  filter: hue-rotate(100deg) saturate(1.6) brightness(1.1);
+}
+
 .FeedItem--crumb {
   filter: hue-rotate(280deg) saturate(1.8);
   animation: crumb-spawn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
@@ -104,6 +108,23 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* The linear transition spans one SMALL_DUCK_TICK_MS step (50ms) so the
+   duck glides between ticks rather than hopping. */
+.SmallDuck {
+  position: absolute;
+  display: flex;
+  pointer-events: none;
+  transition:
+    left 50ms linear,
+    top 50ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .SmallDuck {
+    transition: none;
+  }
 }
 
 .CatchPopup {
@@ -136,6 +157,14 @@
   border-radius: var(--mantine-radius-md);
   overflow: auto;
 }
+.InitialsInput {
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  font-family: monospace;
+  font-size: 1.25rem;
+}
+
 .game-field-label {
   color: inherit;
   display: block;

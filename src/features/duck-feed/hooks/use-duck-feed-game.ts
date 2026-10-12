@@ -9,6 +9,7 @@ import type {
   Popup,
   Position,
   RoundResult,
+  SmallDuck,
 } from '@/features/duck-feed/types/game';
 import { FEED_ITEM_SIZE_PX } from '@/features/duck-feed/utils/constants';
 import type { RoundDurationSeconds } from '@/features/duck-feed/utils/difficulty';
@@ -34,7 +35,14 @@ import {
   FLURRY_CRUMB_COUNT,
   POPUP_LIFETIME_MS,
   randomDelayMs,
+  SMALL_DUCK_CATCH_POINTS,
+  SMALL_DUCK_CATCH_RADIUS_PX,
+  SMALL_DUCK_SIZE_PX,
 } from '@/features/duck-feed/utils/scoring';
+import {
+  spawnSmallDuckFan,
+  stepSmallDuck,
+} from '@/features/duck-feed/utils/small-ducks';
 
 interface GameState {
   status: GameStatus;
@@ -42,9 +50,13 @@ interface GameState {
   comboCount: number;
   bestCombo: number;
   bonusTimeGainedMs: number;
+  /** When the live combo lapses; display-only, `lastFleeAtRef` decides the actual reset. */
+  comboExpiresAt: number | null;
   feed: FeedItem[];
+  /** Whichever pickup (bonus or fan) is on the board; one at a time. */
   bonusPickup: FeedItem | null;
   crumbs: FeedItem[];
+  smallDucks: SmallDuck[];
   bonusPhaseEndsAt: number | null;
   popups: Popup[];
   lastResult: RoundResult | null;
@@ -56,9 +68,11 @@ const initialState: GameState = {
   comboCount: 0,
   bestCombo: 0,
   bonusTimeGainedMs: 0,
+  comboExpiresAt: null,
   feed: [],
   bonusPickup: null,
   crumbs: [],
+  smallDucks: [],
   bonusPhaseEndsAt: null,
   popups: [],
   lastResult: null,
@@ -82,16 +96,26 @@ type Action =
       now: number;
       points: number;
       comboCount: number;
+      comboExpiresAt: number;
     }
   | { type: 'reset-combo' }
   | { type: 'spawn-bonus-pickup'; item: FeedItem }
+  | { type: 'collect-fan-pickup'; ducks: SmallDuck[] }
+  | { type: 'step-small-ducks'; ducks: SmallDuck[] }
+  | {
+      type: 'small-duck-catch';
+      id: string;
+      position: Position;
+      now: number;
+      points: number;
+    }
   | {
       type: 'collect-bonus-pickup';
       crumbs: FeedItem[];
       bonusPhaseEndsAt: number;
     }
   | { type: 'collect-crumbs'; caughtIds: string[]; replacements: FeedItem[] }
-  | { type: 'end-bonus-phase' }
+  | { type: 'end-bonus-phase'; comboExpiresAt: number }
   | { type: 'add-popup'; popup: Popup }
   | { type: 'prune-popups'; now: number }
   | { type: 'end-round'; isNewHighScore: boolean }
@@ -112,13 +136,34 @@ function gameReducer(state: GameState, action: Action): GameState {
         ),
         score: state.score + action.points,
         comboCount: action.comboCount,
+        comboExpiresAt: action.comboExpiresAt,
         bestCombo: Math.max(state.bestCombo, action.comboCount),
       };
     }
+    case 'small-duck-catch': {
+      if (!state.feed.some((item) => item.id === action.id)) return state;
+      return {
+        ...state,
+        feed: state.feed.map((item) =>
+          item.id === action.id
+            ? { ...item, position: action.position, lastMovedAt: action.now }
+            : item,
+        ),
+        score: state.score + action.points,
+      };
+    }
     case 'reset-combo':
-      return { ...state, comboCount: 0 };
+      return { ...state, comboCount: 0, comboExpiresAt: null };
     case 'spawn-bonus-pickup':
       return { ...state, bonusPickup: action.item };
+    case 'collect-fan-pickup':
+      return {
+        ...state,
+        bonusPickup: null,
+        smallDucks: [...state.smallDucks, ...action.ducks],
+      };
+    case 'step-small-ducks':
+      return { ...state, smallDucks: action.ducks };
     case 'collect-bonus-pickup':
       return {
         ...state,
@@ -144,6 +189,7 @@ function gameReducer(state: GameState, action: Action): GameState {
         status: 'playing',
         crumbs: [],
         bonusPhaseEndsAt: null,
+        comboExpiresAt: state.comboCount > 0 ? action.comboExpiresAt : null,
       };
     case 'add-popup':
       return { ...state, popups: [...state.popups, action.popup] };
@@ -158,6 +204,7 @@ function gameReducer(state: GameState, action: Action): GameState {
       return {
         ...state,
         status: 'game-over',
+        smallDucks: [],
         lastResult: {
           score: state.score,
           bestCombo: state.bestCombo,
@@ -173,18 +220,24 @@ function gameReducer(state: GameState, action: Action): GameState {
 }
 
 const GAME_TICK_MS = 150;
+const SMALL_DUCK_TICK_MS = 50;
+/** A backgrounded tab throttles timers; cap the catch-up so ducks do not teleport. */
+const SMALL_DUCK_MAX_STEP_MS = 100;
 
 export interface UseDuckFeedGameOptions {
   boardSize: BoardSize;
   difficulty: Difficulty;
   durationSeconds: RoundDurationSeconds;
-  recordScore: (score: number) => boolean;
+  qualifiesForHighScore: (score: number) => boolean;
 }
 
 export interface UseDuckFeedGameResult {
   status: GameStatus;
   score: number;
   comboCount: number;
+  comboExpiresAt: number | null;
+  comboWindowMs: number;
+  smallDucks: SmallDuck[];
   remainingMs: number;
   durationMs: number;
   bonusPhaseEndsAt: number | null;
@@ -201,7 +254,8 @@ export interface UseDuckFeedGameResult {
 export function useDuckFeedGame(
   options: UseDuckFeedGameOptions,
 ): UseDuckFeedGameResult {
-  const { boardSize, difficulty, durationSeconds, recordScore } = options;
+  const { boardSize, difficulty, durationSeconds, qualifiesForHighScore } =
+    options;
   const [state, dispatch] = useReducer(gameReducer, initialState);
 
   // Latest-value refs so the interval and pointer-move handler below never
@@ -214,14 +268,16 @@ export function useDuckFeedGame(
   difficultyRef.current = difficulty;
   const durationMsRef = useRef(durationSeconds * 1000);
   durationMsRef.current = durationSeconds * 1000;
-  const recordScoreRef = useRef(recordScore);
-  recordScoreRef.current = recordScore;
+  const qualifiesForHighScoreRef = useRef(qualifiesForHighScore);
+  qualifiesForHighScoreRef.current = qualifiesForHighScore;
 
   const lastFleeAtRef = useRef(0);
   const nextBonusPickupAtRef = useRef(0);
 
   const handleRoundComplete = useCallback(() => {
-    const isNewHighScore = recordScoreRef.current(stateRef.current.score);
+    const isNewHighScore = qualifiesForHighScoreRef.current(
+      stateRef.current.score,
+    );
     dispatch({ type: 'end-round', isNewHighScore });
   }, []);
 
@@ -316,6 +372,7 @@ export function useDuckFeedGame(
             now,
             points: comboAward(comboCount),
             comboCount,
+            comboExpiresAt: now + settings.comboWindowMs,
           });
           dispatch({
             type: 'add-popup',
@@ -334,6 +391,21 @@ export function useDuckFeedGame(
           distance(pointer, itemCenter(current.bonusPickup.position)) <=
             BONUS_PICKUP_RADIUS_PX
         ) {
+          if (current.bonusPickup.kind === 'fan-pickup') {
+            nextBonusPickupAtRef.current =
+              now +
+              randomDelayMs(
+                BONUS_PICKUP_MIN_DELAY_MS,
+                BONUS_PICKUP_MAX_DELAY_MS,
+              );
+            dispatch({
+              type: 'collect-fan-pickup',
+              ducks: spawnSmallDuckFan(
+                itemCenter(current.bonusPickup.position),
+              ),
+            });
+            return;
+          }
           const crumbs = Array.from({ length: FLURRY_CRUMB_COUNT }, () =>
             spawnCrumb(boardSizeRef.current, pointer, now),
           );
@@ -424,7 +496,7 @@ export function useDuckFeedGame(
           const avoid = current.feed.map((item) => itemCenter(item.position));
           const item: FeedItem = {
             id: crypto.randomUUID(),
-            kind: 'bonus-pickup',
+            kind: Math.random() < 0.5 ? 'fan-pickup' : 'bonus-pickup',
             position: randomPositionAwayFrom(
               boardSizeRef.current,
               avoid,
@@ -449,12 +521,89 @@ export function useDuckFeedGame(
         // Treat the moment play resumes as a fresh flee for combo-timing
         // purposes, so the enforced pause doesn't cost the player their streak.
         lastFleeAtRef.current = now;
-        dispatch({ type: 'end-bonus-phase' });
+        dispatch({
+          type: 'end-bonus-phase',
+          comboExpiresAt:
+            now + DIFFICULTY_SETTINGS[difficultyRef.current].comboWindowMs,
+        });
       }
     }, GAME_TICK_MS);
 
     return () => clearInterval(interval);
   }, [state.status]);
+
+  const hasSmallDucks = state.smallDucks.length > 0;
+  const isRoundLive =
+    state.status === 'playing' || state.status === 'bonus-phase';
+
+  // Own clock, faster than the game tick, because a duck covers ~14px per
+  // 50ms and a coarser step would visibly stutter and skip past feed items.
+  useEffect(() => {
+    if (!hasSmallDucks || !isRoundLive) return;
+
+    let lastStepAt = Date.now();
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const elapsedMs = Math.min(now - lastStepAt, SMALL_DUCK_MAX_STEP_MS);
+      lastStepAt = now;
+      const current = stateRef.current;
+      const board = boardSizeRef.current;
+
+      const ducks = current.smallDucks.flatMap((duck) => {
+        const next = stepSmallDuck(duck, elapsedMs, board);
+        return next ? [next] : [];
+      });
+      dispatch({ type: 'step-small-ducks', ducks });
+
+      // The feed is muted during the bonus phase, so ducks only eat while
+      // normal play is running.
+      if (current.status !== 'playing') return;
+
+      const eatenIds = new Set<string>();
+      for (const duck of ducks) {
+        const duckCenter = itemCenter(duck.position, SMALL_DUCK_SIZE_PX);
+        const target = current.feed.find(
+          (item) =>
+            !eatenIds.has(item.id) &&
+            distance(duckCenter, itemCenter(item.position)) <=
+              SMALL_DUCK_CATCH_RADIUS_PX,
+        );
+        if (!target) continue;
+
+        eatenIds.add(target.id);
+        dispatch({
+          type: 'small-duck-catch',
+          id: target.id,
+          position: randomPositionAwayFrom(
+            board,
+            [
+              duckCenter,
+              ...current.feed
+                .filter((item) => item.id !== target.id)
+                .map((item) => itemCenter(item.position)),
+              ...(current.bonusPickup
+                ? [itemCenter(current.bonusPickup.position)]
+                : []),
+            ],
+            FEED_ITEM_SIZE_PX,
+          ),
+          now,
+          points: SMALL_DUCK_CATCH_POINTS,
+        });
+        dispatch({
+          type: 'add-popup',
+          popup: {
+            id: crypto.randomUUID(),
+            kind: 'catch',
+            position: itemCenter(target.position),
+            createdAt: now,
+          },
+        });
+      }
+    }, SMALL_DUCK_TICK_MS);
+
+    return () => clearInterval(interval);
+  }, [hasSmallDucks, isRoundLive]);
 
   const feedItems = useMemo(() => {
     const items: FeedItem[] = [...state.feed];
@@ -467,6 +616,9 @@ export function useDuckFeedGame(
     status: state.status,
     score: state.score,
     comboCount: state.comboCount,
+    comboExpiresAt: state.comboExpiresAt,
+    comboWindowMs: DIFFICULTY_SETTINGS[difficulty].comboWindowMs,
+    smallDucks: state.smallDucks,
     remainingMs: countdown.remainingMs,
     durationMs: durationMsRef.current,
     bonusPhaseEndsAt: state.bonusPhaseEndsAt,
