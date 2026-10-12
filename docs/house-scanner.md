@@ -6,7 +6,7 @@ This guide is public-safe. The canonical private product plan remains outside th
 
 Build a private shared shortlist at /projects/house-scanner. This implementation starts with isolated synthetic data and disabled live effects. The public shell can expose the synthetic demo explicitly; private access requires an authenticated active household member.
 
-Foundation acceptance requires route/build checks, a fresh independent auth/ingest review, and authorized behavioral checks for household isolation, actor ownership, replay and atomic publication. Static checks alone do not satisfy that gate. Testing beyond source feasibility has not been authorized in this session.
+Foundation acceptance requires route/build checks, a fresh independent auth/ingest review, and authorized behavioral checks for household isolation, actor ownership, replay and atomic publication. Static checks alone do not satisfy that gate. The user authorized local behavior and privacy checks on 12 October 2026. Live accounts, messages, collection and deployment remain outside this authorization.
 
 ## Contracts and ownership
 
