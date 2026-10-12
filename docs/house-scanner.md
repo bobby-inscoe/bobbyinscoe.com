@@ -47,11 +47,11 @@ Original checkout changes are outside this work.
 
 | Task | Dependencies | State | Owner |
 | --- | --- | --- | --- |
-| F0 contracts, route and source gates | Approved plan | accepted for local consumers; runtime gate pending | Coordinator, gpt-6.1-sol high |
+| F0 contracts, route and source gates | Approved plan | accepted for local consumers; local runtime checks recorded below | Coordinator, gpt-6.1-sol high |
 | F0 independent security review | Fixed foundation diff | findings corrected; design reviewed | /root/foundation_review, gpt-6.1-sol high |
-| P1 UI and map | ffbc326 | integrated as 346403b; runtime review pending | /root/project_ui, gpt-6.1-sol medium |
-| P1 fixture collector | ffbc326; synthetic only | integrated as 17d3567; runtime review pending | /root/fixture_collector, gpt-6.1-sol medium |
-| P1 schema/session/ingest | ffbc326; reviewed design | integrated as 4a655a5, 8ca9cf1 and 1dcd2a2; runtime gate pending | /root/private_backend, gpt-6.1-sol high |
+| P1 UI and map | ffbc326 | integrated as 346403b; local browser checks passed | /root/project_ui, gpt-6.1-sol medium |
+| P1 fixture collector | ffbc326; synthetic only | integrated as 17d3567; local fixture checks passed | /root/fixture_collector, gpt-6.1-sol medium |
+| P1 schema/session/ingest | ffbc326; reviewed design | integrated as 4a655a5, 8ca9cf1 and 1dcd2a2; local runtime checks passed; hosted gates remain | /root/private_backend, gpt-6.1-sol high |
 | P1 backend security review | Final backend diff | fixed diff reviewed; no remaining source-review blockers; runtime gate pending | /root/backend_review, gpt-6.1-sol high |
 
 Workers are leaves and use separate managed worktrees at the accepted foundation commit. Record requested model/effort and actual launcher acknowledgment; the launcher does not independently attest the execution model. No worker owns shared files without reassignment.
@@ -72,7 +72,7 @@ Backend notes are actor-owned and revisioned, but their display and editing are 
 
 Before activation, add and verify retention cleanup for source records, run staging, nonces and history while preserving user-authored bookmarks and notes. Read-time redaction limits returned source facts; it does not purge stored data. Review snapshot limits and pagination before exceeding 500 homes, ten member records, twenty profiles or 5,000 attributed saves. Historical member attribution counts toward these bounds.
 
-Verification must cover two-household access denial, revoked membership, actor-owned saves/notes, profile conflicts, sign-out and user-switch races, storage denial, signature/replay rejection, duplicate and contradictory batches, failed-source preservation, empty-fetch rejection, atomic publication, source-rights expiry and price-history retention. Also inspect narrow/wide layouts, keyboard controls, map failure and visual isolation from the portfolio. None of these runtime claims is established by the static builds.
+The original runtime checklist covered two-household access denial, revoked membership, actor-owned saves/notes, profile conflicts, sign-out and user-switch races, storage denial, signature/replay rejection, duplicate and contradictory batches, failed-source preservation, empty-fetch rejection, atomic publication, source-rights expiry and price-history retention. Also inspect narrow/wide layouts, keyboard controls, map failure and visual isolation from the portfolio. Static builds did not establish these claims. The authorized local evidence below covers a bounded subset; hosted and concurrent transaction checks remain open.
 
 ## Original static evidence before rebase
 
@@ -97,3 +97,37 @@ House Scanner now owns src/features/house-scanner. The app composes its route tr
 The rebased manifest preserves main's Mantine 9.7 dependency ranges and existing toolchain. Only Supabase, MapLibre, Zod and collector scripts are added. Existing locked package versions match main; old redesign font and test packages are not carried over. The migration is byte-for-byte unchanged from the reviewed pre-rebase implementation. Only shared import paths changed in the Edge function and collector.
 
 Fresh static evidence after integration: npm run check passed (78 files), npm run typecheck passed, npm run house-scanner:typecheck passed, npm run build passed, npm run house-scanner:build passed, and the offline Deno Edge check passed. The map chunk warning and pre-existing source-map-js advisory remain. No behavior tests, visual interaction tests or database execution ran. The local preview uses port 5183 and must be restarted after rebasing.
+
+## Authorized local behavior and privacy checks
+
+The user authorized local behavior/privacy checks and continued implementation on 12 October 2026. Goal: execute the existing public UI, session/API, signed handler, collector and actual migration with synthetic data; fix demonstrated failures; retain main's styling. Done when the integrated behavior suite, desktop/narrow browser flows, verification typecheck, normal static gates and independent fix review pass. No live collection, accounts, messages, push or deployment is included.
+
+Vitest runs behavior tests; Testing Library and jsdom run the real React hooks and client with the external Supabase SDK mocked. PGlite runs the actual migration in PostgreSQL WASM, with synthetic roles and an auth.uid shim. Playwright uses installed Microsoft Edge with a fresh context, external requests blocked, and a locally fulfilled blank map style for overlap checks. The interactive browser tool failed to start, so browser evidence comes from Playwright. These are development dependencies; no browser download or paid service is required.
+
+| Task | Dependencies and base | State | Owner/model | Worktree and integrated commit |
+| --- | --- | --- | --- | --- |
+| V1 test setup | User authorization; dd0821d | accepted | Coordinator, gpt-6.1-sol high | house-scanner; dd0821d, 7d5ea4b |
+| V1 database behavior | dd0821d; contract 1 | accepted | /root/db_behavior, gpt-6.1-sol high | house-scanner-db-checks; 1ba8154 from e56597e |
+| V1 session behavior | dd0821d; contract 1 | accepted | /root/session_behavior, gpt-6.1-sol high | house-scanner-session-checks; 8f5cf48 from 11c5713 |
+| V1 independent review | Fixed integrated diff | accepted; no confirmed privacy blockers | /root/behavior_review, gpt-6.1-sol high | Read-only integration/session worktrees |
+
+Each fresh-context launch explicitly selected the listed model and effort and was acknowledged by the launcher. That acknowledgment does not independently attest execution metadata. All workers remained leaves. The coordinator read both implementation diffs and reran the integrated suites.
+
+Runtime failures corrected:
+
+- Valid ingestion staging failed with PostgreSQL column reference e is ambiguous. Rename the PL/pgSQL evidence loop variable to evidence_item; validation rules and SQL aliases remain intact.
+- Late mutations and refreshes could restore private snapshots during logout, and stale callback errors could replace the signed-out state. Guard refresh during sign-out, track session generations, and clear identity refs after auth/load failures. Reject foreign-identity memberships before household selection; refresh identity after token changes.
+- A displayed photo remained visible after permission expiry until another render. Schedule a bounded expiry check and remove the image when it expires.
+- MapLibre's default worker resolved beside Vite's optimized module and returned 504 in development. Import the installed worker as a Vite URL asset. This also emits a separate worker in production.
+- The collector CLI reported two observations for three observations because it counted listing identities. Count staged observations instead.
+- A defensive SDK sign-out error case could leave identity-change recovery on the loading screen. Check the returned error and expose the existing error/sign-out controls. The installed SDK normally emits SIGNED_OUT for network failures; the regression test covers an error without that event.
+
+Regression tests were observed failing against the original behavior and passing after the relevant fixes. Initial fixture/control-selector mistakes were corrected in tests without changing product behavior or weakening the assertions.
+
+Fresh integrated evidence: npm test passes 155 tests across nine files, including 30 actual PostgreSQL tests, 68 session/API tests, 17 signed-handler tests, and matching, source policy, photo and collector checks. npm run test:browser passes twelve flows across desktop and narrow viewports. The production preview additionally passes both overlap-selection cases. Screenshots were inspected for narrow list layout and desktop map/details. The map style is a blank local fixture; no claim is made about live tile coverage.
+
+npm run check, npm run typecheck, npm run test:typecheck, npm run house-scanner:typecheck, npm run build, npm run house-scanner:fixture and the offline Deno Edge check pass. test:typecheck includes Node-side SQL/Edge tests and uses a minimal test-only Deno declaration; the actual Edge handler is separately checked by Deno. The CLI reports three observations and three prepared requests, and rejects live or real-source execution. Existing map chunk-size and source-map-js development advisory warnings remain visible.
+
+Limits: PGlite has one connection, so simultaneous nonce, publication and profile-edit transactions are unverified. Synthetic role checks do not establish hosted Auth/PostgREST or gateway configuration. Session tests mock external Auth/RPC and do not prove real OTP/SMTP or SDK synchronization across tabs. Real photo providers and tile transport were not contacted. Retention purge, note display/editing, account setup, source rights and activation remain open as described above. Read-time redaction does not remove stored source content. Live activation remains closed.
+
+Rollback for these local fixes is reverting their scoped commits. No schema shape changed and no remote migration ran. The original redesign checkout and homepage edits remain untouched; the integration branch still contains main and the merged textile workshop ancestry.

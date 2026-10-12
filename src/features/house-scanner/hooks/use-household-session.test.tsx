@@ -514,3 +514,21 @@ describe('House Scanner session privacy', () => {
     expect(sdk.rpc).not.toHaveBeenCalled();
   });
 });
+
+it('offers recovery when a refresh detects a changed identity and SDK sign-out returns an error', async () => {
+  const hook = await authenticated();
+  sdk.auth.getUser.mockResolvedValueOnce(userReply(OTHER_USER_ID));
+  sdk.auth.signOut.mockResolvedValueOnce({
+    error: { message: 'Synthetic SDK sign-out failure' },
+  });
+  await act(() => hook.result.current.refresh());
+  expect(hook.result.current.state).toMatchObject({
+    status: 'error',
+    message: 'Session changed. Sign out and try again.',
+  });
+  expect(JSON.stringify(hook.result.current.state)).not.toContain(
+    'Example balcony home',
+  );
+  await act(() => hook.result.current.signOut());
+  expect(hook.result.current.state).toEqual({ status: 'signed-out' });
+});

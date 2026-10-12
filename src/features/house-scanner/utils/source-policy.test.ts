@@ -1,15 +1,38 @@
-import { sourceRegistry } from '@house-scanner-tools/source-registry';
 import { describe, expect, it } from 'vitest';
 import { SYNTHETIC_SNAPSHOT } from '@/features/house-scanner/mock/synthetic-household';
-import type {
-  Observation,
-  SourcePolicy,
+import {
+  factsSchema,
+  type Observation,
+  type SourcePolicy,
 } from '@/features/house-scanner/types/contracts';
 import { assertObservationAllowed } from '@/features/house-scanner/utils/source-policy';
 
 const now = new Date('2026-10-12T12:00:00Z');
 const policy: SourcePolicy = {
-  ...sourceRegistry()[0].policy,
+  sourceId: 'synthetic-fixture',
+  revision: 1,
+  status: 'approved',
+  reviewedAt: '2026-10-12T00:00:00Z',
+  reviewDueAt: '2027-01-01T00:00:00Z',
+  rightsBasis: 'Authored local test fixture',
+  listingOrigins: ['https://example.invalid'],
+  freeOnly: true,
+  automatedCollection: true,
+  privateDisplay: true,
+  modelProcessing: false,
+  emailDigest: false,
+  telegramDigest: false,
+  allowedFactFields: [...factsSchema.keyof().options],
+  retentionDays: 30,
+  capabilities: {
+    discovery: true,
+    knownListingRefresh: true,
+    unknownPrice: true,
+    upcoming: true,
+    pagination: true,
+    resultCap: null,
+    coverageGaps: ['Synthetic only'],
+  },
   allowedEvidenceSubjects: ['nature_access'],
   imageDisplay: true,
   imageHotlink: true,

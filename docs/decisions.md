@@ -73,3 +73,11 @@ House Scanner adds an invitation-only shortlist beside the static portfolio. The
 The feature owns its UI, network and matching code. Shared registry metadata stays data-only. Collector tooling is separate from the Vite graph. Signed ingest credentials bind one household and approved source scope; stage observations before atomic publication, preserving favorites and notes. No real source is cleared and no live endpoint is activated by this local change.
 
 Rollback removes route/registry exposure and disables jobs first. Preserve the last good edition and user-authored records; revoke compromised keys or membership independently of the frontend. Export privately before destructive database changes. Behavioral privacy/replay evidence is pending user authorization and a local backend runtime.
+
+## 2026-10-12 House Scanner local runtime verification
+
+The user authorized local behavior and privacy tests. Use Vitest, Testing Library/jsdom, PostgreSQL WASM via PGlite, and Playwright with installed Edge. This runs the actual migration and app behavior without provisioning accounts or contacting sources. Static inspection alone missed a PL/pgSQL alias collision and session timing defects. A local Docker Supabase stack would better represent Auth/PostgREST and concurrent connections, but Docker, PostgreSQL and the Supabase CLI are absent on this host. Keep those hosted/concurrency checks as activation gates rather than treating the local substitute as equivalent.
+
+The SQL fix renames one loop variable instead of qualifying every evidence alias. Session generations invalidate pending actions, with a separate sign-out latch preventing refresh while logout is pending. Photo display schedules its own expiry check. Import MapLibre's worker through Vite's URL asset support: excluding the library from dependency optimization would address development serving but would not explicitly establish the production worker asset. Each demonstrated failure has a regression check; the production preview verifies the selected worker approach.
+
+These commits can be reverted locally. They change no deployed data or schema shape. Revisit the runtime setup when a permitted local or hosted Supabase environment becomes available; verify concurrent transactions, Auth/PostgREST, real OTP/SMTP, multi-tab SDK behavior and retention cleanup before live use.

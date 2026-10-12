@@ -90,7 +90,11 @@ export function useHouseholdSession() {
         householdId.current = null;
         setState({ status: 'loading' });
         clearOwnedSessionStorage();
-        await client.auth.signOut({ scope: 'local' });
+        const { error: signOutError } = await client.auth.signOut({
+          scope: 'local',
+        });
+        if (signOutError && mounted.current && ticket === generation.current)
+          fail('Session changed. Sign out and try again.');
         return;
       }
       userId.current = data.user.id;
