@@ -18,7 +18,7 @@ async function openDemo(page: import('@playwright/test').Page) {
     .getByRole('button', { name: 'Explore the synthetic demo' })
     .click();
   await expect(
-    page.getByText('4 homes · 2 list only', { exact: false }),
+    page.getByText('5 homes · 3 list only', { exact: false }),
   ).toBeVisible();
 }
 
@@ -80,16 +80,17 @@ test('favorites preserve the other member save and filters identify the saver', 
     home.getByText('Saved by: Demo Morgan', { exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Favorites', exact: true }).click();
-  await expect(page.getByRole('article')).toHaveCount(1);
+  await expect(page.getByRole('article')).toHaveCount(2);
   await page.getByRole('combobox', { name: 'Saved by' }).click();
   await page.getByRole('option', { name: 'Mine', exact: true }).click();
-  await expect(page.getByRole('article')).toHaveCount(0);
+  await expect(page.getByRole('article')).toHaveCount(1);
   await expect(
-    page.getByText('No homes in this view.', { exact: false }),
+    page.getByRole('article', { name: 'Example older listing', exact: true }),
   ).toBeVisible();
   await page.getByRole('combobox', { name: 'Saved by' }).click();
   await page.getByRole('option', { name: 'Demo Morgan', exact: true }).click();
   await expect(page.getByRole('article')).toHaveCount(1);
+  await expect(home).toBeVisible();
 });
 
 test('manual links are normalized without fetching and duplicates open the existing home', async ({
@@ -207,7 +208,7 @@ test('map is opt-in and a failed tile request leaves details and list controls u
     ),
   ).toBe(true);
   await page.getByRole('button', { name: 'Use list only' }).click();
-  await expect(page.getByRole('article')).toHaveCount(4);
+  await expect(page.getByRole('article')).toHaveCount(5);
   await page
     .getByRole('article', { name: 'Example terrace home', exact: true })
     .getByRole('button', { name: 'Details', exact: true })
@@ -307,4 +308,39 @@ test('shared notes show every member and the signed-in member edits only their o
   await home.getByRole('button', { name: 'Details', exact: true }).click();
   await expect(notes.getByRole('listitem')).toHaveCount(1);
   await expect(notes).not.toContainText('Moved the visit to Sunday.');
+});
+
+test('a saved listing missing from the latest scan shows a notice and can be unfavorited by keyboard', async ({
+  page,
+}) => {
+  await openDemo(page);
+  const home = page.getByRole('article', {
+    name: 'Example older listing',
+    exact: true,
+  });
+  await expect(home.getByText('Not in latest scan')).toBeVisible();
+  await expect(home.getByRole('note')).toHaveCount(0);
+  await home.getByRole('button', { name: 'Details', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  const notice = home.getByRole('note', {
+    name: 'Not seen in the latest scan',
+  });
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText('Not seen in the latest scan. Last seen');
+  await expect(notice).toContainText('open it to check');
+  await expect(
+    home.getByText('Saved by: Demo Alex', { exact: true }),
+  ).toBeVisible();
+  const remove = home.getByRole('button', { name: 'Remove my favorite' });
+  await remove.focus();
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByText('Your favorite was removed.', { exact: false }),
+  ).toBeVisible();
+  await expect(
+    home.getByText('Saved by: Nobody', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    home.getByRole('button', { name: 'Save favorite', exact: true }),
+  ).toBeVisible();
 });

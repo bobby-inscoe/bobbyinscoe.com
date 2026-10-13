@@ -8,6 +8,7 @@ export const DEMO_HOUSEHOLD_ID = '00000000-0000-4000-8000-000000000001';
 export const DEMO_USER_ID = '00000000-0000-4000-8000-000000000002';
 export const DEMO_OTHER_USER_ID = '00000000-0000-4000-8000-000000000003';
 const date = '2026-10-12T10:00:00Z';
+export const STALE_LISTING_ID = '00000000-0000-4000-8000-000000000014';
 const baseFacts = {
   propertyType: 'apartment',
   tenure: 'cooperative',
@@ -149,15 +150,26 @@ export const SYNTHETIC_SNAPSHOT = snapshotSchema.parse({
       },
       previousAskingPriceSek: null,
     },
+    {
+      // Fictional source listing last seen a week before the edition, so the
+      // demo shows the "not seen in the latest scan" notice.
+      id: STALE_LISTING_ID,
+      title: 'Example older listing',
+      origin: 'source',
+      observedAt: '2026-10-05T10:00:00Z',
+      facts: { ...baseFacts, askingPriceSek: 2600000 },
+      coordinates: null,
+      previousAskingPriceSek: null,
+    },
   ].map((listing) => ({
-    ...listing,
     householdId: DEMO_HOUSEHOLD_ID,
     origin: 'synthetic',
+    observedAt: date,
+    ...listing,
     sourceUrls: [`https://example.invalid/homes/${listing.id}`],
     conflicts: [],
     evidence: [],
     photo: null,
-    observedAt: date,
     addedBy: null,
     userTags: [],
   })),
@@ -167,6 +179,12 @@ export const SYNTHETIC_SNAPSHOT = snapshotSchema.parse({
       listingId: '00000000-0000-4000-8000-000000000010',
       userId: DEMO_OTHER_USER_ID,
       savedAt: date,
+    },
+    {
+      householdId: DEMO_HOUSEHOLD_ID,
+      listingId: STALE_LISTING_ID,
+      userId: DEMO_USER_ID,
+      savedAt: '2026-10-04T10:00:00Z',
     },
   ],
 });

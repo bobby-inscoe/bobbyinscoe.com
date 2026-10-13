@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   Group,
+  Paper,
   Stack,
   Text,
   Title,
@@ -69,6 +70,7 @@ interface ListingCardProps {
   userId: string;
   selected?: boolean;
   details?: boolean;
+  stale?: boolean;
   busy: boolean;
   canSave: boolean;
   notes?: ListingNotesController;
@@ -82,6 +84,7 @@ export function ListingCard({
   userId,
   selected,
   details,
+  stale,
   busy,
   canSave,
   notes,
@@ -120,6 +123,7 @@ export function ListingCard({
             Added by {memberName(listing.addedBy)}
           </Badge>
         )}
+        {stale && <Badge variant="outline">Not in latest scan</Badge>}
       </Group>
       <Title order={3}>{listing.title}</Title>
       <Text>
@@ -199,6 +203,21 @@ export function ListingCard({
       )}
       {details && (
         <>
+          {stale && (
+            <Paper
+              withBorder
+              p="sm"
+              role="note"
+              aria-label="Not seen in the latest scan"
+            >
+              <Text size="sm">
+                Not seen in the latest scan. Last seen{' '}
+                {formatDate(listing.observedAt)}. The source page may have
+                changed or been removed, so open it to check. Remove your
+                favorite and clear your note when you no longer want this home.
+              </Text>
+            </Paper>
+          )}
           <Title order={4}>Facts and source evidence</Title>
           <div className={styles.facts}>
             {listing.facts.propertyType === 'house' ? (

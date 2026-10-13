@@ -30,6 +30,7 @@ import type {
   SearchProfile,
   Snapshot,
 } from '@/features/house-scanner/types/contracts';
+import { isListingStale } from '@/features/house-scanner/utils/listing-staleness';
 import {
   formatDate,
   formatPrice,
@@ -266,6 +267,7 @@ export function HouseholdWorkspace({
               snapshot={snapshot}
               userId={userId}
               details
+              stale={isListingStale(duplicate, snapshot.edition)}
               selected
               busy={pending.includes(duplicate.id)}
               canSave={canSave(duplicate.id)}
@@ -393,6 +395,7 @@ export function HouseholdWorkspace({
                   snapshot={snapshot}
                   userId={userId}
                   selected={selectedId === listing.id}
+                  stale={isListingStale(listing, snapshot.edition)}
                   details={!mapOpen && selectedId === listing.id}
                   busy={pending.includes(listing.id)}
                   canSave={canSave(listing.id)}
@@ -437,6 +440,7 @@ export function HouseholdWorkspace({
                     userId={userId}
                     selected
                     details
+                    stale={isListingStale(selected, snapshot.edition)}
                     busy={pending.includes(selected.id)}
                     canSave={canSave(selected.id)}
                     notes={notes}
