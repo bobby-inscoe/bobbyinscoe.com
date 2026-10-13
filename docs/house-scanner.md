@@ -70,9 +70,9 @@ The map loads after Open map, uses the same filtered listings as the list and gr
 
 The collector has one synthetic fixture executor, bounded requests and explicit replay inputs. It prepares begin/stage/publish requests in memory. No sender, real adapter, daily workflow or digest is active. The schema and signed endpoint are local source, not a provisioned service.
 
-Backend notes are actor-owned and revisioned, but their display and editing are not connected to the workspace. The manual form can store an initial note. Manual edit/removal and internationalized manual hostnames are deferred; server bookmark validation currently accepts a conservative ASCII DNS/IP subset. Membership administration, initial profile creation, notifications and source-policy management require a later private administration flow. No live household is seeded with demo criteria.
+Backend notes are actor-owned and revisioned. The workspace shows each member's note on the open details card and lets the signed-in member edit only their own, through the session hook or the in-memory demo store. A stale save keeps the draft and offers explicit recovery. The manual form stores an initial note. Manual edit/removal and internationalized manual hostnames are deferred; server bookmark validation currently accepts a conservative ASCII DNS/IP subset. Membership administration, initial profile creation, notifications and source-policy management require a later private administration flow. No live household is seeded with demo criteria.
 
-Before activation, add and verify retention cleanup for source records, run staging, nonces and history while preserving user-authored bookmarks and notes. Read-time redaction limits returned source facts; it does not purge stored data. Review snapshot limits and pagination before exceeding 500 homes, ten member records, twenty profiles or 5,000 attributed saves. Historical member attribution counts toward these bounds.
+Retention cleanup exists as `hs_purge_expired` (migration 202610120002), callable by the service role only and dry run by default. It deletes or scrubs expired source records, history, staged payloads and nonces older than one hour, and tombstones expired listings that someone saved or noted. Nothing calls it yet: a private job or operator procedure must loop until `more` is false, after a private export. Read-time redaction remains the second line. Review snapshot limits and pagination before exceeding 500 homes, ten member records, twenty profiles or 5,000 attributed saves. Historical member attribution counts toward these bounds.
 
 The original runtime checklist covered two-household access denial, revoked membership, actor-owned saves/notes, profile conflicts, sign-out and user-switch races, storage denial, signature/replay rejection, duplicate and contradictory batches, failed-source preservation, empty-fetch rejection, atomic publication, source-rights expiry and price-history retention. Also inspect narrow/wide layouts, keyboard controls, map failure and visual isolation from the portfolio. Static builds did not establish these claims. The authorized local evidence below covers a bounded subset; hosted and concurrent transaction checks remain open.
 
@@ -133,3 +133,33 @@ npm run check, npm run typecheck, npm run test:typecheck, npm run house-scanner:
 Limits: PGlite has one connection, so simultaneous nonce, publication and profile-edit transactions are unverified. Synthetic role checks do not establish hosted Auth/PostgREST or gateway configuration. Session tests mock external Auth/RPC and do not prove real OTP/SMTP or SDK synchronization across tabs. Real photo providers and tile transport were not contacted. Retention purge, note display/editing, account setup, source rights and activation remain open as described above. Read-time redaction does not remove stored source content. Live activation remains closed.
 
 Rollback for these local fixes is reverting their scoped commits. No schema shape changed and no remote migration ran. The original redesign checkout and homepage edits remain untouched; the integration branch still contains main and the merged textile workshop ancestry.
+
+## Retention purge and shared notes (13 October 2026)
+
+The user approved the retention design and the shared-note plan with the recommended defaults. Local commits only; nothing was pushed, deployed or purged against real data.
+
+| Task | State | Owner/model | Integrated commit |
+| --- | --- | --- | --- |
+| R1 retention design | accepted | Plan agent, claude-sonnet-5-5 high | recorded in decisions.md |
+| N1 shared-note plan | accepted | Plan agent, claude-sonnet-5-5 medium | none (design only) |
+| N2 shared-note UI | accepted | worker, claude-sonnet-5-5 medium | a034727 from 4546b2e |
+| R2 retention purge | accepted | worker, claude-sonnet-5-5 high | 64fab76 from 3336721, fix 374085e from 75a67cc |
+| R3 independent review | one defect confirmed and fixed | Plan agent, claude-sonnet-5-5 high | none (read only) |
+
+Each launch set model and effort explicitly through the launcher, which acknowledged the request; that does not independently attest the execution model. All workers were leaves in separate worktrees with disjoint owned paths. The coordinator read each diff and the migration before integrating.
+
+Behavior added:
+
+- `hs_purge_expired` (migration 202610120002), service role only, dry run by default. Removes or scrubs expired source content, history, staged payloads and nonces older than one hour; tombstones expired listings that someone saved or noted; resets cursors only for lapsed sources. Closes any still-staging run it removes a staged row from as failed, so a later publish or stage raises instead of publishing a partial batch (found in review, fixed in 374085e).
+- Notes: the details card lists every member's note and lets the signed-in member edit only their own. Stale saves keep the draft and offer two explicit recoveries. Loads and saves are dropped after sign-out, identity or household change, listing change and unmount. Demo notes live in memory.
+
+Fresh integrated evidence on 374085e: `npm test` 13 files, 245 tests passed (72 in the PostgreSQL file, including the purge and its mutation-checked regressions). `npm run test:browser` 14 passed. `npm run check`, `typecheck`, `test:typecheck`, `house-scanner:typecheck`, `build`, the fixture CLI, the offline Deno handler check and `git diff --check` passed. The worker's roughly 60 deliberate breakages of the purge, applied one at a time, each failed the suite except removing the household row lock, which PGlite cannot exercise, and one equivalent mutant.
+
+Not proven locally: purge versus publish concurrency and lock order, hosted grants and PostgREST exposure, behavior above the documented row ceilings, and the real shape of a PostgREST 40001 error (the note conflict mapping assumes supabase-js exposes `code`). Nothing schedules or calls the purge yet.
+
+Open follow-ups:
+
+1. A private job or operator procedure to loop `hs_purge_expired` until `more` is false, after a private export. Run it when no ingest is in flight.
+2. A note that saved but whose reload failed reports "could not save"; a retry resolves through the conflict path.
+3. Export copies and the tombstone's retained source URL need a rights decision before activation.
+4. Private administration, source rights and the collector, digests and hosted acceptance gates are unchanged from the handoff.
