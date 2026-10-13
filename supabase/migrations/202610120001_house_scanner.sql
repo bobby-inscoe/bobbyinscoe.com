@@ -19,7 +19,14 @@ create table hs.profile_versions (
 );
 create table hs.source_policies (
  household_id uuid not null references hs.households(id), source_id text not null check(source_id ~ '^[a-z0-9-]{1,60}$'),
- policy jsonb not null check(jsonb_typeof(policy)='object' and policy->>'sourceId'=source_id), cursor text, primary key(household_id,source_id)
+ policy jsonb not null check(jsonb_typeof(policy)='object' and policy->>'sourceId'=source_id), cursor text, primary key(household_id,source_id),
+ -- Reads and the retention purge cast these keys for every listing of the source, so one malformed value would make
+ -- hs_snapshot raise for the whole household. Pending and disabled policies may omit a key, so only present keys are checked.
+ constraint source_policy_shape check(
+  (not(policy ? 'retentionDays') or case when jsonb_typeof(policy->'retentionDays')='number' and policy->>'retentionDays' ~ '^[0-9]+$' then (policy->>'retentionDays')::numeric between 1 and 180 else false end) and
+  (not(policy ? 'listingOrigins') or jsonb_typeof(policy->'listingOrigins')='array') and
+  (not(policy ? 'allowedFactFields') or jsonb_typeof(policy->'allowedFactFields')='array') and
+  (not(policy ? 'allowedEvidenceSubjects') or jsonb_typeof(policy->'allowedEvidenceSubjects')='array'))
 );
 create table hs.ingest_credentials (
  key_id text primary key check(key_id ~ '^[a-zA-Z0-9_-]{1,80}$'), household_id uuid not null references hs.households(id),
@@ -151,8 +158,11 @@ begin
  if jsonb_array_length(visible)>500 or jsonb_array_length(people)>10 or jsonb_array_length(profiles)>20 or jsonb_array_length(favorites)>5000 then raise exception 'Household exceeds snapshot limit; refine backend delivery before continuing'; end if;
  return jsonb_build_object('contractVersion',1,'householdId',p_household_id,'edition',edition,'listings',visible,'members',people,'profiles',profiles,'favorites',favorites);
 end; $$;
+-- The favorite and note writers take the household lock first, as hs_ingest and hs.purge_expired do. Without it a
+-- favorite landing mid-purge could save a listing after the purge chose its history rows, which the purge then deletes.
 create function public.hs_set_favorite(p_household_id uuid,p_listing_id uuid,p_saved boolean) returns jsonb language plpgsql security definer set search_path=pg_catalog,hs as $$ begin
  perform hs.require_member(p_household_id);
+ perform 1 from hs.households where id=p_household_id for update;
  if p_saved is null or not exists(select 1 from hs.listings where id=p_listing_id and household_id=p_household_id) then raise exception 'Listing unavailable'; end if;
  if p_saved then insert into hs.favorites(household_id,listing_id,user_id,bookmark_url) select p_household_id,p_listing_id,auth.uid(),coalesce(value->>'sourceUrl',value->'sourceUrls'->>0) from hs.listings where id=p_listing_id and household_id=p_household_id on conflict do nothing;
  else delete from hs.favorites where household_id=p_household_id and listing_id=p_listing_id and user_id=auth.uid(); end if;
@@ -191,6 +201,7 @@ create function public.hs_notes(p_household_id uuid,p_listing_id uuid) returns j
 end; $$;
 create function public.hs_save_note(p_household_id uuid,p_listing_id uuid,p_body text,p_revision integer) returns jsonb language plpgsql security definer set search_path=pg_catalog,hs as $$ declare rev integer; begin
  perform hs.require_member(p_household_id);
+ perform 1 from hs.households where id=p_household_id for update;
  if p_body is null or hs.text_length(p_body)>2000 or p_revision is null or p_revision<0 then raise exception 'Invalid note'; end if;
  if p_revision=0 then insert into hs.notes(household_id,listing_id,user_id,bookmark_url,body) select p_household_id,p_listing_id,auth.uid(),coalesce(value->>'sourceUrl',value->'sourceUrls'->>0),p_body from hs.listings where id=p_listing_id and household_id=p_household_id on conflict do nothing returning revision into rev;
  else update hs.notes set body=p_body,revision=revision+1,edited_at=now() where household_id=p_household_id and listing_id=p_listing_id and user_id=auth.uid() and revision=p_revision returning revision into rev; end if;

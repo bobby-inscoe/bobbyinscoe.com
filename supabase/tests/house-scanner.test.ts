@@ -997,6 +997,161 @@ describe('current household membership and actor ownership', () => {
   });
 });
 
+describe('source policy shape guard', () => {
+  async function insertPolicy(body: Record<string, unknown>, sourceId: string) {
+    await db.query(
+      'insert into hs.source_policies(household_id,source_id,policy) values($1,$2,$3::jsonb)',
+      [HOUSE_A, sourceId, JSON.stringify(body)],
+    );
+  }
+
+  it.each<[string, Record<string, unknown>, string[]]>([
+    ['a complete approved policy', {}, []],
+    ['the lowest retention', { retentionDays: 1 }, []],
+    ['the highest retention', { retentionDays: 180 }, []],
+    ['empty arrays', { listingOrigins: [], allowedFactFields: [] }, []],
+    [
+      'a pending policy without retention, origins or fields',
+      { status: 'pending' },
+      ['retentionDays', 'listingOrigins', 'allowedFactFields'],
+    ],
+    [
+      'a disabled policy without evidence subjects',
+      { status: 'disabled' },
+      ['allowedEvidenceSubjects'],
+    ],
+  ])('stores %s', async (_name, patch, omit) => {
+    const body = Object.fromEntries(
+      Object.entries({ ...policy('delta'), ...patch }).filter(
+        ([key]) => !omit.includes(key),
+      ),
+    );
+    await insertPolicy(body, 'delta');
+    expect(
+      await count(
+        "select count(*)::int count from hs.source_policies where household_id=$1 and source_id='delta'",
+        [HOUSE_A],
+      ),
+    ).toBe(1);
+    const stored = await db.query<{ policy: Record<string, unknown> }>(
+      "select policy from hs.source_policies where household_id=$1 and source_id='delta'",
+      [HOUSE_A],
+    );
+    expect(stored.rows[0].policy).toEqual(body);
+  });
+
+  it.each<[string, Record<string, unknown>]>([
+    ['a fractional retention', { retentionDays: 30.5 }],
+    ['a string retention', { retentionDays: '30' }],
+    ['zero retention', { retentionDays: 0 }],
+    ['retention above 180', { retentionDays: 181 }],
+    ['negative retention', { retentionDays: -1 }],
+    ['an integer too large for int', { retentionDays: 99999999999 }],
+    ['a null retention', { retentionDays: null }],
+    ['a boolean retention', { retentionDays: true }],
+    ['an object retention', { retentionDays: {} }],
+    ['string listing origins', { listingOrigins: ORIGIN }],
+    ['null listing origins', { listingOrigins: null }],
+    ['object allowed fact fields', { allowedFactFields: { rooms: true } }],
+    ['string evidence subjects', { allowedEvidenceSubjects: 'facts' }],
+  ])('rejects %s on insert and on update', async (_name, patch) => {
+    const body = { ...policy('delta'), ...patch } as Record<string, unknown>;
+    await expect(insertPolicy(body, 'delta')).rejects.toThrow(
+      'source_policy_shape',
+    );
+    const before = await db.query<{ policy: unknown }>(
+      "select policy from hs.source_policies where household_id=$1 and source_id='alpha'",
+      [HOUSE_A],
+    );
+    await expect(
+      db.query(
+        'update hs.source_policies set policy=$1::jsonb where household_id=$2 and source_id=$3',
+        [JSON.stringify({ ...policy('alpha'), ...patch }), HOUSE_A, 'alpha'],
+      ),
+    ).rejects.toThrow('source_policy_shape');
+    expect(
+      await count(
+        "select count(*)::int count from hs.source_policies where household_id=$1 and source_id='delta'",
+        [HOUSE_A],
+      ),
+    ).toBe(0);
+    const after = await db.query<{ policy: unknown }>(
+      "select policy from hs.source_policies where household_id=$1 and source_id='alpha'",
+      [HOUSE_A],
+    );
+    expect(after.rows).toEqual(before.rows);
+  });
+});
+
+describe('household lock in favorite and note writes', () => {
+  async function lockMarker(householdId: string) {
+    const result = await db.query<{ marker: string }>(
+      'select xmax::text marker from hs.households where id=$1',
+      [householdId],
+    );
+    return result.rows[0].marker;
+  }
+
+  async function seedManual(householdId: string, userId: string) {
+    const url = `${ORIGIN}/seeded-${householdId}`;
+    const result = await db.query<{ id: string }>(
+      "insert into hs.listings(household_id,origin,added_by,canonical_url,value) values($1,'manual',$2,$3,$4::jsonb) returning id",
+      [
+        householdId,
+        userId,
+        url,
+        JSON.stringify({ title: 'Seeded', sourceUrls: [url], userTags: [] }),
+      ],
+    );
+    return result.rows[0].id;
+  }
+
+  // PGlite has one connection, so contention cannot be reproduced here. A row
+  // lock writes the locker's transaction id to xmax of the household row, which
+  // shows that the lock was taken even though nothing waited on it. Seeding a
+  // listing already key-shares the row, so each test compares against that.
+  it('locks the household row when a favorite is set', async () => {
+    const listingId = await seedManual(HOUSE_A, OWNER_A);
+    const before = await lockMarker(HOUSE_A);
+    const otherBefore = await lockMarker(HOUSE_B);
+    expect(await favorite(listingId, true)).toEqual({ ok: true });
+    expect(await lockMarker(HOUSE_A)).not.toBe(before);
+    expect(await lockMarker(HOUSE_B)).toBe(otherBefore);
+    expect((await snapshot()).favorites).toHaveLength(1);
+    expect(await favorite(listingId, false)).toEqual({ ok: true });
+    expect((await snapshot()).favorites).toHaveLength(0);
+  });
+
+  it('locks the household row when a note is saved', async () => {
+    const listingId = await seedManual(HOUSE_B, OWNER_B);
+    const before = await lockMarker(HOUSE_B);
+    const otherBefore = await lockMarker(HOUSE_A);
+    expect(
+      await saveNote(listingId, OWNER_B, 'Locked note', 0, HOUSE_B),
+    ).toEqual({ revision: 1 });
+    expect(await lockMarker(HOUSE_B)).not.toBe(before);
+    expect(await lockMarker(HOUSE_A)).toBe(otherBefore);
+    expect(
+      await saveNote(listingId, OWNER_B, 'Locked revision', 1, HOUSE_B),
+    ).toEqual({ revision: 2 });
+    await expect(
+      saveNote(listingId, OWNER_B, 'Stale', 1, HOUSE_B),
+    ).rejects.toMatchObject({ code: '40001' });
+  });
+
+  it('does not lock the household row when access is denied', async () => {
+    const listingId = await seedManual(HOUSE_A, OWNER_A);
+    const before = await lockMarker(HOUSE_A);
+    await expect(favorite(listingId, true, OWNER_B)).rejects.toThrow(
+      'Household access denied',
+    );
+    await expect(saveNote(listingId, OWNER_B, 'Denied', 0)).rejects.toThrow(
+      'Household access denied',
+    );
+    expect(await lockMarker(HOUSE_A)).toBe(before);
+  });
+});
+
 describe('service credential, nonce and exact replay checks', () => {
   it('returns only credential-scoped policies and denies expired, revoked or unscoped credentials', async () => {
     const credential = await asRole('service_role', null, () =>
