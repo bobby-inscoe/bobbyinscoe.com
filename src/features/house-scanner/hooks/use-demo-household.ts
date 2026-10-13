@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import {
+  createDemoNoteStore,
   DEMO_USER_ID,
   SYNTHETIC_SNAPSHOT,
 } from '@/features/house-scanner/mock/synthetic-household';
@@ -15,6 +16,7 @@ export function useDemoHousehold() {
   const [snapshot, setSnapshot] = useState<Snapshot>(() =>
     structuredClone(SYNTHETIC_SNAPSHOT),
   );
+  const [notes] = useState(createDemoNoteStore);
   async function saveFavorite(listingId: string) {
     setSnapshot((current) =>
       current.favorites.some(
@@ -48,21 +50,25 @@ export function useDemoHousehold() {
   async function addManual(submission: ManualSubmission) {
     const url = normalizeManualUrl(submission.url);
     const now = new Date().toISOString();
-    setSnapshot((current) => {
-      if (
-        current.listings.some((listing) =>
-          listing.sourceUrls.some(
-            (sourceUrl) => normalizeManualUrl(sourceUrl) === url,
-          ),
-        )
+    if (
+      snapshot.listings.some((listing) =>
+        listing.sourceUrls.some(
+          (sourceUrl) => normalizeManualUrl(sourceUrl) === url,
+        ),
       )
-        return current;
+    )
+      return;
+    const listingId = crypto.randomUUID();
+    // Like hs_add_manual, a non-blank initial note becomes the adder's shared note.
+    const note = submission.note.trim();
+    if (note) notes.save(DEMO_USER_ID, listingId, note, 0);
+    setSnapshot((current) => {
       return {
         ...current,
         listings: [
           ...current.listings,
           {
-            id: crypto.randomUUID(),
+            id: listingId,
             householdId: current.householdId,
             origin: 'manual',
             title: submission.title || new URL(url).hostname,
@@ -94,24 +100,7 @@ export function useDemoHousehold() {
             observedAt: now,
             addedBy: DEMO_USER_ID,
             userTags: submission.tags,
-            evidence: Array.from(
-              { length: Math.ceil(submission.note.length / 1000) },
-              (_, index) => ({
-                id: crypto.randomUUID(),
-                kind: 'buyer_observation' as const,
-                subject: 'facts' as const,
-                summary: submission.note.slice(
-                  index * 1000,
-                  (index + 1) * 1000,
-                ),
-                sourceUrl: null,
-                observedAt: now,
-                datasetVersion: null,
-                method: `Demo-only note by Demo Alex, part ${index + 1} of ${Math.ceil(submission.note.length / 1000)}`,
-                value: null,
-                unit: null,
-              }),
-            ),
+            evidence: [],
           },
         ],
       };
@@ -132,5 +121,19 @@ export function useDemoHousehold() {
       ),
     }));
   }
-  return { snapshot, saveFavorite, removeFavorite, addManual, saveProfile };
+  async function loadNotes(listingId: string) {
+    return notes.list(listingId);
+  }
+  async function saveNote(listingId: string, body: string, revision: number) {
+    return notes.save(DEMO_USER_ID, listingId, body, revision);
+  }
+  return {
+    snapshot,
+    saveFavorite,
+    removeFavorite,
+    addManual,
+    saveProfile,
+    loadNotes,
+    saveNote,
+  };
 }

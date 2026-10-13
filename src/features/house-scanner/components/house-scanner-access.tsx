@@ -12,6 +12,10 @@ import { type ReactNode, useState } from 'react';
 
 import { useHouseholdSession } from '@/features/house-scanner/hooks/use-household-session';
 import type {
+  LoadNotes,
+  SaveNote,
+} from '@/features/house-scanner/hooks/use-listing-notes';
+import type {
   ManualSubmission,
   SearchProfile,
   Snapshot,
@@ -24,6 +28,8 @@ export interface AuthenticatedHousehold {
   onRemoveFavorite: (listingId: string) => Promise<void>;
   onAddManual: (submission: ManualSubmission) => Promise<void>;
   onSaveProfile: (profile: SearchProfile) => Promise<void>;
+  onLoadNotes: LoadNotes;
+  onSaveNote: SaveNote;
 }
 export function HouseScannerAccess({
   children,
@@ -79,6 +85,8 @@ export function HouseScannerAccess({
             onRemoveFavorite: session.onRemoveFavorite,
             onAddManual: session.onAddManual,
             onSaveProfile: session.onSaveProfile,
+            onLoadNotes: session.onLoadNotes,
+            onSaveNote: session.onSaveNote,
           })}
         </>
       ) : state.status === 'loading' ? (

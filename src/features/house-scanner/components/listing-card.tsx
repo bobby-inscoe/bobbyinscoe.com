@@ -10,6 +10,8 @@ import {
 import { useEffect, useState } from 'react';
 
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
+import { ListingNotes } from '@/features/house-scanner/components/listing-notes';
+import type { ListingNotesController } from '@/features/house-scanner/hooks/use-listing-notes';
 import type {
   Listing,
   Snapshot,
@@ -69,6 +71,7 @@ interface ListingCardProps {
   details?: boolean;
   busy: boolean;
   canSave: boolean;
+  notes?: ListingNotesController;
   onSelect: () => void;
   onFavorite: () => void;
 }
@@ -81,6 +84,7 @@ export function ListingCard({
   details,
   busy,
   canSave,
+  notes,
   onSelect,
   onFavorite,
 }: ListingCardProps) {
@@ -293,11 +297,12 @@ export function ListingCard({
               No supporting nature, transit or other evidence recorded.
             </Text>
           )}
-          <Text size="sm">
-            {snapshot.edition?.coverage === 'synthetic'
-              ? 'Demo notes appear as fictional buyer observations above. Note editing is unavailable.'
-              : 'Shared note display and editing are not connected to this snapshot.'}
-          </Text>
+          <Title order={4}>Notes</Title>
+          <ListingNotes
+            controller={notes}
+            members={snapshot.members}
+            userId={userId}
+          />
         </>
       )}
     </article>

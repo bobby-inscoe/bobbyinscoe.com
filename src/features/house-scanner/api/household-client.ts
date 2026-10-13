@@ -9,6 +9,11 @@ import {
   type SearchProfile,
   snapshotSchema,
 } from '@/features/house-scanner/types/contracts';
+import {
+  NOTE_MAX_LENGTH,
+  NoteConflictError,
+  noteSchema,
+} from '@/features/house-scanner/types/notes';
 
 const STORAGE_PREFIX = 'house-scanner.auth.';
 const REMEMBER_KEY = 'house-scanner.remember';
@@ -111,12 +116,6 @@ const manualResultSchema = z.strictObject({
   listingId: z.uuid(),
   existing: z.boolean(),
 });
-const noteSchema = z.strictObject({
-  userId: z.uuid(),
-  body: z.string().max(2000),
-  revision: z.number().int().positive(),
-  editedAt: z.iso.datetime({ offset: true }),
-});
 async function rpc<T>(
   client: SupabaseClient,
   name: string,
@@ -124,8 +123,12 @@ async function rpc<T>(
   schema: z.ZodType<T>,
 ) {
   const { data, error } = await client.rpc(name, args);
-  if (error)
+  if (error) {
+    // 40001 is the server's revision-conflict code; only a note save treats it as recoverable.
+    if (name === 'hs_save_note' && error.code === '40001')
+      throw new NoteConflictError();
     throw new Error('The household request failed. Reload and try again.');
+  }
   const parsed = schema.safeParse(data);
   if (!parsed.success)
     throw new Error('The server returned an unsupported household response.');
@@ -260,7 +263,7 @@ export function saveNote(
     {
       p_household_id: householdId,
       p_listing_id: listingId,
-      p_body: z.string().max(2000).parse(body),
+      p_body: z.string().max(NOTE_MAX_LENGTH).parse(body),
       p_revision: z.number().int().nonnegative().parse(revision),
     },
     revisionSchema,

@@ -12,6 +12,8 @@ export function SyntheticWorkspace() {
       onRemoveFavorite={demo.removeFavorite}
       onAddManual={demo.addManual}
       onSaveProfile={demo.saveProfile}
+      onLoadNotes={demo.loadNotes}
+      onSaveNote={demo.saveNote}
     />
   );
 }

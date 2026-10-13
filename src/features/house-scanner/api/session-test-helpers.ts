@@ -18,7 +18,10 @@ type AuthListener = (
   event: string,
   session: { user: { id: string } } | null,
 ) => void;
-type Reply = { data: unknown; error: { message: string } | null };
+export type Reply = {
+  data: unknown;
+  error: { message: string; code?: string } | null;
+};
 type UserReply = {
   data: { user: { id: string } | null };
   error: { message: string } | null;

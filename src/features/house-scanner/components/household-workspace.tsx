@@ -20,6 +20,11 @@ import styles from '@/features/house-scanner/components/household-workspace.modu
 import { ListingCard } from '@/features/house-scanner/components/listing-card';
 import { ManualListingForm } from '@/features/house-scanner/components/manual-listing-form';
 import { ProfileEditor } from '@/features/house-scanner/components/profile-editor';
+import {
+  type LoadNotes,
+  type SaveNote,
+  useListingNotes,
+} from '@/features/house-scanner/hooks/use-listing-notes';
 import type {
   ManualSubmission,
   SearchProfile,
@@ -65,6 +70,8 @@ export interface HouseholdWorkspaceProps {
   onRemoveFavorite?: (listingId: string) => Promise<void>;
   onAddManual?: (submission: ManualSubmission) => Promise<void>;
   onSaveProfile?: (profile: SearchProfile) => Promise<void>;
+  onLoadNotes?: LoadNotes;
+  onSaveNote?: SaveNote;
 }
 
 export function HouseholdWorkspace({
@@ -75,6 +82,8 @@ export function HouseholdWorkspace({
   onRemoveFavorite,
   onAddManual,
   onSaveProfile,
+  onLoadNotes,
+  onSaveNote,
 }: HouseholdWorkspaceProps) {
   const [tab, setTab] = useState<
     'suggestions' | 'favorites' | 'manual' | 'settings'
@@ -137,6 +146,15 @@ export function HouseholdWorkspace({
     [visible],
   );
   const selected = visible.find((listing) => listing.id === selectedId) ?? null;
+  // At most one card shows details at a time, so one controller serves them all.
+  const notesListingId =
+    tab === 'manual' ? (duplicate?.id ?? null) : (selected?.id ?? null);
+  const notes = useListingNotes({
+    listingId: tab === 'settings' ? null : notesListingId,
+    userId,
+    onLoad: onLoadNotes,
+    onSave: onSaveNote,
+  });
   async function favorite(listingId: string) {
     const mine = snapshot.favorites.some(
       (entry) => entry.listingId === listingId && entry.userId === userId,
@@ -251,6 +269,7 @@ export function HouseholdWorkspace({
               selected
               busy={pending.includes(duplicate.id)}
               canSave={canSave(duplicate.id)}
+              notes={notes}
               onSelect={() => setDuplicateId(null)}
               onFavorite={() => void favorite(duplicate.id)}
             />
@@ -377,6 +396,9 @@ export function HouseholdWorkspace({
                   details={!mapOpen && selectedId === listing.id}
                   busy={pending.includes(listing.id)}
                   canSave={canSave(listing.id)}
+                  notes={
+                    !mapOpen && selectedId === listing.id ? notes : undefined
+                  }
                   onSelect={() => {
                     setSelectedId(listing.id);
                     if (mapOpen) setNarrowView('map');
@@ -417,6 +439,7 @@ export function HouseholdWorkspace({
                     details
                     busy={pending.includes(selected.id)}
                     canSave={canSave(selected.id)}
+                    notes={notes}
                     onSelect={() => setNarrowView('list')}
                     onFavorite={() => void favorite(selected.id)}
                   />

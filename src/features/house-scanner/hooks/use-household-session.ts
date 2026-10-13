@@ -7,7 +7,9 @@ import {
   clearOwnedSessionStorage,
   createHouseholdClient,
   householdSnapshot,
+  listingNotes,
   memberships,
+  saveNote as saveNoteRequest,
   saveProfile,
   setFavorite,
   setRememberDevice,
@@ -243,12 +245,10 @@ export function useHouseholdSession() {
       clearOwnedSessionStorage();
     }
   }
-  async function mutate(
-    action: (
-      activeClient: SupabaseClient,
-      activeHouseholdId: string,
-    ) => Promise<object>,
-  ) {
+  // Throws unless this render's identity is still the live one. The returned
+  // active() turns false once sign-out, a user or household switch, or unmount
+  // supersedes the request, so late results can be dropped.
+  function beginActive() {
     if (
       !client ||
       state.status !== 'authenticated' ||
@@ -257,18 +257,64 @@ export function useHouseholdSession() {
     )
       throw new Error('Reload your household before making a change.');
     const ticket = sessionGeneration.current;
-    const active = () =>
-      mounted.current &&
-      ticket === sessionGeneration.current &&
-      userId.current === state.userId &&
-      householdId.current === state.snapshot.householdId;
+    const owner = state.userId;
+    const household = state.snapshot.householdId;
+    return {
+      client,
+      householdId: household,
+      active: () =>
+        mounted.current &&
+        ticket === sessionGeneration.current &&
+        userId.current === owner &&
+        householdId.current === household,
+    };
+  }
+  async function mutate(
+    action: (
+      activeClient: SupabaseClient,
+      activeHouseholdId: string,
+    ) => Promise<object>,
+  ) {
+    const scope = beginActive();
     try {
-      await action(client, state.snapshot.householdId);
-      if (active()) await refresh();
+      await action(scope.client, scope.householdId);
+      if (scope.active()) await refresh();
     } catch (error) {
-      if (active())
+      if (scope.active())
         fail('The change could not be saved. Reload before trying again.');
       throw error;
+    }
+  }
+  // Notes are read and written outside mutate(): a failed or conflicting note
+  // request must leave the workspace on screen, so it never calls fail() or refresh().
+  async function loadNotes(listingId: string) {
+    const scope = beginActive();
+    try {
+      const notes = await listingNotes(
+        scope.client,
+        scope.householdId,
+        listingId,
+      );
+      return scope.active() ? notes : null;
+    } catch (error) {
+      if (scope.active()) throw error;
+      return null;
+    }
+  }
+  async function saveNote(listingId: string, body: string, revision: number) {
+    const scope = beginActive();
+    try {
+      const saved = await saveNoteRequest(
+        scope.client,
+        scope.householdId,
+        listingId,
+        body,
+        revision,
+      );
+      return scope.active() ? saved.revision : null;
+    } catch (error) {
+      if (scope.active()) throw error;
+      return null;
     }
   }
   return {
@@ -289,5 +335,7 @@ export function useHouseholdSession() {
       mutate((active, household) => addManual(active, household, value)),
     onSaveProfile: (value: SearchProfile) =>
       mutate((active, household) => saveProfile(active, household, value)),
+    onLoadNotes: loadNotes,
+    onSaveNote: saveNote,
   };
 }

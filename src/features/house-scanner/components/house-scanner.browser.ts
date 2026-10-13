@@ -141,7 +141,14 @@ test('manual links are normalized without fetching and duplicates open the exist
     manual.getByRole('link', { name: 'Open original listing' }),
   ).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(
-    manual.getByText('Synthetic household note', { exact: false }),
+    manual
+      .getByRole('list', { name: 'Household notes' })
+      .getByText('Synthetic household note', { exact: false }),
+  ).toBeVisible();
+  await expect(
+    manual
+      .getByRole('list', { name: 'Household notes' })
+      .getByText('You (Demo Alex) · edited', { exact: false }),
   ).toBeVisible();
   expect(
     requests.some((url) => new URL(url).hostname === 'example.invalid'),
@@ -252,4 +259,52 @@ test('a locally served map style groups overlapping homes and keeps map selectio
     path: `.browser-test-results/map-${test.info().project.name}.png`,
     fullPage: true,
   });
+});
+
+test('shared notes show every member and the signed-in member edits only their own, by keyboard', async ({
+  page,
+}) => {
+  await openDemo(page);
+  const home = page.getByRole('article', {
+    name: 'Example balcony home',
+    exact: true,
+  });
+  await home.getByRole('button', { name: 'Details', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  const notes = home.getByRole('list', { name: 'Household notes' });
+  await expect(notes.getByRole('listitem')).toHaveCount(1);
+  await expect(notes).toContainText('Demo Morgan · edited');
+  await expect(notes).toContainText('the balcony faces a courtyard');
+  await expect(notes).not.toContainText('You (Demo Alex)');
+
+  const editor = home.getByRole('textbox', { name: 'Your shared note' });
+  const save = home.getByRole('button', { name: 'Save note', exact: true });
+  await expect(save).toBeDisabled();
+  await editor.focus();
+  await page.keyboard.type('Our first visit is Saturday.');
+  await expect(save).toBeEnabled();
+  await page.keyboard.press('Tab');
+  await expect(save).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(home.getByText('Note saved.', { exact: true })).toBeVisible();
+  await expect(notes.getByRole('listitem')).toHaveCount(2);
+  await expect(notes).toContainText('You (Demo Alex) · edited');
+  await expect(notes).toContainText('Our first visit is Saturday.');
+  await expect(save).toBeDisabled();
+
+  await editor.focus();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.type('Moved the visit to Sunday.');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Enter');
+  await expect(notes).toContainText('Moved the visit to Sunday.');
+  await expect(notes).not.toContainText('Our first visit is Saturday.');
+  await expect(notes.getByRole('listitem')).toHaveCount(2);
+  await expect(notes).toContainText('the balcony faces a courtyard');
+
+  await page.getByRole('button', { name: 'Leave demo' }).click();
+  await openDemo(page);
+  await home.getByRole('button', { name: 'Details', exact: true }).click();
+  await expect(notes.getByRole('listitem')).toHaveCount(1);
+  await expect(notes).not.toContainText('Moved the visit to Sunday.');
 });

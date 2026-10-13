@@ -28,6 +28,7 @@ import {
   USER_ID,
 } from '@/features/house-scanner/api/session-test-helpers';
 import type { Snapshot } from '@/features/house-scanner/types/contracts';
+import { NoteConflictError } from '@/features/house-scanner/types/notes';
 
 vi.mock('@supabase/supabase-js', async () => {
   const fake = await import(
@@ -251,6 +252,43 @@ describe('House Scanner RPC boundaries', () => {
     await expect(memberships(client())).rejects.toThrow(
       'The household request failed. Reload and try again.',
     );
+  });
+  it('reports a note revision conflict as a typed error', async () => {
+    sdk.rpc.mockResolvedValue({
+      data: null,
+      error: { message: 'Note changed; reload before saving', code: '40001' },
+    });
+    await expect(
+      saveNote(
+        client(),
+        HOUSEHOLD_ID,
+        fixtureSnapshot().listings[0].id,
+        'draft',
+        1,
+      ),
+    ).rejects.toBeInstanceOf(NoteConflictError);
+  });
+  it.each([
+    ['another SQLSTATE on a note save', 'hs_save_note', '42501'],
+    ['no SQLSTATE on a note save', 'hs_save_note', undefined],
+    ['a conflict code on a profile save', 'hs_save_profile', '40001'],
+    ['a conflict code on a note read', 'hs_notes', '40001'],
+  ])('keeps the generic message for %s', async (_label, name, code) => {
+    sdk.rpc.mockResolvedValue({
+      data: null,
+      error: { message: 'synthetic confidential database detail', code },
+    });
+    const listingId = fixtureSnapshot().listings[0].id;
+    const call =
+      name === 'hs_save_note'
+        ? saveNote(client(), HOUSEHOLD_ID, listingId, 'draft', 1)
+        : name === 'hs_notes'
+          ? listingNotes(client(), HOUSEHOLD_ID, listingId)
+          : saveProfile(client(), HOUSEHOLD_ID, fixtureSnapshot().profiles[0]);
+    await expect(call).rejects.toThrow(
+      'The household request failed. Reload and try again.',
+    );
+    await expect(call).rejects.not.toBeInstanceOf(NoteConflictError);
   });
   it('rejects oversized membership responses', async () => {
     sdk.rpc.mockResolvedValue(

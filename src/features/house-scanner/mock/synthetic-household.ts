@@ -1,4 +1,8 @@
 import { snapshotSchema } from '@/features/house-scanner/types/contracts';
+import {
+  type ListingNote,
+  NoteConflictError,
+} from '@/features/house-scanner/types/notes';
 
 export const DEMO_HOUSEHOLD_ID = '00000000-0000-4000-8000-000000000001';
 export const DEMO_USER_ID = '00000000-0000-4000-8000-000000000002';
@@ -166,3 +170,75 @@ export const SYNTHETIC_SNAPSHOT = snapshotSchema.parse({
     },
   ],
 });
+
+export interface DemoNoteStore {
+  list(listingId: string): ListingNote[];
+  save(
+    userId: string,
+    listingId: string,
+    body: string,
+    revision: number,
+  ): number;
+}
+
+const SEEDED_NOTES: [string, ListingNote][] = [
+  [
+    '00000000-0000-4000-8000-000000000010',
+    {
+      userId: DEMO_OTHER_USER_ID,
+      body: 'Fictional note: the balcony faces a courtyard. Ask about the association repair plan.',
+      revision: 1,
+      editedAt: '2026-10-12T11:30:00Z',
+    },
+  ],
+  [
+    '00000000-0000-4000-8000-000000000011',
+    {
+      userId: DEMO_USER_ID,
+      body: 'Fictional note: the terrace is large, but the street side may be loud.',
+      revision: 1,
+      editedAt: '2026-10-12T11:45:00Z',
+    },
+  ],
+  [
+    '00000000-0000-4000-8000-000000000011',
+    {
+      userId: DEMO_OTHER_USER_ID,
+      body: 'Fictional note: worth a second visit in the evening.',
+      revision: 2,
+      editedAt: '2026-10-12T12:15:00Z',
+    },
+  ],
+];
+
+// One shared note per member and listing, revisioned like hs_save_note.
+// Created per demo session, so leaving the demo discards every edit.
+export function createDemoNoteStore(): DemoNoteStore {
+  const notes = new Map<string, ListingNote[]>();
+  for (const [listingId, note] of SEEDED_NOTES)
+    notes.set(listingId, [...(notes.get(listingId) ?? []), { ...note }]);
+  return {
+    list(listingId) {
+      return (notes.get(listingId) ?? [])
+        .map((note) => ({ ...note }))
+        .sort((a, b) => a.editedAt.localeCompare(b.editedAt));
+    },
+    save(userId, listingId, body, revision) {
+      const existing = notes.get(listingId) ?? [];
+      const own = existing.find((note) => note.userId === userId);
+      const editedAt = new Date().toISOString();
+      if (revision === 0 && !own) {
+        notes.set(listingId, [
+          ...existing,
+          { userId, body, revision: 1, editedAt },
+        ]);
+        return 1;
+      }
+      if (!own || own.revision !== revision) throw new NoteConflictError();
+      own.body = body;
+      own.revision += 1;
+      own.editedAt = editedAt;
+      return own.revision;
+    },
+  };
+}
