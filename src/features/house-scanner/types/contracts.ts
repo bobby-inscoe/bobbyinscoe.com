@@ -4,12 +4,26 @@ export const CONTRACT_VERSION = 1;
 const id = z.uuid();
 const timestamp = z.iso.datetime({ offset: true });
 const money = z.number().int().nonnegative().max(1_000_000_000);
+// z.url() can accept strings that the URL constructor then rejects (for example
+// some punycode or numeric hosts). A throw inside a refinement escapes safeParse,
+// so every URL refinement goes through this guard and fails validation instead.
+function parseUrl(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+const originSchema = z
+  .url()
+  .refine((value) => parseUrl(value)?.origin === value);
 export const listingUrlSchema = z
   .url()
   .max(2048)
   .refine((value) => {
-    const url = new URL(value);
+    const url = parseUrl(value);
     return (
+      url !== null &&
       ['http:', 'https:'].includes(url.protocol) &&
       !url.username &&
       !url.password
@@ -162,13 +176,8 @@ export const sourcePolicySchema = z.strictObject({
   reviewedAt: timestamp,
   reviewDueAt: timestamp,
   rightsBasis: z.string().min(1).max(2000),
-  listingOrigins: z
-    .array(z.url().refine((value) => new URL(value).origin === value))
-    .min(1)
-    .max(20),
-  imageOrigins: z
-    .array(z.url().refine((value) => new URL(value).origin === value))
-    .max(20),
+  listingOrigins: z.array(originSchema).min(1).max(20),
+  imageOrigins: z.array(originSchema).max(20),
   allowedEvidenceSubjects: z.array(evidenceSchema.shape.subject).max(10),
   freeOnly: z.literal(true),
   automatedCollection: z.boolean(),

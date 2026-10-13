@@ -190,14 +190,15 @@ describe('signed ingestion trust boundary', () => {
       false,
     );
   });
-  // The schema's origin refinement calls new URL(), which throws for this host
-  // instead of failing the parse. That must not surface as an unhandled 500.
-  it('answers 403 when a stored policy makes the schema parse throw', async () => {
+  // This host used to make the schema's origin refinement throw out of
+  // safeParse. The schema now rejects it cleanly, and the handler also guards
+  // the parse, so a bad stored policy is a 403 and never an unhandled 500.
+  it('answers 403 when a stored policy fails the schema parse', async () => {
     const unparseable = {
       ...sourceRegistry()[0].policy,
       listingOrigins: ['https://example.123'],
     };
-    expect(() => sourcePolicySchema.safeParse(unparseable)).toThrow();
+    expect(sourcePolicySchema.safeParse(unparseable).success).toBe(false);
     const original = database.rpc.getMockImplementation();
     database.rpc.mockImplementation(async (name, args) =>
       name === 'hs_ingest_policies'

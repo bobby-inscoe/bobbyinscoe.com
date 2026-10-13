@@ -1740,9 +1740,11 @@ describe('hs.valid_policy and hs.admin_set_source_policy', () => {
     const outcomes = origins.map((origin) =>
       schemaOutcome(setPath(policy(), ['listingOrigins'], [origin])),
     );
-    // The sweep is only meaningful if it contains both kinds of host.
+    // The sweep is only meaningful if it contains both kinds of host. The
+    // schema used to throw on some of them; it now rejects them cleanly.
+    expect(outcomes.filter((outcome) => outcome === 'throws')).toHaveLength(0);
     expect(
-      outcomes.filter((outcome) => outcome === 'throws').length,
+      outcomes.filter((outcome) => outcome === 'rejects').length,
     ).toBeGreaterThan(500);
     expect(
       outcomes.filter((outcome) => outcome === 'accepts').length,

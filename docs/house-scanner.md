@@ -181,9 +181,9 @@ Fresh integrated evidence on 3001684: `npm test` 14 files, 260 tests passed (78 
 Limits and follow-ups:
 
 1. More than 500 visible homes makes the snapshot raise; saved listings no longer age out. Paginate before a household approaches it.
-2. A deactivated member's favorite keeps a listing. Handle it in the private administration flow.
+2. A deactivated member's favorite keeps a listing until the operator clears it with `hs.admin_set_member(..., p_clear_favorites => true)`.
 3. The favorite and note writes now take the household lock; verify contention on a hosted project.
-4. A database check now guards `retentionDays` (integer 1 to 180) and the origin and field arrays. Malformed timestamps or booleans in an approved policy would still raise; add a validator in the administration slice.
+4. A database check now guards `retentionDays` (integer 1 to 180) and the origin and field arrays. Policies written through `hs.admin_set_source_policy` are checked against the full policy shape, including timestamps and booleans.
 5. Stale detection is inferred from the daily edition, not link checking.
 6. A real source's terms must be checked for keeping saved listings after its permission lapses.
 ## Boneo source adapter (13 October 2026)
@@ -201,3 +201,33 @@ Unproven, and recorded as coverage gaps: page size and ordering across several p
 Fresh evidence on 581a4f6: `npm test` 16 files, 329 tests passed (56 in tools/house-scanner, 40 new); `npm run test:browser` 16 passed; `check`, `typecheck`, `test:typecheck`, `house-scanner:typecheck`, `build`, the fixture CLI and `git diff --check` passed. The live CLI path was not run end to end.
 
 Next for sources: run the live reader once by hand to inspect real coverage, resolve the unproven items, then add Bjurfors if wanted. Delivery needs the hosted project, the ingest function and an issued credential.
+## Operator runbook: household administration (13 October 2026)
+
+Implemented in migration 202610120003 by a claude-sonnet-5-5 high worker and integrated as 5b8663a. All functions live in schema `hs`, are plain invoker functions granted to nobody, and are run by the project owner in the Supabase SQL editor as `postgres`. Every success appends one row to `hs.admin_log`; a failed call appends none. Values below are placeholders.
+
+Order for a new project: apply migrations 0001, 0002 and 0003, create each person as an auth user in the dashboard, then bootstrap.
+
+```sql
+-- 1. First household, owner and profile (criteria are an argument with no default; keep real criteria out of the repo)
+select hs.admin_bootstrap_household('Household name', '<auth user uuid>', 'Owner name', 'Profile name', '<criteria jsonb>'::jsonb);
+
+-- 2. Add or update a member; deactivate and keep their rows
+select hs.admin_set_member('<household>', '<user>', 'Member name', 'member', true);
+select hs.admin_set_member('<household>', '<user>', 'Member name', 'member', false);
+
+-- 3. Clear a departed member's saves or notes only when you decide to (member must be inactive)
+select hs.admin_set_member('<household>', '<user>', 'Member name', 'member', false, true, false);
+
+-- 4. Source policy (full policy json with a revision above the stored one; status stays pending until you approve it)
+select hs.admin_set_source_policy('<household>', '<policy jsonb>'::jsonb);
+
+-- 5. Scanner credential, at most 90 days; key ids are never reused
+select hs.admin_issue_credential('<household>', 'key-id-1', array['boneo'], now() + interval '60 days');
+select hs.admin_revoke_credential('key-id-1');
+```
+
+Outside SQL: create auth users in the dashboard first (the functions only look them up); generate an HMAC secret of at least 32 characters and add it to the ingest function environment under `HS_INGEST_KEYS_JSON` keyed by the key id, together with `SUPABASE_URL` and the service role key; rotate by issuing a new key id, switching the collector, then revoking the old one. Never run a raw `update hs.members set active=false`; use the function so the owner and member-cap rules hold.
+
+Independent review of 5b8663a confirmed two defects, fixed in f7a4986 and the contract change below: `hs.valid_policy` accepted origins (for example `https://a.b.c.4`) that made the ingest function throw after the nonce was consumed, and the note, favorite, manual-add and profile writers checked membership before taking the household lock, so a waiting request could land after the operator deactivated that member. Writers now re-check membership after the lock, the validator rejects punycode and numeric-looking hosts, the ingest function guards the policy parse and returns 403, and the URL refinements in `contracts.ts` fail validation instead of throwing. The 90-day credential cap uses 2160 hours so a DST change cannot exceed it, and a credential source list must be one-dimensional.
+
+Evidence on the final branch: `npm test` 18 files, 562 tests passed (including 219 in supabase/tests/house-scanner-admin.test.ts and the new contracts tests); the new regression tests were watched failing against the unfixed code; `check`, `typecheck`, `test:typecheck`, `house-scanner:typecheck`, `build` and `git diff --check` passed. About 60 deliberate breakages of the migration were applied one at a time and each failed the suite, except removing the household lock in `admin_issue_credential`, which PGlite cannot distinguish. Not proven locally: behavior as the real non-superuser `postgres` role, hosted privilege defaults and PostgREST exposure, and lock contention.
