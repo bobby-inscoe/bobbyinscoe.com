@@ -389,6 +389,7 @@ const TABLES = [
 const purgeSchema = z.strictObject({
   observationsDeleted: z.number().int(),
   stagedDeleted: z.number().int(),
+  runsClosed: z.number().int(),
   listingsDeleted: z.number().int(),
   listingsTombstoned: z.number().int(),
   listingsScrubbed: z.number().int(),
@@ -402,6 +403,7 @@ type PurgeResult = z.infer<typeof purgeSchema>;
 const NO_WORK: PurgeResult = {
   observationsDeleted: 0,
   stagedDeleted: 0,
+  runsClosed: 0,
   listingsDeleted: 0,
   listingsTombstoned: 0,
   listingsScrubbed: 0,
@@ -634,6 +636,7 @@ async function seedThree(overrides: Partial<Observation>) {
 const MIXED_TOTALS: PurgeResult = {
   observationsDeleted: 3,
   stagedDeleted: 3,
+  runsClosed: 0,
   listingsDeleted: 1,
   listingsTombstoned: 2,
   listingsScrubbed: 1,
@@ -1812,8 +1815,10 @@ describe('bounded retention purge', () => {
     for (;;) {
       const { more, ...counts } = await purge({ limit: 2 });
       calls += 1;
+      const { runsClosed, ...budgeted } = counts;
+      expect(runsClosed).toBe(0);
       expect(
-        Object.values(counts).reduce((sum, value) => sum + value, 0),
+        Object.values(budgeted).reduce((sum, value) => sum + value, 0),
       ).toBeLessThanOrEqual(2);
       for (const [key, value] of Object.entries(counts))
         totals[key] = Number(totals[key]) + value;
@@ -2080,6 +2085,7 @@ describe('bounded retention purge', () => {
       ...NO_WORK,
       observationsDeleted: 3,
       stagedDeleted: 4,
+      runsClosed: 1,
       listingsDeleted: 2,
       listingsTombstoned: 1,
       cursorsReset: 1,
@@ -2236,6 +2242,7 @@ describe('bounded retention purge', () => {
     const expected = {
       ...NO_WORK,
       stagedDeleted: 1,
+      runsClosed: 1,
       stagedScrubbed: 1,
       observationsScrubbed: 1,
       listingsScrubbed: 1,
@@ -2247,10 +2254,190 @@ describe('bounded retention purge', () => {
         "select jsonb_build_object('url',value->>'sourceUrl','coordinates',value->'coordinates','evidence',value->'evidence') value from hs.staged_observations",
       ),
     ).toEqual([{ url: `${ORIGIN}/closed`, coordinates: null, evidence: [] }]);
-    expect((await ingest(stage)).state).toBe('staging');
+    expect((await ingest(stage)).state).toBe('failed');
     await expect(ingest(publishRequest(open.runId))).rejects.toThrow(
-      'Empty results lack coverage proof',
+      'Publish ID reused with different content',
     );
+  });
+
+  describe('staging runs that lose a staged row', () => {
+    const fresh = () => new Date(baseTime).toISOString();
+    const runStates = async (householdId = HOUSE_A) =>
+      (
+        await db.query<{
+          id: string;
+          state: string;
+          publish_hash: string | null;
+        }>(
+          'select id,state,publish_hash from hs.runs where household_id=$1 order by id',
+          [householdId],
+        )
+      ).rows;
+    // One batch with two listings for source alpha. "bad" can be made to lapse; "good" cannot.
+    async function stageTwoRows(
+      options: {
+        key?: string;
+        profile?: string;
+        bad?: Partial<Observation>;
+      } = {},
+    ) {
+      const { key = KEY_A, profile = PROFILE_A, bad = {} } = options;
+      const begin = beginRequest(randomUUID(), ['alpha'], profile);
+      await ingest(begin, key);
+      await ingest(
+        stageRequest(begin.runId, [
+          observation({
+            sourceListingId: 'bad',
+            sourceUrl: `${ORIGIN}/bad`,
+            title: 'bad',
+            ...bad,
+          }),
+          observation({
+            sourceListingId: 'good',
+            sourceUrl: `${ORIGIN}/good`,
+            title: 'good',
+          }),
+        ]),
+        key,
+      );
+      return begin;
+    }
+    const lapsing: [string, () => Partial<Observation>, () => Promise<void>][] =
+      [
+        [
+          'a photo expires',
+          () => ({ photo: photoItem(fresh()) }),
+          async () => {
+            await db.query(
+              "update hs.staged_observations set value=jsonb_set(value,'{photo,expiresAt}',to_jsonb($1::text)) where source_listing_id='bad'",
+              [new Date(Date.now() - HOUR).toISOString()],
+            );
+          },
+        ],
+        [
+          'a coordinate leaves the retention window',
+          () => ({ coordinates: coordinateItem(aged(2)) }),
+          async () => {
+            await setPolicy({ retentionDays: 1 });
+          },
+        ],
+      ];
+
+    it.each(lapsing)(
+      'closes the run as failed when %s so publication cannot drop the listing silently',
+      async (_name, bad, lapse) => {
+        const begin = await stageTwoRows({ bad: bad() });
+        await lapse();
+        const before = await runStates();
+        expect(await purge({ dryRun: true })).toEqual({
+          ...NO_WORK,
+          stagedDeleted: 1,
+          runsClosed: 1,
+        });
+        expect(await runStates()).toEqual(before);
+        expect(await purge()).toEqual({
+          ...NO_WORK,
+          stagedDeleted: 1,
+          runsClosed: 1,
+        });
+        expect(await runStates()).toEqual([
+          { id: begin.runId, state: 'failed', publish_hash: null },
+        ]);
+        expect(
+          await stored(
+            'select source_listing_id value from hs.staged_observations',
+          ),
+        ).toEqual(['good']);
+        await expect(ingest(publishRequest(begin.runId))).rejects.toThrow(
+          'Publish ID reused with different content',
+        );
+        await expect(
+          ingest(stageRequest(begin.runId, [observation()])),
+        ).rejects.toThrow('Run closed');
+        expect((await ingest(begin)).state).toBe('failed');
+        expect(
+          await stored(
+            "select cursor value from hs.source_policies where household_id=$1 and source_id='alpha'",
+            [HOUSE_A],
+          ),
+        ).toEqual(['previous-cursor']);
+        for (const table of ['listings', 'observations', 'editions'])
+          expect(
+            await count(`select count(*)::int count from hs.${table}`),
+          ).toBe(0);
+        expect(await purge()).toEqual(NO_WORK);
+      },
+    );
+
+    it('leaves a staging run with no offending rows open and publishable', async () => {
+      const open = await stageTwoRows();
+      await publishOne(observation({ observedAt: aged(2) }), 'beta');
+      await setPolicy({ retentionDays: 1 }, 'beta');
+      expect(await purge()).toMatchObject({ stagedDeleted: 1, runsClosed: 0 });
+      expect((await runStates()).find((run) => run.id === open.runId)).toEqual({
+        id: open.runId,
+        state: 'staging',
+        publish_hash: null,
+      });
+      expect((await ingest(publishRequest(open.runId))).state).toBe(
+        'published',
+      );
+      expect(
+        (await snapshot()).listings.map((item) => item.title).sort(),
+      ).toEqual(['bad', 'good']);
+    });
+
+    it('closes only runs whose rows fall inside the call budget', async () => {
+      const first = await stageTwoRows({
+        bad: { coordinates: coordinateItem(aged(2)) },
+      });
+      const second = await stageTwoRows({
+        bad: { coordinates: coordinateItem(aged(2)) },
+      });
+      await setPolicy({ retentionDays: 1 });
+      const states = async () =>
+        (await runStates())
+          .filter((run) => [first.runId, second.runId].includes(run.id))
+          .map((run) => run.state)
+          .sort();
+      expect(await purge({ limit: 1, dryRun: true })).toMatchObject({
+        stagedDeleted: 1,
+        runsClosed: 1,
+        more: true,
+      });
+      expect(await purge({ limit: 1 })).toMatchObject({
+        stagedDeleted: 1,
+        runsClosed: 1,
+        more: true,
+      });
+      expect(await states()).toEqual(['failed', 'staging']);
+      expect(await purge({ limit: 1 })).toMatchObject({
+        stagedDeleted: 1,
+        runsClosed: 1,
+        more: false,
+      });
+      expect(await states()).toEqual(['failed', 'failed']);
+    });
+
+    it("does not close another household's staging run", async () => {
+      await stageTwoRows({ bad: { coordinates: coordinateItem(aged(2)) } });
+      const other = await stageTwoRows({
+        key: KEY_B,
+        profile: PROFILE_B,
+        bad: { coordinates: coordinateItem(aged(2)) },
+      });
+      for (const household of [HOUSE_A, HOUSE_B])
+        await setPolicy({ retentionDays: 1 }, 'alpha', household);
+      const houseB = await digest(TABLES, HOUSE_B);
+      expect(await purge()).toMatchObject({ runsClosed: 1 });
+      expect(await digest(TABLES, HOUSE_B)).toEqual(houseB);
+      expect(await runStates(HOUSE_B)).toEqual([
+        { id: other.runId, state: 'staging', publish_hash: null },
+      ]);
+      expect(await purge({ householdId: HOUSE_B })).toMatchObject({
+        runsClosed: 1,
+      });
+    });
   });
 
   it('is a no-op on a second run with an equal state digest', async () => {

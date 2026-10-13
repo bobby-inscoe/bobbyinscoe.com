@@ -1,6 +1,7 @@
 -- Bounded retention purge. Read-time redaction in hs_snapshot stays as the second line of defense.
 -- The purge removes only what that read path already hides, so snapshots are the same before and after it.
--- Favorites, notes, manual listings, profiles, members, credentials, policies, runs, batches and editions are never written.
+-- Favorites, notes, manual listings, profiles, members, credentials, policies, batches and editions are never written.
+-- The only write to runs closes a staging run that lost a staged row, so it cannot publish a partial batch.
 
 -- How long source content may outlive reviewDueAt before it is purged. Zero purges as soon as the review lapses.
 create function hs.lapse_grace() returns interval language sql immutable set search_path=pg_catalog as $$ select interval '0 seconds'; $$;
@@ -52,7 +53,7 @@ create function hs.purge_expired(p_household_id uuid,p_limit integer,p_dry_run b
 declare
  dry boolean:=coalesce(p_dry_run,true); budget integer; more_work boolean:=false; n integer; counts jsonb:='{}'::jsonb;
  obs_ids uuid[]; obs_scrub_ids uuid[]; listing_ids uuid[]; tombstone_ids uuid[]; scrub_ids uuid[]; source_ids text[];
- staged_ids tid[]; staged_scrub_ids tid[]; nonce_ids tid[];
+ staged_ids tid[]; staged_scrub_ids tid[]; nonce_ids tid[]; closed_run_ids uuid[];
 begin
  if p_household_id is null or p_limit is null or p_limit not between 1 and 1000 then raise exception 'Invalid purge request'; end if;
  perform 1 from hs.households where id=p_household_id for update;
@@ -72,7 +73,9 @@ begin
  if not dry and n>0 then delete from hs.observations where household_id=p_household_id and id=any(obs_ids); end if;
  counts:=counts||jsonb_build_object('observationsDeleted',n);
 
- -- Staged payloads. A row of a run still staging that would need scrubbing is deleted: scrubbing would publish content the collector never sent, and publication would reject it anyway.
+ -- Staged payloads. A row of a run still staging that would need scrubbing is deleted: scrubbing would publish content the collector never sent.
+ -- Publication only requires one staged row per source, so a run that lost any staged row is closed as failed below. Otherwise
+ -- it would publish the remaining rows and silently drop the deleted listing.
  select coalesce(array_agg(ctid),'{}') into staged_ids from (
   select s.ctid from hs.staged_observations s
   join hs.runs r on r.id=s.run_id and r.household_id=s.household_id
@@ -83,8 +86,12 @@ begin
  if cardinality(staged_ids)>budget then more_work:=true; staged_ids:=staged_ids[1:budget]; end if;
  n:=cardinality(staged_ids); budget:=budget-n;
  -- ponytail: staged_observations has no surrogate key, so rows are addressed by ctid. Writers are serialized by the household lock and nothing updates these rows.
+ select coalesce(array_agg(distinct s.run_id),'{}') into closed_run_ids from hs.staged_observations s
+  join hs.runs r on r.id=s.run_id and r.household_id=s.household_id
+  where s.household_id=p_household_id and s.ctid=any(staged_ids) and r.state='staging';
  if not dry and n>0 then delete from hs.staged_observations where household_id=p_household_id and ctid=any(staged_ids); end if;
- counts:=counts||jsonb_build_object('stagedDeleted',n);
+ if not dry and cardinality(closed_run_ids)>0 then update hs.runs set state='failed' where household_id=p_household_id and id=any(closed_run_ids) and state='staging'; end if;
+ counts:=counts||jsonb_build_object('stagedDeleted',n,'runsClosed',cardinality(closed_run_ids));
 
  -- Expired listings nobody saved. Their history was selected above under the same budget, and the budget is spent on it first,
  -- so a listing is only reached once all of its history rows are gone (the foreign key would reject the delete otherwise).
@@ -181,7 +188,8 @@ begin
  if not dry and n>0 then delete from hs.ingest_nonces where ctid=any(nonce_ids); end if;
  counts:=counts||jsonb_build_object('noncesDeleted',n);
 
- -- A resume token for purged content must not outlive it. Budget is only left here when no content work was cut off, so this runs after the lapsed source's content is gone.
+ -- Only lapsed sources lose their cursor; a live source whose content aged out keeps it. Budget is only left here when no
+ -- content work was cut off, so the reset runs after the lapsed source's content is gone.
  select coalesce(array_agg(source_id),'{}') into source_ids from (
   select sp.source_id from hs.source_policies sp where sp.household_id=p_household_id and sp.cursor is not null and not hs.policy_live(sp.policy)
   order by sp.source_id limit budget+1) s;
