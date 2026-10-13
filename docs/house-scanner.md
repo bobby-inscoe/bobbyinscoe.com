@@ -182,7 +182,7 @@ Limits and follow-ups:
 
 1. More than 500 visible homes makes the snapshot raise; saved listings no longer age out. Paginate before a household approaches it.
 2. A deactivated member's favorite keeps a listing. Handle it in the private administration flow.
-3. Add the household lock to `hs_set_favorite` and `hs_save_note` once concurrent tests exist.
-4. Validate source policies (`retentionDays` is an integer from 1 to 180) in the private bootstrap.
+3. The favorite and note writes now take the household lock; verify contention on a hosted project.
+4. A database check now guards `retentionDays` (integer 1 to 180) and the origin and field arrays. Malformed timestamps or booleans in an approved policy would still raise; add a validator in the administration slice.
 5. Stale detection is inferred from the daily edition, not link checking.
 6. A real source's terms must be checked for keeping saved listings after its permission lapses.
