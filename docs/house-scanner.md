@@ -242,3 +242,14 @@ Checks: anon is blocked from every `hs_*` function and the `hs` schema is not ex
 It cannot prove one-time-code email delivery, the ingest function once deployed, or free-tier limits. Cleanup leaves one manual bookmark per household and an emptied note, because the API has no delete.
 
 Fresh evidence: `npm test` 19 files, 589 tests passed (27 new); `check`, `typecheck`, `test:typecheck`, `house-scanner:typecheck`, `house-scanner:accept:typecheck`, `build` and `git diff --check` passed. The script was run only in its refusal and seed-SQL modes, with no network contact.
+## First live Boneo read (13 October 2026)
+
+One guarded run of `node .house-scanner-build/collector.mjs --live --source=boneo --confirm-personal-read` against the Göteborg apartment partition, with the owner's go-ahead. Five requests (robots.txt and four result pages), nothing sent or saved, output was counts only.
+
+Confirmed: the municipality-level path works (`/sv/till_salu/lägenhet/västra götalands/göteborg`); `robots.txt` allowed it; each page holds 25 results; `?page=N` pagination works across at least four pages; no item was skipped as unparseable; the source reports 621 total results for the partition.
+
+Findings that change the plan:
+
+1. The run stopped at the collector's 100 observation ceiling, so it read 100 of 621 (16 percent) and correctly reported `truncated` and `partial`. A useful run needs the ceiling raised, or the query narrowed.
+2. 621 apartments is above the snapshot ceiling of 500 listings per household, which makes `hs_snapshot` raise. Delivering the whole municipality is therefore not viable as is. The collector should apply coarse filters from the union of enabled profiles (area, rooms, price cap) and keep unknowns before delivery, or the snapshot needs pagination.
+3. Upcoming listings and houses are still unproven. Only apartments in Göteborg are mapped.
