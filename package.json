@@ -44,6 +44,8 @@
     "house-scanner:build": "vite build --config tools/house-scanner/vite.config.ts",
     "house-scanner:typecheck": "tsc --noEmit -p tools/house-scanner/tsconfig.json",
     "house-scanner:fixture": "npm run house-scanner:build && node .house-scanner-build/collector.mjs",
+    "house-scanner:accept": "vite build --config tools/house-scanner/acceptance/vite.config.ts && node .house-scanner-build/acceptance.mjs",
+    "house-scanner:accept:typecheck": "tsc --noEmit -p tools/house-scanner/acceptance/tsconfig.json",
     "test": "vitest run",
     "test:browser": "playwright test",
     "test:typecheck": "tsc --noEmit -p tsconfig.verification.json"
