@@ -391,7 +391,6 @@ const purgeSchema = z.strictObject({
   stagedDeleted: z.number().int(),
   runsClosed: z.number().int(),
   listingsDeleted: z.number().int(),
-  listingsTombstoned: z.number().int(),
   listingsScrubbed: z.number().int(),
   observationsScrubbed: z.number().int(),
   stagedScrubbed: z.number().int(),
@@ -405,7 +404,6 @@ const NO_WORK: PurgeResult = {
   stagedDeleted: 0,
   runsClosed: 0,
   listingsDeleted: 0,
-  listingsTombstoned: 0,
   listingsScrubbed: 0,
   observationsScrubbed: 0,
   stagedScrubbed: 0,
@@ -633,12 +631,12 @@ async function seedThree(overrides: Partial<Observation>) {
   return ids;
 }
 
+// seedMixedState: only the unsaved listing and its history go. Saved and noted keep their rows, history and content.
 const MIXED_TOTALS: PurgeResult = {
-  observationsDeleted: 3,
+  observationsDeleted: 1,
   stagedDeleted: 3,
   runsClosed: 0,
   listingsDeleted: 1,
-  listingsTombstoned: 2,
   listingsScrubbed: 1,
   observationsScrubbed: 1,
   stagedScrubbed: 1,
@@ -1433,7 +1431,7 @@ describe('unknown prices, provenance expiry and user bookmark preservation', () 
     expect(await count('select count(*)::int count from hs.batches')).toBe(0);
   });
 
-  it('redacts expired rights and retains only user bookmark URLs, saves and notes', async () => {
+  it('hides an unsaved listing after its policy lapses and keeps a saved or noted one with its stored content', async () => {
     const original = observation({
       coordinates: {
         longitude: 0,
@@ -1486,15 +1484,20 @@ describe('unknown prices, provenance expiry and user bookmark preservation', () 
     );
     const state = await snapshot();
     expect(state.listings).toHaveLength(1);
+    // Nested paths use their own retention, expiry and permission predicates, none of which checks that the review is current.
     expect(state.listings[0]).toMatchObject({
       id,
-      title: 'Saved listing: source facts unavailable',
+      origin: 'source',
+      title: 'Synthetic home',
       sourceUrls: [`${ORIGIN}/home`],
-      facts: { askingPriceSek: null, livingAreaM2: null, municipality: null },
-      coordinates: null,
-      evidence: [],
-      photo: null,
-      previousAskingPriceSek: null,
+      facts: {
+        livingAreaM2: 60,
+        municipality: 'Synthetic municipality',
+        status: 'available',
+      },
+      coordinates: original.coordinates,
+      evidence: original.evidence,
+      photo: original.photo,
     });
     expect(state.favorites[0]).toMatchObject({
       listingId: id,
@@ -1658,7 +1661,7 @@ describe('historical replay and retention edges', () => {
     ]);
   });
 
-  it('preserves a notes-only source bookmark after retention expiry alongside manual records', async () => {
+  it('keeps a notes-only source listing with its stored content after retention expiry alongside manual records', async () => {
     const old = new Date(baseTime - 2 * 24 * HOUR).toISOString();
     await publishOne(observation({ observedAt: old }));
     await publishOne(
@@ -1685,8 +1688,9 @@ describe('historical replay and retention edges', () => {
     const state = await snapshot();
     expect(state.listings).toHaveLength(2);
     expect(state.listings.find((item) => item.id === source.id)).toMatchObject({
-      title: 'Saved listing: source facts unavailable',
+      title: 'Synthetic home',
       sourceUrls: [`${ORIGIN}/home`],
+      facts: { livingAreaM2: 60, municipality: 'Synthetic municipality' },
       coordinates: null,
       photo: null,
       evidence: [],
@@ -2076,6 +2080,11 @@ describe('bounded retention purge', () => {
         "select jsonb_build_object('l',(select jsonb_agg(to_jsonb(l)) from hs.listings l where source_id='beta'),'o',(select jsonb_agg(to_jsonb(o)) from hs.observations o join hs.listings l on l.id=o.listing_id where l.source_id='beta'),'s',(select jsonb_agg(to_jsonb(s)) from hs.staged_observations s where source_id='beta')) value",
       );
     const betaBefore = await betaRows();
+    const savedRows = () =>
+      stored(
+        "select jsonb_build_object('l',(select jsonb_agg(to_jsonb(l)) from hs.listings l where source_listing_id='gamma-saved'),'o',(select jsonb_agg(to_jsonb(o)) from hs.observations o join hs.listings l on l.id=o.listing_id where l.source_listing_id='gamma-saved')) value",
+      );
+    const savedBefore = await savedRows();
     const before = await snapshot();
     expect(before.listings.map((item) => item.sourceUrls[0]).sort()).toEqual([
       `${ORIGIN}/gamma-saved`,
@@ -2083,15 +2092,15 @@ describe('bounded retention purge', () => {
     ]);
     expect(await purge()).toEqual({
       ...NO_WORK,
-      observationsDeleted: 3,
+      observationsDeleted: 2,
       stagedDeleted: 4,
       runsClosed: 1,
       listingsDeleted: 2,
-      listingsTombstoned: 1,
       cursorsReset: 1,
     });
     expect(await snapshot()).toEqual(before);
     expect(await betaRows()).toEqual(betaBefore);
+    expect(await savedRows()).toEqual(savedBefore);
     const cursors = await db.query<{
       source_id: string;
       cursor: string | null;
@@ -2107,113 +2116,366 @@ describe('bounded retention purge', () => {
     expect(await purge()).toEqual(NO_WORK);
   });
 
-  it('turns an expired saved or noted listing into a tombstone and keeps every user record', async () => {
-    const { saved, noted } = await seedMixedState();
-    const userTables = ['favorites', 'notes', 'members'];
-    const userRecords = await digest(userTables);
-    const identity = () =>
-      db
-        .query(
-          'select id,source_id,source_listing_id,episode_id,canonical_url,revision,last_checked_at from hs.listings where id in ($1,$2) order by id',
-          [saved, noted],
-        )
-        .then((result) => result.rows);
-    const rows = await identity();
-    expect(rows).toHaveLength(2);
-    const before = await snapshot();
-    const placeholders = before.listings.filter((item) =>
-      [saved, noted].includes(item.id),
-    );
-    expect(placeholders).toHaveLength(2);
-    for (const item of placeholders)
-      expect(item.title).toBe('Saved listing: source facts unavailable');
-    expect(await purge()).toEqual(MIXED_TOTALS);
-    expect(await digest(userTables)).toEqual(userRecords);
-    expect(await identity()).toEqual(rows);
-    const tombstones = await db.query<{
-      value: unknown;
-      observed_at: Date;
-      previous_asking_price: number | null;
-      previous_price_observed_at: Date | null;
-      history: number;
-      staged: number;
-    }>(
-      `select value,observed_at,previous_asking_price,previous_price_observed_at,
-        (select count(*)::int from hs.observations o where o.listing_id=l.id) history,
-        (select count(*)::int from hs.staged_observations s where s.source_listing_id=l.source_listing_id) staged
-       from hs.listings l where id in ($1,$2) order by value->>'sourceUrl'`,
-      [saved, noted],
-    );
-    expect(tombstones.rows.map((row) => row.value)).toEqual([
-      { sourceUrl: `${ORIGIN}/noted` },
-      { sourceUrl: `${ORIGIN}/saved` },
-    ]);
-    for (const row of tombstones.rows)
-      expect(row).toMatchObject({
-        observed_at: new Date(0),
-        previous_asking_price: null,
-        previous_price_observed_at: null,
-        history: 0,
-        staged: 0,
+  describe('listings with a favorite or a note', () => {
+    const listingRows = (...ids: string[]) =>
+      stored(
+        'select to_jsonb(l) value from hs.listings l where id=any($1::uuid[]) order by id',
+        [`{${ids.join(',')}}`],
+      );
+    const historyRows = (...ids: string[]) =>
+      stored(
+        'select to_jsonb(o) value from hs.observations o where listing_id=any($1::uuid[]) order by id',
+        [`{${ids.join(',')}}`],
+      );
+    // One listing observed twice with a price change and stale nested data, so once retention drops to one day it is
+    // expired and has history, a previous price, coordinates, evidence and a photo that are all outside retention.
+    async function publishStale(sourceListingId = 'home') {
+      const base = observation({ sourceListingId });
+      const common = {
+        sourceListingId,
+        sourceUrl: `${ORIGIN}/${sourceListingId}`,
+        title: sourceListingId,
+      };
+      await publishOne(
+        observation({
+          ...common,
+          observedAt: aged(3),
+          facts: { ...base.facts, askingPriceSek: 2_500_000 },
+        }),
+      );
+      await publishOne(
+        observation({
+          ...common,
+          observedAt: aged(2),
+          facts: { ...base.facts, askingPriceSek: 2_000_000 },
+          coordinates: coordinateItem(aged(2)),
+          evidence: [
+            evidenceItem('facts', aged(2), `${ORIGIN}/${sourceListingId}`),
+          ],
+          photo: photoItem(aged(2)),
+        }),
+      );
+      const item = (await snapshot()).listings.find(
+        (listing) => listing.title === sourceListingId,
+      );
+      if (!item) throw new Error(`Listing ${sourceListingId} missing`);
+      return item.id;
+    }
+
+    it('keeps an expired favorited or noted listing and its history byte-identical and visible with its real content', async () => {
+      const { saved, noted } = await seedMixedState();
+      const userTables = ['favorites', 'notes', 'members'];
+      const userRecords = await digest(userTables);
+      const rowsBefore = await listingRows(saved, noted);
+      const historyBefore = await historyRows(saved, noted);
+      expect(rowsBefore).toHaveLength(2);
+      expect(historyBefore).toHaveLength(2);
+      const before = await snapshot();
+      const kept = before.listings.filter((item) =>
+        [saved, noted].includes(item.id),
+      );
+      expect(kept.map((item) => item.title).sort()).toEqual(['noted', 'saved']);
+      for (const item of kept)
+        expect(item).toMatchObject({
+          origin: 'source',
+          facts: { livingAreaM2: 60, rooms: 2, status: 'available' },
+        });
+      expect(kept.map((item) => item.sourceUrls[0]).sort()).toEqual([
+        `${ORIGIN}/noted`,
+        `${ORIGIN}/saved`,
+      ]);
+      expect(await purge({ dryRun: true })).toEqual(MIXED_TOTALS);
+      expect(await purge()).toEqual(MIXED_TOTALS);
+      expect(await listingRows(saved, noted)).toEqual(rowsBefore);
+      expect(await historyRows(saved, noted)).toEqual(historyBefore);
+      expect(await digest(userTables)).toEqual(userRecords);
+      const state = await snapshot();
+      expect(state).toEqual(before);
+      expect(state.favorites.map((item) => item.listingId)).toEqual([
+        saved,
+        saved,
+      ]);
+      expect((await notes(noted))[0].body).toBe('Seeded note');
+      expect(await purge()).toEqual(NO_WORK);
+    });
+
+    it('hides expired nested items and the previous price at read time while keeping them stored through a purge', async () => {
+      const id = await publishStale();
+      await favorite(id, true);
+      expect(
+        (await snapshot()).listings.find((item) => item.id === id),
+      ).toMatchObject({
+        coordinates: expect.anything(),
+        photo: expect.anything(),
+        previousAskingPriceSek: 2_500_000,
       });
-    const state = await snapshot();
-    expect(state).toEqual(before);
-    expect(state.favorites.map((item) => item.listingId)).toEqual([
-      saved,
-      saved,
-    ]);
-    expect((await notes(noted))[0].body).toBe('Seeded note');
-    expect(
-      await stored(
-        'select bookmark_url value from hs.favorites union all select bookmark_url from hs.notes order by 1',
-      ),
-    ).toEqual([`${ORIGIN}/noted`, `${ORIGIN}/saved`, `${ORIGIN}/saved`]);
-  });
+      await setPolicy({ retentionDays: 1 });
+      const before = await snapshot();
+      expect(before.listings).toHaveLength(1);
+      expect(before.listings[0]).toMatchObject({
+        id,
+        title: 'home',
+        sourceUrls: [`${ORIGIN}/home`],
+        facts: { askingPriceSek: 2_000_000, livingAreaM2: 60 },
+        coordinates: null,
+        evidence: [],
+        photo: null,
+        previousAskingPriceSek: null,
+      });
+      const row = await listingByUrl('home');
+      expect(row.value.coordinates).not.toBeNull();
+      expect(row.value.evidence).toHaveLength(1);
+      expect(row.value.photo).not.toBeNull();
+      expect(row.previous_asking_price).toBe(2_500_000);
+      const storedBefore = await digest(['listings', 'observations']);
+      expect(await purge()).toEqual({ ...NO_WORK, stagedDeleted: 2 });
+      expect(await digest(['listings', 'observations'])).toEqual(storedBefore);
+      expect(await snapshot()).toEqual(before);
+      expect(await listingByUrl('home')).toEqual(row);
+    });
 
-  it('rehydrates a tombstone on re-observation without a conflict and keeps its saves', async () => {
-    const { saved } = await seedMixedState();
-    await purge();
-    const tombstone = await listingByUrl('saved');
-    await publishOne(
-      observation({
-        sourceListingId: 'saved',
-        sourceUrl: `${ORIGIN}/saved`,
+    it('pins a listing with a non-empty note and not one whose note was emptied or is only whitespace', async () => {
+      const noted = await publishStale('noted');
+      const emptied = await publishStale('emptied');
+      const spaces = await publishStale('spaces');
+      await saveNote(noted, MEMBER_A, 'Keep this listing', 0);
+      await saveNote(emptied, MEMBER_A, 'Temporary note', 0);
+      await saveNote(emptied, MEMBER_A, '', 1);
+      await saveNote(spaces, OWNER_A, ' \n\t ', 0);
+      expect(await count('select count(*)::int count from hs.notes')).toBe(3);
+      await setPolicy({ retentionDays: 1 });
+      const keptRows = await listingRows(noted);
+      const keptHistory = await historyRows(noted);
+      expect(keptHistory).toHaveLength(2);
+      const expected = {
+        ...NO_WORK,
+        observationsDeleted: 4,
+        stagedDeleted: 6,
+        listingsDeleted: 2,
+      };
+      expect(await purge({ dryRun: true })).toEqual(expected);
+      expect(await purge()).toEqual(expected);
+      expect(await listingRows(noted)).toEqual(keptRows);
+      expect(await historyRows(noted)).toEqual(keptHistory);
+      expect(await stored('select id value from hs.listings')).toEqual([noted]);
+      expect(await stored('select listing_id value from hs.notes')).toEqual([
+        noted,
+      ]);
+      expect((await snapshot()).listings.map((item) => item.id)).toEqual([
+        noted,
+      ]);
+      expect(await purge()).toEqual(NO_WORK);
+    });
+
+    it('keeps a listing that only another member favorited', async () => {
+      const id = await publishStale();
+      await favorite(id, true, MEMBER_A);
+      await setPolicy({ retentionDays: 1 });
+      const rows = await listingRows(id);
+      const history = await historyRows(id);
+      expect(await purge()).toEqual({ ...NO_WORK, stagedDeleted: 2 });
+      expect(await listingRows(id)).toEqual(rows);
+      expect(await historyRows(id)).toEqual(history);
+      const state = await snapshot(HOUSE_A, OWNER_A);
+      expect(state.listings.map((item) => item.id)).toEqual([id]);
+      expect(state.favorites.map((item) => item.userId)).toEqual([MEMBER_A]);
+    });
+
+    it('deletes the listing on the pass after its last favorite and note are removed, history rows first', async () => {
+      const id = await publishStale();
+      await favorite(id, true);
+      await favorite(id, true, MEMBER_A);
+      await saveNote(id, MEMBER_A, 'Remove me', 0);
+      await setPolicy({ retentionDays: 1 });
+      expect(await purge()).toEqual({ ...NO_WORK, stagedDeleted: 2 });
+      await favorite(id, false);
+      await favorite(id, false, MEMBER_A);
+      // The note still pins the listing.
+      expect(await purge({ dryRun: true })).toEqual(NO_WORK);
+      await saveNote(id, MEMBER_A, '', 1);
+      const expected = {
+        ...NO_WORK,
+        observationsDeleted: 2,
+        listingsDeleted: 1,
+      };
+      expect(await purge({ dryRun: true })).toEqual(expected);
+      const listings = () =>
+        count('select count(*)::int count from hs.listings');
+      expect(await purge({ limit: 1 })).toEqual({
+        ...NO_WORK,
+        observationsDeleted: 1,
+        more: true,
+      });
+      expect(await listings()).toBe(1);
+      expect(await purge({ limit: 1 })).toEqual({
+        ...NO_WORK,
+        observationsDeleted: 1,
+        more: true,
+      });
+      expect(await listings()).toBe(1);
+      expect(await purge({ limit: 1 })).toEqual({
+        ...NO_WORK,
+        listingsDeleted: 1,
+      });
+      for (const table of ['listings', 'observations', 'notes', 'favorites'])
+        expect(await count(`select count(*)::int count from hs.${table}`)).toBe(
+          0,
+        );
+      expect(await purge()).toEqual(NO_WORK);
+    });
+
+    it('keeps a visible saved listing of a lapsed source untouched while an unsaved one and the cursor are cleared', async () => {
+      const id = await publishStale();
+      await favorite(id, true);
+      const unsaved = await publishStale('unsaved');
+      await lapse('alpha');
+      const before = await snapshot();
+      expect(before.listings.map((item) => item.id).sort()).toEqual([id]);
+      expect(unsaved).not.toBe(id);
+      const rows = await listingRows(id);
+      const history = await historyRows(id);
+      expect(await purge()).toEqual({
+        ...NO_WORK,
+        observationsDeleted: 2,
+        stagedDeleted: 4,
+        listingsDeleted: 1,
+        cursorsReset: 1,
+      });
+      expect(await listingRows(id)).toEqual(rows);
+      expect(await historyRows(id)).toEqual(history);
+      expect(await listingRows(unsaved)).toEqual([]);
+      const state = await snapshot();
+      expect(state).toEqual(before);
+      expect(state.listings[0]).toMatchObject({
+        title: 'home',
+        facts: { livingAreaM2: 60 },
+      });
+      expect(await purge()).toEqual(NO_WORK);
+    });
+
+    it('never scrubs a live interacted listing or its history and leaves its snapshot unchanged', async () => {
+      const original = observation();
+      await publishOne(
+        observation({
+          observedAt: new Date(baseTime - HOUR).toISOString(),
+          facts: { ...original.facts, askingPriceSek: 2_500_000 },
+        }),
+      );
+      await publishOne(
+        observation({
+          facts: { ...original.facts, askingPriceSek: 2_000_000 },
+          coordinates: coordinateItem(aged(2)),
+          photo: photoItem(aged(2)),
+          evidence: [evidenceItem('facts', aged(2))],
+        }),
+      );
+      const id = (await snapshot()).listings[0].id;
+      await favorite(id, true);
+      await setPolicy({
+        retentionDays: 1,
+        allowedFactFields: ['askingPriceSek'],
+      });
+      const before = await snapshot();
+      expect(before.listings[0]).toMatchObject({
+        coordinates: null,
+        photo: null,
+        evidence: [],
+        facts: { askingPriceSek: 2_000_000, livingAreaM2: null },
+      });
+      const storedBefore = await digest(['listings', 'observations']);
+      expect(await purge({ dryRun: true })).toEqual({
+        ...NO_WORK,
+        stagedScrubbed: 2,
+      });
+      expect(await purge()).toEqual({ ...NO_WORK, stagedScrubbed: 2 });
+      expect(await digest(['listings', 'observations'])).toEqual(storedBefore);
+      expect((await listingByUrl('home')).value.coordinates).not.toBeNull();
+      expect(await snapshot()).toEqual(before);
+      await favorite(id, false);
+      expect(await purge()).toMatchObject({
+        listingsScrubbed: 1,
+        observationsScrubbed: 2,
+      });
+    });
+
+    it('updates an expired interacted listing normally when it is observed again', async () => {
+      const { saved } = await seedMixedState();
+      expect(await purge()).toEqual(MIXED_TOTALS);
+      const before = await listingByUrl('saved');
+      await publishOne(
+        observation({
+          sourceListingId: 'saved',
+          sourceUrl: `${ORIGIN}/saved`,
+          title: 'Returned listing',
+        }),
+      );
+      const row = await listingByUrl('saved');
+      expect(row).toMatchObject({ id: saved, revision: before.revision + 1 });
+      expect(row.observed_at.getTime()).toBe(baseTime);
+      expect(row.value).toMatchObject({ title: 'Returned listing' });
+      const state = await snapshot();
+      expect(state.listings.find((item) => item.id === saved)).toMatchObject({
         title: 'Returned listing',
-      }),
-    );
-    const row = await listingByUrl('saved');
-    expect(row).toMatchObject({ id: saved, revision: tombstone.revision + 1 });
-    expect(row.observed_at.getTime()).toBe(baseTime);
-    const state = await snapshot();
-    expect(state.listings.find((item) => item.id === saved)).toMatchObject({
-      title: 'Returned listing',
-      facts: { livingAreaM2: 60 },
+        facts: { livingAreaM2: 60 },
+      });
+      expect(
+        state.favorites.filter((item) => item.listingId === saved),
+      ).toHaveLength(2);
+      expect(
+        await count(
+          'select count(*)::int count from hs.observations where listing_id=$1',
+          [saved],
+        ),
+      ).toBe(2);
+      expect(await purge()).toEqual(NO_WORK);
     });
-    expect(
-      state.favorites.filter((item) => item.listingId === saved),
-    ).toHaveLength(2);
-    expect(
-      await count(
-        'select count(*)::int count from hs.observations where listing_id=$1',
-        [saved],
-      ),
-    ).toBe(1);
-    expect(await purge()).toEqual(NO_WORK);
-  });
 
-  it('deletes a tombstone once its last favorite and note are gone', async () => {
-    await publishOne(observation({ observedAt: aged(2) }));
-    const id = (await snapshot()).listings[0].id;
-    await favorite(id, true);
-    await setPolicy({ retentionDays: 1 });
-    expect(await purge()).toMatchObject({
-      listingsTombstoned: 1,
-      listingsDeleted: 0,
+    it('defines interaction as a favorite or a non-blank note in the same household', async () => {
+      const favorited = await publishStale('favorited');
+      const noted = await publishStale('noted');
+      const blank = await publishStale('blank');
+      const plain = await publishStale('plain');
+      await favorite(favorited, true, MEMBER_A);
+      await saveNote(noted, OWNER_A, 'Real note', 0);
+      await saveNote(blank, OWNER_A, '   ', 0);
+      const interacted = async (listing: string, household = HOUSE_A) =>
+        (
+          await db.query<{ value: boolean }>(
+            'select hs.listing_interacted($1,$2) value',
+            [household, listing],
+          )
+        ).rows[0].value;
+      expect(await interacted(favorited)).toBe(true);
+      expect(await interacted(noted)).toBe(true);
+      expect(await interacted(blank)).toBe(false);
+      expect(await interacted(plain)).toBe(false);
+      expect(await interacted(favorited, HOUSE_B)).toBe(false);
     });
-    expect(await purge()).toEqual(NO_WORK);
-    await favorite(id, false);
-    expect(await purge()).toEqual({ ...NO_WORK, listingsDeleted: 1 });
-    expect(await count('select count(*)::int count from hs.listings')).toBe(0);
+
+    it('applies the snapshot ceiling to interacted expired listings', async () => {
+      await db.query(
+        `insert into hs.listings(household_id,origin,source_id,source_listing_id,episode_id,value,observed_at)
+         select $1,'source','alpha','n'||i,'e',jsonb_build_object('title','n'||i,'sourceUrl',$2::text||'/n'||i),now()-interval '40 days'
+         from generate_series(1,501) i`,
+        [HOUSE_A, ORIGIN],
+      );
+      const save = (from: number, to: number) =>
+        db.query(
+          `insert into hs.favorites(household_id,listing_id,user_id,bookmark_url)
+           select household_id,id,$2,value->>'sourceUrl' from hs.listings
+           where household_id=$1 and source_listing_id in (select 'n'||i from generate_series($3::int,$4::int) i)`,
+          [HOUSE_A, OWNER_A, from, to],
+        );
+      expect((await snapshot()).listings).toEqual([]);
+      await save(1, 500);
+      const state = await snapshot();
+      expect(state.listings).toHaveLength(500);
+      expect(state.favorites).toHaveLength(500);
+      await save(501, 501);
+      await expect(snapshot()).rejects.toThrow(
+        'Household exceeds snapshot limit',
+      );
+    });
   });
 
   it('deletes staging-run payloads that would need scrubbing and scrubs closed-run payloads in place', async () => {
@@ -2469,7 +2731,7 @@ describe('bounded retention purge', () => {
     }
     expect(await purge()).toEqual(MIXED_TOTALS);
     expect(await count('select count(*)::int count from hs.observations')).toBe(
-      2,
+      4,
     );
   });
 
@@ -2618,36 +2880,6 @@ describe('bounded retention purge', () => {
     expect(await snapshot()).toEqual(before);
   });
 
-  it('clears the previous price when an expired saved listing becomes a tombstone', async () => {
-    const original = observation();
-    await publishOne(
-      observation({
-        observedAt: aged(3),
-        facts: { ...original.facts, askingPriceSek: 2_500_000 },
-      }),
-    );
-    await publishOne(
-      observation({
-        observedAt: aged(2),
-        facts: { ...original.facts, askingPriceSek: 2_000_000 },
-      }),
-    );
-    const id = (await snapshot()).listings[0].id;
-    await favorite(id, true);
-    expect((await listingByUrl('home')).previous_asking_price).toBe(2_500_000);
-    await setPolicy({ retentionDays: 1 });
-    expect(await purge()).toEqual({
-      ...NO_WORK,
-      observationsDeleted: 2,
-      stagedDeleted: 2,
-      listingsTombstoned: 1,
-    });
-    expect(await listingByUrl('home')).toMatchObject({
-      previous_asking_price: null,
-      previous_price_observed_at: null,
-    });
-  });
-
   it('deletes all history of a listing that is no longer live even when each row is individually live', async () => {
     await publishOne(
       observation({ observedAt: new Date(baseTime - HOUR).toISOString() }),
@@ -2680,17 +2912,6 @@ describe('bounded retention purge', () => {
       },
     ],
     [
-      'listingsTombstoned',
-      async () => {
-        for (const id of await seedThree({ observedAt: aged(2) }))
-          await favorite(id, true);
-        await setPolicy({ retentionDays: 1 });
-        await db.exec(
-          'delete from hs.observations; delete from hs.staged_observations',
-        );
-      },
-    ],
-    [
       'listingsScrubbed',
       async () => {
         await seedThree({ coordinates: coordinateItem(aged(2)) });
@@ -2703,16 +2924,9 @@ describe('bounded retention purge', () => {
     [
       'observationsDeleted',
       async () => {
-        // Tombstones remain after their history goes, so this class is the only work left.
-        for (const id of await seedThree({ observedAt: aged(2) }))
-          await favorite(id, true);
+        await seedThree({ observedAt: aged(2) });
         await setPolicy({ retentionDays: 1 });
         await db.exec('delete from hs.staged_observations');
-        await purge();
-        await db.query(
-          "insert into hs.observations(household_id,listing_id,run_id,value) select l.household_id,l.id,(select id from hs.runs limit 1),jsonb_build_object('sourceUrl',l.value->>'sourceUrl','observedAt',$1::text) from hs.listings l",
-          [aged(2)],
-        );
       },
     ],
     [
@@ -2825,5 +3039,35 @@ describe('bounded retention purge', () => {
     `);
     expect(tables.rows).toHaveLength(45);
     expect(tables.rows.every((row) => !row.granted)).toBe(true);
+  });
+
+  it('leaves no private hs function executable by an API role, including the interaction helper', async () => {
+    const helper = await db.query<{ granted: boolean }>(`
+      select has_function_privilege(r,'hs.listing_interacted(uuid,uuid)','EXECUTE') granted
+      from unnest(array['anon','authenticated','service_role']) r
+    `);
+    expect(helper.rows).toEqual([
+      { granted: false },
+      { granted: false },
+      { granted: false },
+    ]);
+    const executable = await db.query<{ proname: string }>(`
+      select p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace,unnest(array['anon','authenticated','service_role']) r
+      where n.nspname='hs' and has_function_privilege(r,p.oid,'EXECUTE')
+    `);
+    expect(executable.rows).toEqual([]);
+    for (const role of [
+      'anon',
+      'authenticated',
+      'service_role',
+    ] satisfies Role[])
+      await expect(
+        asRole(role, OWNER_A, () =>
+          rpc('select hs.listing_interacted($1,$2) as value', [
+            HOUSE_A,
+            randomUUID(),
+          ]),
+        ),
+      ).rejects.toThrow('permission denied for schema hs');
   });
 });

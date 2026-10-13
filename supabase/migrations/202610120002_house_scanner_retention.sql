@@ -1,6 +1,9 @@
 -- Bounded retention purge. Read-time redaction in hs_snapshot stays as the second line of defense.
 -- The purge removes only what that read path already hides, so snapshots are the same before and after it.
--- Favorites, notes, manual listings, profiles, members, credentials, policies, batches and editions are never written.
+-- A listing with a favorite or a non-blank note (hs.listing_interacted) is kept with its stored content, and so is its
+-- history: no class below deletes, scrubs or rewrites it. Once the last favorite and note are removed it is an ordinary
+-- expired listing and the next pass deletes it. Manual listings, favorites, non-blank notes, profiles, members,
+-- credentials, policies, batches and editions are never written. A blank note row goes only with its listing.
 -- The only write to runs closes a staging run that lost a staged row, so it cannot publish a partial batch.
 
 -- How long source content may outlive reviewDueAt before it is purged. Zero purges as soon as the review lapses.
@@ -52,7 +55,7 @@ end; $$;
 create function hs.purge_expired(p_household_id uuid,p_limit integer,p_dry_run boolean default true) returns jsonb language plpgsql security definer set search_path=pg_catalog,hs as $$
 declare
  dry boolean:=coalesce(p_dry_run,true); budget integer; more_work boolean:=false; n integer; counts jsonb:='{}'::jsonb;
- obs_ids uuid[]; obs_scrub_ids uuid[]; listing_ids uuid[]; tombstone_ids uuid[]; scrub_ids uuid[]; source_ids text[];
+ obs_ids uuid[]; obs_scrub_ids uuid[]; listing_ids uuid[]; scrub_ids uuid[]; source_ids text[];
  staged_ids tid[]; staged_scrub_ids tid[]; nonce_ids tid[]; closed_run_ids uuid[];
 begin
  if p_household_id is null or p_limit is null or p_limit not between 1 and 1000 then raise exception 'Invalid purge request'; end if;
@@ -60,12 +63,12 @@ begin
  if not found then raise exception 'Household unavailable'; end if;
  budget:=p_limit;
 
- -- History rows outside retention, with a lapsed policy, or whose listing is no longer live.
+ -- History rows outside retention, with a lapsed policy, or whose listing is no longer live. Not for interacted listings.
  select coalesce(array_agg(id),'{}') into obs_ids from (
   select o.id from hs.observations o
   join hs.listings l on l.id=o.listing_id and l.household_id=o.household_id
   join hs.source_policies p on p.household_id=l.household_id and p.source_id=l.source_id
-  where o.household_id=p_household_id
+  where o.household_id=p_household_id and not hs.listing_interacted(l.household_id,l.id)
    and not (hs.source_row_live(p.policy,o.value->>'sourceUrl',(o.value->>'observedAt')::timestamptz) and hs.source_row_live(p.policy,l.value->>'sourceUrl',l.observed_at))
   order by o.id limit budget+1) s;
  if cardinality(obs_ids)>budget then more_work:=true; obs_ids:=obs_ids[1:budget]; end if;
@@ -93,45 +96,31 @@ begin
  if not dry and cardinality(closed_run_ids)>0 then update hs.runs set state='failed' where household_id=p_household_id and id=any(closed_run_ids) and state='staging'; end if;
  counts:=counts||jsonb_build_object('stagedDeleted',n,'runsClosed',cardinality(closed_run_ids));
 
- -- Expired listings nobody saved. Their history was selected above under the same budget, and the budget is spent on it first,
- -- so a listing is only reached once all of its history rows are gone (the foreign key would reject the delete otherwise).
- -- A favorite committed after this select makes the delete fail on its foreign key and the call rolls back; a rerun tombstones instead.
+ -- Expired listings nobody favorited or wrote a note on. Their history was selected above under the same budget, and the budget
+ -- is spent on it first, so a listing is only reached once all of its history rows are gone (the foreign key would reject the
+ -- delete otherwise). Blank note rows still reference such a listing, so they are deleted with it and are not counted.
+ -- A favorite or note committed after this select makes the delete fail on its foreign key and the call rolls back;
+ -- a rerun keeps the listing.
  select coalesce(array_agg(id),'{}') into listing_ids from (
   select l.id from hs.listings l
   join hs.source_policies p on p.household_id=l.household_id and p.source_id=l.source_id
   where l.household_id=p_household_id and l.origin='source' and not hs.source_row_live(p.policy,l.value->>'sourceUrl',l.observed_at)
-   and not exists(select 1 from hs.favorites f where f.household_id=l.household_id and f.listing_id=l.id)
-   and not exists(select 1 from hs.notes x where x.household_id=l.household_id and x.listing_id=l.id)
+   and not hs.listing_interacted(l.household_id,l.id)
   order by l.id limit budget+1) s;
  if cardinality(listing_ids)>budget then more_work:=true; listing_ids:=listing_ids[1:budget]; end if;
  n:=cardinality(listing_ids); budget:=budget-n;
- if not dry and n>0 then delete from hs.listings where household_id=p_household_id and id=any(listing_ids); end if;
+ if not dry and n>0 then
+  delete from hs.notes where household_id=p_household_id and listing_id=any(listing_ids) and body !~ '\S';
+  delete from hs.listings where household_id=p_household_id and id=any(listing_ids);
+ end if;
  counts:=counts||jsonb_build_object('listingsDeleted',n);
 
- -- Expired listings with a favorite or note keep their id, bookmark and user records but lose all source content.
- -- observed_at 'epoch' is a sentinel: it is never inside retention, so hs_snapshot never shows the row as a live listing,
- -- and it never equals a real observation time, so a later hs_ingest of the same listing rehydrates it without a same-time conflict.
- select coalesce(array_agg(id),'{}') into tombstone_ids from (
-  select l.id from hs.listings l
-  join hs.source_policies p on p.household_id=l.household_id and p.source_id=l.source_id
-  where l.household_id=p_household_id and l.origin='source' and not hs.source_row_live(p.policy,l.value->>'sourceUrl',l.observed_at)
-   and (exists(select 1 from hs.favorites f where f.household_id=l.household_id and f.listing_id=l.id)
-    or exists(select 1 from hs.notes x where x.household_id=l.household_id and x.listing_id=l.id))
-   and not (l.observed_at='epoch'::timestamptz and l.value=jsonb_build_object('sourceUrl',l.value->'sourceUrl') and l.previous_asking_price is null and l.previous_price_observed_at is null)
-  order by l.id limit budget+1) s;
- if cardinality(tombstone_ids)>budget then more_work:=true; tombstone_ids:=tombstone_ids[1:budget]; end if;
- n:=cardinality(tombstone_ids); budget:=budget-n;
- if not dry and n>0 then
-  update hs.listings set value=jsonb_build_object('sourceUrl',value->'sourceUrl'),observed_at='epoch'::timestamptz,previous_asking_price=null,previous_price_observed_at=null
-  where household_id=p_household_id and id=any(tombstone_ids);
- end if;
- counts:=counts||jsonb_build_object('listingsTombstoned',n);
-
- -- Live listings: scrub nested paths and an invisible previous price.
+ -- Live listings: scrub nested paths and an invisible previous price. Not for interacted listings.
  select coalesce(array_agg(id),'{}') into scrub_ids from (
   select l.id from hs.listings l
   join hs.source_policies p on p.household_id=l.household_id and p.source_id=l.source_id
   where l.household_id=p_household_id and l.origin='source' and hs.source_row_live(p.policy,l.value->>'sourceUrl',l.observed_at)
+   and not hs.listing_interacted(l.household_id,l.id)
    and (hs.scrub_value(l.value,p.policy) is distinct from l.value
     or ((l.previous_asking_price is not null or l.previous_price_observed_at is not null) and not hs.price_history_visible(p.policy,l.value,l.previous_price_observed_at)))
   order by l.id limit budget+1) s;
@@ -145,12 +134,12 @@ begin
  end if;
  counts:=counts||jsonb_build_object('listingsScrubbed',n);
 
- -- Live history rows: same scrub.
+ -- Live history rows: same scrub, again not for interacted listings.
  select coalesce(array_agg(id),'{}') into obs_scrub_ids from (
   select o.id from hs.observations o
   join hs.listings l on l.id=o.listing_id and l.household_id=o.household_id
   join hs.source_policies p on p.household_id=l.household_id and p.source_id=l.source_id
-  where o.household_id=p_household_id
+  where o.household_id=p_household_id and not hs.listing_interacted(l.household_id,l.id)
    and hs.source_row_live(p.policy,o.value->>'sourceUrl',(o.value->>'observedAt')::timestamptz) and hs.source_row_live(p.policy,l.value->>'sourceUrl',l.observed_at)
    and hs.scrub_value(o.value,p.policy) is distinct from o.value
   order by o.id limit budget+1) s;

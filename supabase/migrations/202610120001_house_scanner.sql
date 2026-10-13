@@ -97,6 +97,12 @@ create function hs.policy_current(p jsonb) returns boolean language sql stable s
  select coalesce(p->>'status'='approved' and (p->>'freeOnly')::boolean and (p->>'automatedCollection')::boolean and (p->>'privateDisplay')::boolean and
  (p->>'reviewedAt')::timestamptz<=now() and (p->>'reviewDueAt')::timestamptz>now() and (p->>'retentionDays')::int between 1 and 180,false);
 $$;
+-- A listing someone favorited or wrote a note on is kept with its stored content. A blank note row does not count:
+-- saving an empty note is how a note is removed, and the retention purge must be able to delete the listing then.
+create function hs.listing_interacted(p_household_id uuid,p_listing_id uuid) returns boolean language sql stable set search_path=pg_catalog,hs as $$
+ select exists(select 1 from hs.favorites where household_id=p_household_id and listing_id=p_listing_id)
+  or exists(select 1 from hs.notes where household_id=p_household_id and listing_id=p_listing_id and body ~ '\S');
+$$;
 create function hs.assert_observation(p jsonb,o jsonb) returns void language plpgsql set search_path=pg_catalog,hs as $$ declare f record; evidence_item jsonb; at_time timestamptz; begin
  if not hs.policy_current(p) or not(p->'listingOrigins' ? hs.origin(o->>'sourceUrl')) or (o->>'observedAt')::timestamptz>now()+interval '5 minutes' or
  (o->>'observedAt')::timestamptz<now()-make_interval(days=>(p->>'retentionDays')::int) or o->'coordinates'->>'precision'='user_supplied' then raise exception 'Source permission or observation time invalid'; end if;
@@ -137,20 +143,7 @@ begin
  'previousAskingPriceSek',case when p.policy->'allowedFactFields' ? 'askingPriceSek' and not(l.value->'conflicts' ? 'askingPriceSek') and l.previous_price_observed_at>=now()-make_interval(days=>(p.policy->>'retentionDays')::int) then l.previous_asking_price else null end,
  'observedAt',l.observed_at,'addedBy',l.added_by,'userTags',case when l.origin='manual' then l.value->'userTags' else '[]'::jsonb end
  ) item from hs.listings l left join hs.source_policies p on p.household_id=l.household_id and p.source_id=l.source_id
- where l.household_id=p_household_id and (l.origin='manual' or (hs.policy_current(p.policy) and p.policy->'listingOrigins' ? hs.origin(l.value->>'sourceUrl') and l.observed_at>=now()-make_interval(days=>(p.policy->>'retentionDays')::int)))
- union all
- select l.id,coalesce((select min(saved_at) from hs.favorites where household_id=l.household_id and listing_id=l.id),(select min(edited_at) from hs.notes where household_id=l.household_id and listing_id=l.id)),
- jsonb_build_object('id',l.id,'householdId',l.household_id,'origin','source','title','Saved listing: source facts unavailable',
- 'sourceUrls',bookmarks.urls,'facts',hs.empty_facts(),'conflicts','[]'::jsonb,'coordinates',null,'evidence','[]'::jsonb,'photo',null,
- 'previousAskingPriceSek',null,'observedAt',coalesce((select min(saved_at) from hs.favorites where household_id=l.household_id and listing_id=l.id),(select min(edited_at) from hs.notes where household_id=l.household_id and listing_id=l.id)),
- 'addedBy',null,'userTags','[]'::jsonb)
- from hs.listings l left join hs.source_policies p on p.household_id=l.household_id and p.source_id=l.source_id
- cross join lateral (select jsonb_agg(url order by url) urls from (
- select bookmark_url url from hs.favorites where household_id=l.household_id and listing_id=l.id
- union select bookmark_url url from hs.notes where household_id=l.household_id and listing_id=l.id
- ) saved) bookmarks
- where l.household_id=p_household_id and l.origin='source' and bookmarks.urls is not null and not coalesce(
- hs.policy_current(p.policy) and p.policy->'listingOrigins' ? hs.origin(l.value->>'sourceUrl') and l.observed_at>=now()-make_interval(days=>(p.policy->>'retentionDays')::int),false)
+ where l.household_id=p_household_id and (l.origin='manual' or hs.listing_interacted(l.household_id,l.id) or (hs.policy_current(p.policy) and p.policy->'listingOrigins' ? hs.origin(l.value->>'sourceUrl') and l.observed_at>=now()-make_interval(days=>(p.policy->>'retentionDays')::int)))
  ) permitted;
  select coalesce(jsonb_agg(jsonb_build_object('householdId',household_id,'userId',user_id,'displayName',display_name,'role',role) order by user_id),'[]'::jsonb) into people from hs.members where household_id=p_household_id;
  select coalesce(jsonb_agg(jsonb_build_object('id',id,'householdId',household_id,'revision',revision,'name',name,'enabled',enabled,'criteria',criteria,'editedBy',edited_by,'editedAt',edited_at) order by id),'[]'::jsonb) into profiles from hs.profiles where household_id=p_household_id;
