@@ -1150,6 +1150,39 @@ describe('household lock in favorite and note writes', () => {
     );
     expect(await lockMarker(HOUSE_A)).toBe(before);
   });
+
+  // Looking up an existing bookmark and updating a profile touch no foreign key to
+  // the household row, so a changed marker can only come from the explicit lock.
+  it('locks the household row when a bookmark is added and when a profile is saved', async () => {
+    const listingId = await seedManual(HOUSE_A, OWNER_A);
+    const url = `${ORIGIN}/seeded-${HOUSE_A}`;
+    const otherBefore = await lockMarker(HOUSE_B);
+    const beforeManual = await lockMarker(HOUSE_A);
+    expect(await manual(HOUSE_A, OWNER_A, url)).toEqual({
+      listingId,
+      existing: true,
+    });
+    expect(await lockMarker(HOUSE_A)).not.toBe(beforeManual);
+    const beforeProfile = await lockMarker(HOUSE_A);
+    await saveProfile(OWNER_A, 1);
+    expect(await lockMarker(HOUSE_A)).not.toBe(beforeProfile);
+    expect(await lockMarker(HOUSE_B)).toBe(otherBefore);
+  });
+
+  it('does not lock the household row when a bookmark or profile write is denied', async () => {
+    await seedManual(HOUSE_A, OWNER_A);
+    const before = await lockMarker(HOUSE_A);
+    await expect(
+      manual(HOUSE_A, OWNER_B, `${ORIGIN}/outsider`),
+    ).rejects.toThrow('Household access denied');
+    await expect(saveProfile(MEMBER_A, 1)).rejects.toThrow(
+      'Household access denied',
+    );
+    await expect(saveProfile(OWNER_B, 1)).rejects.toThrow(
+      'Household access denied',
+    );
+    expect(await lockMarker(HOUSE_A)).toBe(before);
+  });
 });
 
 describe('service credential, nonce and exact replay checks', () => {

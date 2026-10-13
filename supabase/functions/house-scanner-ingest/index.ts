@@ -31,6 +31,9 @@ function response(status: number, body: object) {
     },
   });
 }
+function parsePolicies(data: unknown) {
+  return z.array(sourcePolicySchema).max(20).safeParse(data);
+}
 function hex(bytes: ArrayBuffer) {
   return Array.from(new Uint8Array(bytes), (byte) =>
     byte.toString(16).padStart(2, '0'),
@@ -160,8 +163,15 @@ Deno.serve(async (request: Request) => {
     'hs_ingest_policies',
     { p_key_id: keyId },
   );
-  const policies = z.array(sourcePolicySchema).max(20).safeParse(policyData);
-  if (policyError || !policies.success)
+  // The schema's origin refinement calls new URL(), which can throw instead of failing. A stored policy that makes
+  // it throw is an unusable policy, not a server fault, and the nonce is already consumed.
+  let policies: ReturnType<typeof parsePolicies> | null = null;
+  try {
+    policies = parsePolicies(policyData);
+  } catch {
+    policies = null;
+  }
+  if (policyError || !policies?.success)
     return response(403, { error: 'Source permissions unavailable' });
   let input: z.infer<typeof ingestRequestSchema>;
   try {

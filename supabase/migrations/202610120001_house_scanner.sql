@@ -160,9 +160,13 @@ begin
 end; $$;
 -- The favorite and note writers take the household lock first, as hs_ingest and hs.purge_expired do. Without it a
 -- favorite landing mid-purge could save a listing after the purge chose its history rows, which the purge then deletes.
+-- Membership is checked again after the lock. Under READ COMMITTED a request that passed the first check and then waited on
+-- the lock would otherwise write after an operator deactivated or demoted the caller; the first check stays as a cheap gate
+-- so an outsider cannot queue for the lock.
 create function public.hs_set_favorite(p_household_id uuid,p_listing_id uuid,p_saved boolean) returns jsonb language plpgsql security definer set search_path=pg_catalog,hs as $$ begin
  perform hs.require_member(p_household_id);
  perform 1 from hs.households where id=p_household_id for update;
+ perform hs.require_member(p_household_id);
  if p_saved is null or not exists(select 1 from hs.listings where id=p_listing_id and household_id=p_household_id) then raise exception 'Listing unavailable'; end if;
  if p_saved then insert into hs.favorites(household_id,listing_id,user_id,bookmark_url) select p_household_id,p_listing_id,auth.uid(),coalesce(value->>'sourceUrl',value->'sourceUrls'->>0) from hs.listings where id=p_listing_id and household_id=p_household_id on conflict do nothing;
  else delete from hs.favorites where household_id=p_household_id and listing_id=p_listing_id and user_id=auth.uid(); end if;
@@ -189,6 +193,7 @@ create function public.hs_add_manual(p_household_id uuid,p_url text,p_title text
  perform hs.require_member(p_household_id);
  if p_url is null or p_title is null or p_note is null or p_tags is null or hs.text_length(p_url)>2048 or not hs.valid_bookmark_url(p_url) or hs.text_length(p_title)>200 or hs.text_length(p_note)>2000 or jsonb_typeof(p_tags)<>'array' or jsonb_array_length(p_tags)>10 or exists(select 1 from jsonb_array_elements(p_tags) tag where jsonb_typeof(tag)<>'string' or hs.text_length(tag#>>'{}') not between 1 and 40) then raise exception 'Invalid bookmark'; end if;
  perform 1 from hs.households where id=p_household_id for update;
+ perform hs.require_member(p_household_id);
  select id into lid from hs.listings where household_id=p_household_id and (canonical_url=p_url or (origin='source' and value->>'sourceUrl'=p_url)) order by id limit 1;
  if lid is not null then return jsonb_build_object('listingId',lid,'existing',true); end if;
  insert into hs.listings(household_id,origin,added_by,canonical_url,value) values(p_household_id,'manual',auth.uid(),p_url,jsonb_build_object('title',coalesce(nullif(btrim(p_title),''),'Saved listing'),'sourceUrls',jsonb_build_array(p_url),'userTags',p_tags)) returning id into lid;
@@ -202,6 +207,7 @@ end; $$;
 create function public.hs_save_note(p_household_id uuid,p_listing_id uuid,p_body text,p_revision integer) returns jsonb language plpgsql security definer set search_path=pg_catalog,hs as $$ declare rev integer; begin
  perform hs.require_member(p_household_id);
  perform 1 from hs.households where id=p_household_id for update;
+ perform hs.require_member(p_household_id);
  if p_body is null or hs.text_length(p_body)>2000 or p_revision is null or p_revision<0 then raise exception 'Invalid note'; end if;
  if p_revision=0 then insert into hs.notes(household_id,listing_id,user_id,bookmark_url,body) select p_household_id,p_listing_id,auth.uid(),coalesce(value->>'sourceUrl',value->'sourceUrls'->>0),p_body from hs.listings where id=p_listing_id and household_id=p_household_id on conflict do nothing returning revision into rev;
  else update hs.notes set body=p_body,revision=revision+1,edited_at=now() where household_id=p_household_id and listing_id=p_listing_id and user_id=auth.uid() and revision=p_revision returning revision into rev; end if;
@@ -231,6 +237,7 @@ create function public.hs_save_profile(p_household_id uuid,p_profile_id uuid,p_r
  perform hs.require_member(p_household_id,true);
  if p_name is null or hs.text_length(btrim(p_name)) not between 1 and 80 or p_enabled is null or not hs.valid_criteria(p_criteria) then raise exception 'Invalid profile'; end if;
  perform 1 from hs.households where id=p_household_id for update;
+ perform hs.require_member(p_household_id,true);
  -- Preserve the initial revision even when a private bootstrap omitted its history row.
  insert into hs.profile_versions select id,household_id,revision,to_jsonb(p) from hs.profiles p where id=p_profile_id and household_id=p_household_id on conflict do nothing;
  update hs.profiles set name=btrim(p_name),enabled=p_enabled,criteria=p_criteria,revision=revision+1,edited_by=auth.uid(),edited_at=now() where id=p_profile_id and household_id=p_household_id and revision=p_revision returning * into v;

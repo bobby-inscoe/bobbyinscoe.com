@@ -21,7 +21,7 @@ revoke all on hs.admin_log from public,anon,authenticated,service_role;
 -- The database reads sourceId, status, both timestamps, the booleans, retentionDays, the origin and field arrays and
 -- capabilities; the Edge ingest parses every policy in a credential's scope with the full schema and fails the whole
 -- request on one malformed policy, so the keys it alone reads are checked too and extra keys are rejected.
--- Deliberately stricter than the schema: origins must be http(s) with an ASCII host (no ftp, ws, IPv6 or IDN hosts),
+-- Deliberately stricter than the schema: origins must be http(s) with an ASCII host (no ftp, ws, IPv6, IDN or xn-- hosts),
 -- retentionDays and numeric bounds must be written as plain integers (the table check rejects 30.0), and integers stop
 -- at 2147483647.
 create function hs.valid_policy(p jsonb) returns boolean language plpgsql stable set search_path=pg_catalog,hs as $$ begin
@@ -36,14 +36,19 @@ create function hs.valid_policy(p jsonb) returns boolean language plpgsql stable
   not exists(select 1 from unnest(array['automatedCollection','privateDisplay','imageDisplay','imageHotlink','modelProcessing','emailDigest','telegramDigest']) k
    where jsonb_typeof(p->k) is distinct from 'boolean') and
   hs.number_in(p,'retentionDays',1,180,true) and p->>'retentionDays' ~ '^[0-9]+$' and
-  -- An origin is scheme, lowercase host and a port that is neither the scheme default nor above 65535, as new URL().origin prints it.
+  -- An origin is scheme, lowercase host and a port that is neither the scheme default nor above 65535, as new URL().origin
+  -- prints it. The WHATWG parser fails outright, and the schema refinement then throws, for a host whose last label is
+  -- numeric or 0x hex unless the host is an IPv4 address, and for an invalid punycode label. So such a host must be a
+  -- strict dotted quad, and no xn-- label is accepted, as in hs.valid_bookmark_url.
   jsonb_typeof(p->'listingOrigins')='array' and jsonb_array_length(p->'listingOrigins') between 1 and 20 and
   jsonb_typeof(p->'imageOrigins')='array' and jsonb_array_length(p->'imageOrigins') between 0 and 20 and
-  not exists(select 1 from (select o from jsonb_array_elements(p->'listingOrigins') o union all select o from jsonb_array_elements(p->'imageOrigins') o) origins
+  not exists(select 1 from (select o,substring(o#>>'{}' from '^https?://([^:]+)') h from
+    (select o from jsonb_array_elements(p->'listingOrigins') o union all select o from jsonb_array_elements(p->'imageOrigins') o) u) origins
    where jsonb_typeof(o)<>'string' or o#>>'{}' !~ '^https?://[a-z0-9.-]+(:(0|[1-9][0-9]{0,4}))?$' or
     coalesce(substring(o#>>'{}' from ':([0-9]+)$')::integer,0)>65535 or o#>>'{}' ~ '^https://.*:443$' or o#>>'{}' ~ '^http://.*:80$' or
-    (substring(o#>>'{}' from '^https?://([^:]+)') ~ '^[0-9.]+$' and
-     substring(o#>>'{}' from '^https?://([^:]+)') !~ '^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$')) and
+    h ~ '(^|\.)xn--' or
+    (regexp_replace(h,'\.$','') ~ '(^|\.)([0-9]+|0x[0-9a-f]*)$' and
+     h !~ '^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$')) and
   jsonb_typeof(p->'allowedFactFields')='array' and jsonb_array_length(p->'allowedFactFields') between 0 and 20 and
   not exists(select 1 from jsonb_array_elements(p->'allowedFactFields') f where jsonb_typeof(f)<>'string' or not hs.empty_facts() ? (f#>>'{}')) and
   jsonb_typeof(p->'allowedEvidenceSubjects')='array' and jsonb_array_length(p->'allowedEvidenceSubjects') between 0 and 10 and
@@ -139,14 +144,15 @@ end; $$;
 
 -- Registers an ingest credential row. The HMAC secret is generated and stored outside the database, in the Edge
 -- function environment (HS_INGEST_KEYS_JSON, keyed by this key id). Nothing here creates, returns or stores a secret.
--- A key id is never reused, revoked or not. Expiry is in the future and at most 90 days out.
+-- A key id is never reused, revoked or not. Expiry is in the future and at most 90 days (2160 hours, so a DST change
+-- cannot stretch the cap) out. The source id list must be one-dimensional.
 -- Returns {keyId, sourceIds, expiresAt}.
 create function hs.admin_issue_credential(p_household_id uuid,p_key_id text,p_source_ids text[],p_expires_at timestamptz) returns jsonb language plpgsql set search_path=pg_catalog,hs as $$ begin
  perform 1 from hs.households where id=p_household_id for update;
  if not found then raise exception 'Household unavailable'; end if;
- if p_key_id is null or p_key_id !~ '^[a-zA-Z0-9_-]{1,80}$' or p_source_ids is null or cardinality(p_source_ids) not between 1 and 20 or
+ if p_key_id is null or p_key_id !~ '^[a-zA-Z0-9_-]{1,80}$' or p_source_ids is null or array_ndims(p_source_ids) is distinct from 1 or cardinality(p_source_ids) not between 1 and 20 or
   exists(select 1 from unnest(p_source_ids) s where s is null) or cardinality(p_source_ids)<>(select count(distinct s) from unnest(p_source_ids) s) or
-  p_expires_at is null or p_expires_at<=now() or p_expires_at>now()+interval '90 days' then raise exception 'Invalid credential'; end if;
+  p_expires_at is null or p_expires_at<=now() or p_expires_at>now()+interval '2160 hours' then raise exception 'Invalid credential'; end if;
  if (select count(*) from hs.source_policies where household_id=p_household_id and source_id=any(p_source_ids))<>cardinality(p_source_ids) then raise exception 'Unknown source'; end if;
  if exists(select 1 from hs.ingest_credentials where key_id=p_key_id) then raise exception 'Credential key id already used'; end if;
  insert into hs.ingest_credentials(key_id,household_id,source_ids,expires_at) values(p_key_id,p_household_id,p_source_ids,p_expires_at);

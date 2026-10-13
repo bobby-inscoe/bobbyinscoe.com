@@ -550,9 +550,30 @@ beforeAll(async () => {
     create role service_role;
     create schema auth;
     create table auth.users(id uuid primary key);
-    create function auth.uid() returns uuid language sql stable as $$
-      select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
-    $$;
+    -- Besides returning the caller, auth.uid() can count its own calls and, on the
+    -- chosen call, run an operator change as if it had committed meanwhile. That
+    -- places a membership change between a function's two membership checks, which
+    -- a single PGlite connection cannot otherwise do. Idle unless counting is true.
+    create table public.test_hook(
+      counting boolean not null default false, calls integer not null default 0,
+      fire_at integer, household uuid, victim uuid, demote_only boolean not null default false);
+    insert into public.test_hook default values;
+    create function auth.uid() returns uuid language plpgsql security definer as $$
+    declare h public.test_hook;
+    begin
+      select * into h from public.test_hook;
+      if h.counting then
+        update public.test_hook set calls=calls+1;
+        if h.calls+1=h.fire_at then
+          if h.demote_only then
+            perform hs.admin_set_member(h.household,h.victim,'Departed','member',true);
+          else
+            perform hs.admin_set_member(h.household,h.victim,'Departed','member',false,true,true);
+          end if;
+        end if;
+      end if;
+      return nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
+    end $$;
   `);
   for (const migration of [
     '202610120001_house_scanner.sql',
@@ -1476,11 +1497,6 @@ describe('hs.valid_policy and hs.admin_set_source_policy', () => {
       ['https://bücher.example'],
     ],
     [
-      'origin with a punycode host',
-      ['listingOrigins'],
-      ['https://xn--bcher-kva.example'],
-    ],
-    [
       'origin with a dotted quad host',
       ['listingOrigins'],
       ['https://127.0.0.1'],
@@ -1593,6 +1609,11 @@ describe('hs.valid_policy and hs.admin_set_source_policy', () => {
       ['capabilities', 'coverageGaps'],
       ['\u{1F600}'.repeat(151)],
     ],
+    [
+      'a valid punycode host, which hs.valid_bookmark_url also refuses',
+      ['listingOrigins'],
+      ['https://xn--bcher-kva.example'],
+    ],
     ['an ftp origin', ['listingOrigins'], ['ftp://example.invalid']],
     ['a websocket origin', ['imageOrigins'], ['wss://example.invalid']],
     ['an IPv6 origin', ['listingOrigins'], ['https://[::1]']],
@@ -1607,6 +1628,128 @@ describe('hs.valid_policy and hs.admin_set_source_policy', () => {
     const body = setPath(policy(), path, replacement);
     expect(schemaAccepts(body)).toBe(true);
     expect(await dbAccepts(body)).toBe(false);
+  });
+
+  // The schema refinement calls new URL(), which throws for a host whose last label
+  // is numeric or 0x hex unless the host is an IPv4 address, and for a bad punycode
+  // label. The Edge function must never be handed a policy it cannot parse.
+  function schemaOutcome(body: unknown) {
+    try {
+      return sourcePolicySchema.safeParse(JSON.parse(JSON.stringify(body)))
+        .success
+        ? 'accepts'
+        : 'rejects';
+    } catch {
+      return 'throws';
+    }
+  }
+
+  it.each([
+    'https://example.123',
+    'https://a.b.c.4',
+    'https://a.0x',
+    'https://a.0x7f',
+    'https://xn--a',
+    'https://xn--ab.com',
+    'https://0x7f000001',
+    'https://0x7f.0.0.1',
+    'https://a.b.0xff',
+    'https://example.com.1',
+    'https://1.2.3',
+    'https://1.2.3.4.5',
+    'https://999.1.1.1',
+    'https://256.1.1.1',
+    'https://1.2.3.4.',
+    'https://a.1.',
+    'https://127.1',
+    'https://0177.0.0.1',
+    'https://2130706433',
+    'https://01.2.3.4',
+    'https://1',
+    'https://0',
+    'https://example.invalid:99999',
+  ])('refuses the origin %s that the schema cannot parse', async (origin) => {
+    const body = setPath(policy(), ['listingOrigins'], [origin]);
+    expect(['rejects', 'throws']).toContain(schemaOutcome(body));
+    expect(await dbAccepts(body)).toBe(false);
+    const images = setPath(policy(), ['imageOrigins'], [origin]);
+    expect(['rejects', 'throws']).toContain(schemaOutcome(images));
+    expect(await dbAccepts(images)).toBe(false);
+  });
+
+  it('still accepts hosts the schema accepts, including a final label that only starts like a number', async () => {
+    for (const origin of [
+      'https://127.0.0.1',
+      'https://255.255.255.255',
+      'https://0.0.0.0',
+      'https://a.0xg',
+      'https://a.1a',
+      'https://a.b1',
+      'https://1a.example',
+      'https://0x7f.example',
+      'https://a.com.',
+      'https://localhost',
+    ]) {
+      const body = setPath(policy(), ['listingOrigins'], [origin]);
+      expect(schemaOutcome(body)).toBe('accepts');
+      expect(await dbAccepts(body)).toBe(true);
+    }
+  });
+
+  it('never accepts an origin host that the schema rejects or throws on, over every short label combination', async () => {
+    const labels = [
+      'a',
+      'b1',
+      '1',
+      '0',
+      '12',
+      '256',
+      '0x',
+      '0x7f',
+      '0xg',
+      '00',
+      '08',
+      'xn--',
+      'xn--a',
+      '-',
+      '',
+      'com',
+    ];
+    const hosts: string[] = [];
+    const build = (prefix: string[]) => {
+      if (prefix.length > 0) hosts.push(prefix.join('.'));
+      if (prefix.length === 3) return;
+      for (const label of labels) build([...prefix, label]);
+    };
+    build([]);
+    const origins = hosts.map((host) => `https://${host}`);
+    const verdicts = await db.query<{ origin: string; valid: boolean }>(
+      `select o origin,hs.valid_policy(jsonb_set($1::jsonb,'{listingOrigins}',jsonb_build_array(o))) valid from unnest($2::text[]) o`,
+      [JSON.stringify(policy()), arrayLiteral(origins)],
+    );
+    expect(verdicts.rows).toHaveLength(origins.length);
+    const leaked = verdicts.rows
+      .filter((row) => row.valid)
+      .map((row) => row.origin)
+      .filter(
+        (origin) =>
+          schemaOutcome(setPath(policy(), ['listingOrigins'], [origin])) !==
+          'accepts',
+      );
+    expect(leaked).toEqual([]);
+    const outcomes = origins.map((origin) =>
+      schemaOutcome(setPath(policy(), ['listingOrigins'], [origin])),
+    );
+    // The sweep is only meaningful if it contains both kinds of host.
+    expect(
+      outcomes.filter((outcome) => outcome === 'throws').length,
+    ).toBeGreaterThan(500);
+    expect(
+      outcomes.filter((outcome) => outcome === 'accepts').length,
+    ).toBeGreaterThan(500);
+    expect(verdicts.rows.filter((row) => row.valid).length).toBeGreaterThan(
+      500,
+    );
   });
 
   it('is stricter than the schema for a retention written as 30.0', async () => {
@@ -1918,6 +2061,65 @@ describe('credentials', () => {
     );
   });
 
+  it('rejects a source list that is not one-dimensional', async () => {
+    const { householdId } = await bootstrap();
+    await setPolicy(householdId, policy('alpha'));
+    await setPolicy(householdId, policy('beta'));
+    const call = (literal: string) =>
+      value(
+        'select hs.admin_issue_credential($1,$2,$3::text[],$4::timestamptz) as value',
+        [householdId, 'k-shape', literal, inDays(5)],
+      );
+    await expectNothingWritten(
+      () => call('{{alpha},{beta}}'),
+      'Invalid credential',
+    );
+    await expectNothingWritten(
+      () => call('{{alpha,beta}}'),
+      'Invalid credential',
+    );
+    await call('{alpha,beta}');
+    expect(
+      await count(
+        'select count(*)::int count from hs.ingest_credentials where key_id=$1',
+        ['k-shape'],
+      ),
+    ).toBe(1);
+  });
+
+  // A zone whose DST ends inside the next 90 days makes '90 days' of local time
+  // 2161 hours. The zone is a POSIX rule built from today's date so the test does
+  // not depend on when it runs.
+  it('caps the expiry at 2160 hours even when a DST change falls inside the window', async () => {
+    const { householdId } = await bootstrap();
+    await setPolicy(householdId, policy('alpha'));
+    const dayOfYear = (date: Date) =>
+      Math.min(
+        365,
+        Math.floor(
+          (date.getTime() - Date.UTC(date.getUTCFullYear(), 0, 0)) / DAY,
+        ),
+      );
+    const start = dayOfYear(new Date(Date.now() - 30 * DAY));
+    const end = dayOfYear(new Date(Date.now() + 45 * DAY));
+    await db.exec(`set time zone 'ZZA0ZZB,J${start},J${end}'`);
+    try {
+      const hours = await value(
+        "select extract(epoch from (now()+interval '90 days')-now())/3600 as value",
+      );
+      expect(Number(hours)).toBe(2161);
+      const inside = new Date(Date.now() + 2160 * HOUR - 60_000).toISOString();
+      const outside = new Date(Date.now() + 2160 * HOUR + 60_000).toISOString();
+      await expectNothingWritten(
+        () => issue(householdId, 'k-dst-out', ['alpha'], outside),
+        'Invalid credential',
+      );
+      await issue(householdId, 'k-dst-in', ['alpha'], inside);
+    } finally {
+      await db.exec('reset time zone');
+    }
+  });
+
   it('accepts an expiry just inside 90 days and refuses to reuse a key id', async () => {
     const { householdId } = await bootstrap();
     await setPolicy(householdId, policy('alpha'));
@@ -2081,4 +2283,177 @@ describe('log and household lock', () => {
       expect(await marker(other.householdId)).toBe(otherBefore);
     }
   });
+});
+
+// A member request passes the membership check, then waits for the household lock.
+// If the operator deactivates or demotes the member meanwhile, the request must not
+// write once it gets the lock. PGlite has one connection, so no real wait happens.
+// test_hook runs the operator change at the last auth.uid() call of the first check,
+// which leaves the first check passed and the change visible to later statements.
+describe('membership is checked again after the household lock', () => {
+  type Context = { householdId: string; profileId: string; listing: string };
+  const cases: {
+    name: string;
+    role: 'member' | 'owner';
+    demoteOnly: boolean;
+    run: (context: Context) => Promise<unknown>;
+    written: (context: Context) => Promise<number>;
+    before: number;
+    after: number;
+  }[] = [
+    {
+      name: 'hs_set_favorite',
+      role: 'member',
+      demoteOnly: false,
+      run: (c) =>
+        asRole('authenticated', MEMBER, () =>
+          value('select public.hs_set_favorite($1,$2,true) as value', [
+            c.householdId,
+            c.listing,
+          ]),
+        ),
+      written: () =>
+        count('select count(*)::int count from hs.favorites where user_id=$1', [
+          MEMBER,
+        ]),
+      before: 0,
+      after: 1,
+    },
+    {
+      name: 'hs_save_note',
+      role: 'member',
+      demoteOnly: false,
+      run: (c) =>
+        asRole('authenticated', MEMBER, () =>
+          value('select public.hs_save_note($1,$2,$3,0) as value', [
+            c.householdId,
+            c.listing,
+            'Racing note',
+          ]),
+        ),
+      written: () =>
+        count('select count(*)::int count from hs.notes where user_id=$1', [
+          MEMBER,
+        ]),
+      before: 0,
+      after: 1,
+    },
+    {
+      name: 'hs_add_manual',
+      role: 'member',
+      demoteOnly: false,
+      run: (c) =>
+        asRole('authenticated', MEMBER, () =>
+          value('select public.hs_add_manual($1,$2,$3,$4,$5::jsonb) as value', [
+            c.householdId,
+            `${ORIGIN}/racing`,
+            'Racing',
+            '',
+            '[]',
+          ]),
+        ),
+      written: () => count('select count(*)::int count from hs.listings'),
+      before: 1,
+      after: 2,
+    },
+    {
+      name: 'hs_save_profile',
+      role: 'owner',
+      demoteOnly: true,
+      run: (c) =>
+        asRole('authenticated', MEMBER, () =>
+          value(
+            'select public.hs_save_profile($1,$2,1,$3,true,$4::jsonb) as value',
+            [
+              c.householdId,
+              c.profileId,
+              'Racing name',
+              JSON.stringify(criteria),
+            ],
+          ),
+        ),
+      written: () => count('select max(revision)::int count from hs.profiles'),
+      before: 1,
+      after: 2,
+    },
+  ];
+
+  async function seedRace(role: 'member' | 'owner'): Promise<Context> {
+    const { householdId, profileId } = await bootstrap();
+    await setMember(householdId, MEMBER, { role });
+    const added = z
+      .strictObject({ listingId: z.uuid(), existing: z.boolean() })
+      .parse(
+        await asRole('authenticated', OWNER, () =>
+          value('select public.hs_add_manual($1,$2,$3,$4,$5::jsonb) as value', [
+            householdId,
+            `${ORIGIN}/seeded`,
+            'Seeded',
+            '',
+            '[]',
+          ]),
+        ),
+      );
+    return { householdId, profileId, listing: added.listingId };
+  }
+
+  // The number of auth.uid() calls one membership check makes in the current state.
+  async function checkCalls(householdId: string) {
+    await db.exec(
+      'update public.test_hook set counting=true,calls=0,fire_at=null',
+    );
+    await db.query("select set_config('request.jwt.claim.sub',$1,false)", [
+      MEMBER,
+    ]);
+    try {
+      await db.query('select hs.require_member($1)', [householdId]);
+    } finally {
+      await db.query("select set_config('request.jwt.claim.sub','',false)");
+    }
+    const row = await db.query<{ calls: number }>(
+      'select calls from public.test_hook',
+    );
+    await db.exec('update public.test_hook set counting=false,calls=0');
+    return row.rows[0].calls;
+  }
+
+  async function arm(householdId: string, fireAt: number, demoteOnly: boolean) {
+    await db.query(
+      'update public.test_hook set counting=true,calls=0,fire_at=$1,household=$2,victim=$3,demote_only=$4',
+      [fireAt, householdId, MEMBER, demoteOnly],
+    );
+  }
+
+  beforeEach(async () => {
+    await db.exec(
+      'update public.test_hook set counting=false,calls=0,fire_at=null,household=null,victim=null,demote_only=false',
+    );
+  });
+
+  it.each(cases)(
+    '$name still works for an active member when nothing changes',
+    async (item) => {
+      const context = await seedRace(item.role);
+      expect(await item.written(context)).toBe(item.before);
+      await item.run(context);
+      expect(await item.written(context)).toBe(item.after);
+    },
+  );
+
+  it.each(cases)(
+    '$name refuses a member who was deactivated or demoted after passing the first check',
+    async (item) => {
+      const context = await seedRace(item.role);
+      const calls = await checkCalls(context.householdId);
+      expect(calls).toBeGreaterThan(0);
+      await arm(context.householdId, calls, item.demoteOnly);
+      await expect(item.run(context)).rejects.toThrow(
+        'Household access denied',
+      );
+      await db.exec('update public.test_hook set counting=false');
+      // The refusal can only come from the second check: the first one passed, and the
+      // operator change it saw ran in the same transaction, so it rolled back with the call.
+      expect(await item.written(context)).toBe(item.before);
+    },
+  );
 });

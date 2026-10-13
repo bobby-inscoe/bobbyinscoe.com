@@ -1,6 +1,7 @@
 import { createHash, createHmac } from 'node:crypto';
 import { sourceRegistry } from '@house-scanner-tools/source-registry';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { sourcePolicySchema } from '@/features/house-scanner/types/contracts';
 
 const database = vi.hoisted(() => ({ rpc: vi.fn() }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => database }));
@@ -185,6 +186,29 @@ describe('signed ingestion trust boundary', () => {
     const response = await handler(signedRequest());
     expect(response.status).toBe(403);
     expect(await response.text()).not.toContain('revoked household');
+    expect(database.rpc.mock.calls.some(([name]) => name === 'hs_ingest')).toBe(
+      false,
+    );
+  });
+  // The schema's origin refinement calls new URL(), which throws for this host
+  // instead of failing the parse. That must not surface as an unhandled 500.
+  it('answers 403 when a stored policy makes the schema parse throw', async () => {
+    const unparseable = {
+      ...sourceRegistry()[0].policy,
+      listingOrigins: ['https://example.123'],
+    };
+    expect(() => sourcePolicySchema.safeParse(unparseable)).toThrow();
+    const original = database.rpc.getMockImplementation();
+    database.rpc.mockImplementation(async (name, args) =>
+      name === 'hs_ingest_policies'
+        ? { data: [unparseable], error: null }
+        : original?.(name, args),
+    );
+    const response = await handler(signedRequest());
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: 'Source permissions unavailable',
+    });
     expect(database.rpc.mock.calls.some(([name]) => name === 'hs_ingest')).toBe(
       false,
     );
