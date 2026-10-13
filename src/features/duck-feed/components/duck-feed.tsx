@@ -34,8 +34,9 @@ export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
     boardSize,
     difficulty,
     durationSeconds,
-    recordScore: highScores.recordScore,
+    qualifiesForHighScore: highScores.qualifies,
   });
+  const lastResult = game.lastResult;
 
   return (
     <Stack className={`${className ?? ''} DuckFeed`} align="center" gap="md">
@@ -46,12 +47,14 @@ export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
         <GameHud
           score={game.score}
           comboCount={game.comboCount}
+          comboExpiresAt={game.comboExpiresAt}
+          comboWindowMs={game.comboWindowMs}
           remainingMs={game.remainingMs}
           durationMs={game.durationMs}
           isBonusPhase={game.status === 'bonus-phase'}
           bonusPhaseEndsAt={game.bonusPhaseEndsAt}
           bonusPhaseDurationMs={game.bonusPhaseDurationMs}
-          bestScore={highScores.scores[0] ?? null}
+          bestScore={highScores.scores[0]?.score ?? null}
         />
       )}
       <Box className="DuckFeed-boardFrame">
@@ -59,6 +62,7 @@ export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
           ref={boardRef}
           avatar={avatar}
           feedItems={game.feedItems}
+          smallDucks={game.smallDucks}
           popups={game.popups}
           isBonusPhase={game.status === 'bonus-phase'}
           onPointerMove={game.handlePointerMove}
@@ -76,10 +80,11 @@ export function DuckFeed({ className }: DuckFeedProps): React.JSX.Element {
             onStart={game.start}
           />
         )}
-        {game.status === 'game-over' && game.lastResult && (
+        {game.status === 'game-over' && lastResult && (
           <GameOverScreen
             avatar={avatar}
-            result={game.lastResult}
+            result={lastResult}
+            onSaveScore={(name) => highScores.saveScore(name, lastResult.score)}
             onPlayAgain={game.start}
             onChangeSettings={game.returnToMenu}
           />

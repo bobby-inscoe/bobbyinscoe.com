@@ -28,8 +28,9 @@ route types. See `docs/decisions.md` for the reasoning.
 ## State and assets
 
 Workshop selection and motion state stay in the workshop feature. Duck Feed owns
-its game reducer, countdown, and high-score persistence. Its top five scores use
-`localStorage` under `duck-feed:high-scores`. Workshop and Duck Feed use no backend or remote cache.
+its game reducer, countdown, and high-score persistence. Its top five scores
+(three-letter initials plus a score) use `localStorage` under
+`duck-feed:high-scores`. Workshop and Duck Feed use no backend or remote cache.
 
 Libron v0.31 regular and italic WOFF2 files are bundled unchanged from the official
 [release](https://github.com/nicoverbruggen/libron/releases/tag/v0.31) under SIL OFL 1.1. The license is kept in

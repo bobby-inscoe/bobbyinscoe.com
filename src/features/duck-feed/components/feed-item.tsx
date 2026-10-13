@@ -23,6 +23,8 @@ function ariaLabel(kind: FeedItemModel['kind'], avatar: Avatar): string {
       return avatar === 'duck' ? 'Feed the duck' : 'Feed the snail';
     case 'bonus-pickup':
       return 'Grab the bonus item';
+    case 'fan-pickup':
+      return 'Grab the duck flock item';
     case 'crumb':
       return 'Grab the crumb';
   }
