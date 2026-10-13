@@ -172,7 +172,8 @@ create function public.hs_set_favorite(p_household_id uuid,p_listing_id uuid,p_s
  else delete from hs.favorites where household_id=p_household_id and listing_id=p_listing_id and user_id=auth.uid(); end if;
  return jsonb_build_object('ok',true);
 end; $$;
--- Zod counts UTF-16 code units; PostgreSQL length counts Unicode code points.
+-- Zod 4 counts Unicode code points; this function counts UTF-16 code units, as a browser maxLength does, so the
+-- database is the stricter of the two for text with characters outside the Basic Multilingual Plane.
 create function hs.text_length(t text) returns integer language sql immutable set search_path=pg_catalog as $$
  select length(t)+(select count(*)::integer from regexp_matches(t,U&'[\+010000-\+10FFFF]','g'));
 $$;
