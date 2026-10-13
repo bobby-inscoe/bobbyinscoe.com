@@ -1484,7 +1484,7 @@ describe('unknown prices, provenance expiry and user bookmark preservation', () 
     );
     const state = await snapshot();
     expect(state.listings).toHaveLength(1);
-    // Nested paths use their own retention, expiry and permission predicates, none of which checks that the review is current.
+    // Content the user saved stays visible, but hotlinked media needs a current review, so only the photo is withheld.
     expect(state.listings[0]).toMatchObject({
       id,
       origin: 'source',
@@ -1497,7 +1497,7 @@ describe('unknown prices, provenance expiry and user bookmark preservation', () 
       },
       coordinates: original.coordinates,
       evidence: original.evidence,
-      photo: original.photo,
+      photo: null,
     });
     expect(state.favorites[0]).toMatchObject({
       listingId: id,
@@ -1507,6 +1507,25 @@ describe('unknown prices, provenance expiry and user bookmark preservation', () 
       'Personal note survives source expiry',
     );
     expect(await count('select count(*)::int count from hs.listings')).toBe(2);
+    expect((await listingByUrl('home')).value.photo).toEqual(original.photo);
+    // The same stored photo is shown again once the policy is current, inside retention and before expiry.
+    await setPolicy({});
+    expect(
+      (await snapshot()).listings.find((item) => item.id === id),
+    ).toMatchObject({
+      id,
+      photo: original.photo,
+      coordinates: original.coordinates,
+    });
+    await setPolicy({ automatedCollection: false });
+    expect(
+      (await snapshot()).listings.find((item) => item.id === id),
+    ).toMatchObject({
+      id,
+      title: 'Synthetic home',
+      coordinates: original.coordinates,
+      photo: null,
+    });
   });
 
   it('applies narrower field, evidence, image and retention permissions at read time', async () => {
