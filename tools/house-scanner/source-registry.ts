@@ -7,9 +7,11 @@ import {
 import { assertSourceAllowed } from '@/features/house-scanner/utils/source-policy';
 
 export const DEMO_SOURCE_ID = 'synthetic-demo';
+export const BONEO_SOURCE_ID = 'boneo';
+export const BONEO_ORIGIN = 'https://www.boneo.se';
 export const capabilitySchema = z.strictObject({
   policy: sourcePolicySchema,
-  executor: z.enum(['demo-only', 'none']),
+  executor: z.enum(['demo-only', 'boneo-personal-read', 'none']),
   nativeNumericFiltersVerified: z.boolean(),
   geographicPartitioning: z.enum(['municipality', 'unverified']),
 });
@@ -32,7 +34,6 @@ const noCapabilities: SourcePolicy['capabilities'] = {
 
 const candidates = [
   ['bjurfors', 'https://www.bjurfors.se', 'pending'],
-  ['boneo', 'https://www.boneo.se', 'pending'],
   ['erik-olsson', 'https://www.erikolsson.se', 'pending'],
   ['stadshem', 'https://stadshem.se', 'pending'],
   ['alvhem', 'https://www.alvhem.com', 'pending'],
@@ -89,6 +90,54 @@ export function sourceRegistry(): SourceCapability[] {
       executor: 'demo-only',
       nativeNumericFiltersVerified: false,
       geographicPartitioning: 'municipality',
+    }),
+    capabilitySchema.parse({
+      policy: {
+        ...common,
+        sourceId: BONEO_SOURCE_ID,
+        // Pending is not approved: the operator sets approval in the database.
+        status: 'pending',
+        retentionDays: 14,
+        listingOrigins: [BONEO_ORIGIN],
+        automatedCollection: false,
+        privateDisplay: false,
+        rightsBasis:
+          'Permission unresolved. The household owner chose to read public search pages for personal use at their own judgment. Technical access is not a reuse license.',
+        allowedFactFields: [
+          'propertyType',
+          'tenure',
+          'purchase',
+          'livingAreaM2',
+          'secondaryAreaM2',
+          'rooms',
+          'askingPriceSek',
+          'municipality',
+          'baseFeeSek',
+          'status',
+        ],
+        capabilities: {
+          discovery: true,
+          knownListingRefresh: false,
+          unknownPrice: false,
+          upcoming: false,
+          pagination: false,
+          resultCap: null,
+          coverageGaps: [
+            'Permission is unresolved and the source is not approved.',
+            'Only the Till salu view was observed. Upcoming (Kommande) inventory appears in facet counts but its query is unproven.',
+            'Whether listings without a price appear in the default view is unproven.',
+            'The page query is accepted but page size and multi-page ordering are unproven. Coverage is never reported complete.',
+            'Only apartment paths for Goteborg are supported. Houses and other municipalities are not covered.',
+            'Floor, lift, outdoor and glazing are not structured fields and stay unknown.',
+            'Photos are not read. Image display and hotlinking are off.',
+            'Listing identity and episode rules come from property_id and created_date and are unproven across relistings.',
+            'Known listings cannot be refreshed outside discovery.',
+          ],
+        },
+      },
+      executor: 'boneo-personal-read',
+      nativeNumericFiltersVerified: false,
+      geographicPartitioning: 'unverified',
     }),
     ...candidates.map(([sourceId, origin, status]) =>
       capabilitySchema.parse({

@@ -49,3 +49,32 @@ it.each([
   expect(result.stdout).toBe('');
   expect(result.stderr).not.toContain('https://');
 });
+
+it.each([
+  [['--live']],
+  [['--live', '--source=boneo']],
+  [['--live', '--confirm-personal-read']],
+  [
+    [
+      '--live',
+      '--source=boneo',
+      '--confirm-personal-read',
+      '--at=2026-10-13T00:00:00Z',
+    ],
+  ],
+  [['--live', '--source=bjurfors', '--confirm-personal-read']],
+  [['--source=boneo', '--confirm-personal-read']],
+  [['--source=boneo']],
+])('refuses live reading without every flag: %j', (args) => {
+  const result = spawnSync(
+    process.execPath,
+    ['.house-scanner-build/collector.mjs', ...args],
+    { encoding: 'utf8', timeout: 10_000 },
+  );
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stderr)).toMatchObject({
+    status: 'rejected',
+    category: 'permission-or-configuration',
+  });
+  expect(result.stdout).toBe('');
+});
