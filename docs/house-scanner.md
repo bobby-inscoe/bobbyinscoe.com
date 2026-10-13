@@ -186,3 +186,18 @@ Limits and follow-ups:
 4. A database check now guards `retentionDays` (integer 1 to 180) and the origin and field arrays. Malformed timestamps or booleans in an approved policy would still raise; add a validator in the administration slice.
 5. Stale detection is inferred from the daily edition, not link checking.
 6. A real source's terms must be checked for keeping saved listings after its permission lapses.
+## Boneo source adapter (13 October 2026)
+
+The owner decided to read public listing pages for personal use (see decisions.md, "House Scanner reads public listing pages for personal use"). One adapter was built and integrated as 581a4f6 from 7564dc1 by a claude-sonnet-5-5 medium worker in an isolated worktree off codex/house-scanner.
+
+What exists: a parser for Boneo's embedded search-page JSON, a page reader with a more-pages signal, a guarded live fetcher and a CLI path that needs `--live --source=boneo --confirm-personal-read`. The live path only prepares begin, stage and publish requests in memory and prints counts. Nothing is sent, because no ingest endpoint exists yet. The registry entry stays `pending`, with photos off, retention 14 days and nine coverage gaps listed.
+
+Guardrails enforced and tested in code: robots check on the exact path, honest user agent, no cookies, two second minimum gap, five pages per partition, thirty requests per run, stop without retry on 403, 429, any non-200 or an unexpected page, a page without embedded data counted as failed coverage and never as empty, and logs limited to counts, statuses and partition names. Each guard was removed in turn and broke a test.
+
+Live shape confirmed with three requests (robots.txt and two search pages, nothing saved): data sits at `props.pageProps.listData.{pData,facetList,count}`; `count` is the total result count and `?page=N` is honored; price is a number and currency is "SEK" where set; coordinates are lon and lat; the default view returned only "Till salu" items and hides upcoming ones.
+
+Unproven, and recorded as coverage gaps: page size and ordering across several pages, how upcoming listings are queried, whether listings without a price appear by default, the municipality-level path, the house path segment (only apartments are supported), coordinate precision, status labels other than "Till salu", and whether `created_date` is a stable episode id across relistings.
+
+Fresh evidence on 581a4f6: `npm test` 16 files, 329 tests passed (56 in tools/house-scanner, 40 new); `npm run test:browser` 16 passed; `check`, `typecheck`, `test:typecheck`, `house-scanner:typecheck`, `build`, the fixture CLI and `git diff --check` passed. The live CLI path was not run end to end.
+
+Next for sources: run the live reader once by hand to inspect real coverage, resolve the unproven items, then add Bjurfors if wanted. Delivery needs the hosted project, the ingest function and an issued credential.
