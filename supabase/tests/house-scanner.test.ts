@@ -368,6 +368,282 @@ async function count(sql: string, params: string[] = []) {
   return result.rows[0].count;
 }
 
+const DAY = 24 * HOUR;
+const TABLES = [
+  'households',
+  'members',
+  'profiles',
+  'profile_versions',
+  'source_policies',
+  'ingest_credentials',
+  'ingest_nonces',
+  'runs',
+  'batches',
+  'staged_observations',
+  'listings',
+  'observations',
+  'editions',
+  'favorites',
+  'notes',
+] as const;
+const purgeSchema = z.strictObject({
+  observationsDeleted: z.number().int(),
+  stagedDeleted: z.number().int(),
+  listingsDeleted: z.number().int(),
+  listingsTombstoned: z.number().int(),
+  listingsScrubbed: z.number().int(),
+  observationsScrubbed: z.number().int(),
+  stagedScrubbed: z.number().int(),
+  noncesDeleted: z.number().int(),
+  cursorsReset: z.number().int(),
+  more: z.boolean(),
+});
+type PurgeResult = z.infer<typeof purgeSchema>;
+const NO_WORK: PurgeResult = {
+  observationsDeleted: 0,
+  stagedDeleted: 0,
+  listingsDeleted: 0,
+  listingsTombstoned: 0,
+  listingsScrubbed: 0,
+  observationsScrubbed: 0,
+  stagedScrubbed: 0,
+  noncesDeleted: 0,
+  cursorsReset: 0,
+  more: false,
+};
+
+function aged(days: number) {
+  return new Date(baseTime - days * DAY).toISOString();
+}
+
+async function purge(
+  options: { limit?: number; dryRun?: boolean; householdId?: string } = {},
+) {
+  const { limit = 100, dryRun = false, householdId = HOUSE_A } = options;
+  return asRole('service_role', null, async () =>
+    purgeSchema.parse(
+      await rpc('select public.hs_purge_expired($1,$2,$3) as value', [
+        householdId,
+        limit,
+        dryRun,
+      ]),
+    ),
+  );
+}
+
+// A per-table md5 of every row, optionally limited to one household.
+async function digest(
+  tables: readonly string[] = TABLES,
+  householdId?: string,
+) {
+  const result: Record<string, string> = {};
+  for (const table of tables) {
+    let filter = '';
+    if (householdId)
+      filter =
+        table === 'ingest_nonces'
+          ? 'where t.key_id in (select key_id from hs.ingest_credentials where household_id=$1)'
+          : `where t.${table === 'households' ? 'id' : 'household_id'}=$1`;
+    const row = await db.query<{ digest: string }>(
+      `select md5(coalesce(string_agg(to_jsonb(t)::text,'|' order by to_jsonb(t)::text),'')) digest from hs.${table} t ${filter}`,
+      householdId ? [householdId] : [],
+    );
+    result[table] = row.rows[0].digest;
+  }
+  return result;
+}
+
+async function setPolicy(
+  patch: Partial<SourcePolicy>,
+  source = 'alpha',
+  householdId = HOUSE_A,
+) {
+  await db.query(
+    'update hs.source_policies set policy=$1::jsonb where household_id=$2 and source_id=$3',
+    [JSON.stringify({ ...policy(source), ...patch }), householdId, source],
+  );
+}
+
+async function lapse(source: string, householdId = HOUSE_A) {
+  await db.query(
+    "update hs.source_policies set policy=jsonb_set(policy,'{reviewDueAt}',to_jsonb((now()-interval '1 second')::text)) where household_id=$1 and source_id=$2",
+    [householdId, source],
+  );
+}
+
+async function listingByUrl(path: string) {
+  const row = await db.query<{
+    id: string;
+    value: Record<string, unknown>;
+    observed_at: Date;
+    revision: number;
+    last_checked_at: Date;
+    previous_asking_price: number | null;
+    previous_price_observed_at: Date | null;
+  }>(
+    'select id,value,observed_at,revision,last_checked_at,previous_asking_price,previous_price_observed_at from hs.listings where value->>$1=$2',
+    ['sourceUrl', `${ORIGIN}/${path}`],
+  );
+  expect(row.rows).toHaveLength(1);
+  return row.rows[0];
+}
+
+function stored(sql: string, params: string[] = []) {
+  return db
+    .query<{ value: unknown }>(sql, params)
+    .then((result) => result.rows.map((row) => row.value));
+}
+
+function evidenceItem(
+  subject: Observation['evidence'][number]['subject'],
+  observedAt: string,
+  sourceUrl: string | null = `${ORIGIN}/home`,
+  kind: 'source_claim' | 'measurement' = 'source_claim',
+): Observation['evidence'][number] {
+  return {
+    id: randomUUID(),
+    kind,
+    subject,
+    summary: 'Synthetic evidence',
+    sourceUrl,
+    observedAt,
+    datasetVersion: null,
+    method: null,
+    value: null,
+    unit: null,
+  };
+}
+
+function coordinateItem(
+  observedAt: string,
+): NonNullable<Observation['coordinates']> {
+  return {
+    longitude: 0,
+    latitude: 0,
+    precision: 'address',
+    source: 'Synthetic coordinates',
+    observedAt,
+  };
+}
+
+function photoItem(
+  observedAt: string,
+  expiresAt = new Date(baseTime + DAY).toISOString(),
+): NonNullable<Observation['photo']> {
+  return {
+    url: `${ORIGIN}/photo`,
+    attribution: 'Synthetic image',
+    rightsBasis: 'Synthetic permission',
+    observedAt,
+    expiresAt,
+    displayAllowed: true,
+    hotlinkAllowed: true,
+  };
+}
+
+// Five listings in one published run. After retentionDays drops to 1 the first three
+// are expired, the fourth has only stale nested data and the fifth is fully fresh.
+const HOUSEHOLD_A = {
+  id: HOUSE_A,
+  key: KEY_A,
+  profile: PROFILE_A,
+  owner: OWNER_A,
+  member: MEMBER_A,
+};
+const HOUSEHOLD_B = {
+  id: HOUSE_B,
+  key: KEY_B,
+  profile: PROFILE_B,
+  owner: OWNER_B,
+  member: OWNER_B,
+};
+
+async function seedMixedState(household = HOUSEHOLD_A) {
+  const begin = beginRequest(randomUUID(), ['alpha'], household.profile);
+  await ingest(begin, household.key);
+  const home = (id: string, overrides: Partial<Observation> = {}) =>
+    observation({
+      sourceListingId: id,
+      sourceUrl: `${ORIGIN}/${id}`,
+      title: id,
+      ...overrides,
+    });
+  await ingest(
+    stageRequest(begin.runId, [
+      home('unsaved', { observedAt: aged(2) }),
+      home('saved', { observedAt: aged(2) }),
+      home('noted', { observedAt: aged(2) }),
+      home('nested', {
+        coordinates: coordinateItem(aged(2)),
+        evidence: [evidenceItem('facts', aged(2), `${ORIGIN}/nested`)],
+        photo: photoItem(aged(2)),
+      }),
+      home('fresh', {
+        coordinates: coordinateItem(new Date(baseTime).toISOString()),
+      }),
+    ]),
+    household.key,
+  );
+  await ingest(publishRequest(begin.runId), household.key);
+  const state = await snapshot(household.id, household.owner);
+  const idOf = (id: string) => {
+    const found = state.listings.find((item) => item.title === id)?.id;
+    if (!found) throw new Error(`Seeded listing ${id} missing`);
+    return found;
+  };
+  await favorite(idOf('saved'), true, household.owner, household.id);
+  await favorite(idOf('saved'), true, household.member, household.id);
+  await saveNote(
+    idOf('noted'),
+    household.member,
+    'Seeded note',
+    0,
+    household.id,
+  );
+  await db.query(
+    "insert into hs.ingest_nonces(key_id,nonce,used_at) values($1,'seed_nonce_old_0001',now()-interval '61 minutes'),($1,'seed_nonce_new_0001',now()-interval '59 minutes')",
+    [household.key],
+  );
+  await setPolicy({ retentionDays: 1 }, 'alpha', household.id);
+  return { saved: idOf('saved'), noted: idOf('noted') };
+}
+
+// Three listings in one published run, returning their ids.
+async function seedThree(overrides: Partial<Observation>) {
+  const begin = beginRequest();
+  await ingest(begin);
+  await ingest(
+    stageRequest(
+      begin.runId,
+      ['one', 'two', 'three'].map((id) =>
+        observation({
+          sourceListingId: id,
+          sourceUrl: `${ORIGIN}/${id}`,
+          title: id,
+          ...overrides,
+        }),
+      ),
+    ),
+  );
+  await ingest(publishRequest(begin.runId));
+  const ids = (await snapshot()).listings.map((item) => item.id);
+  expect(ids).toHaveLength(3);
+  return ids;
+}
+
+const MIXED_TOTALS: PurgeResult = {
+  observationsDeleted: 3,
+  stagedDeleted: 3,
+  listingsDeleted: 1,
+  listingsTombstoned: 2,
+  listingsScrubbed: 1,
+  observationsScrubbed: 1,
+  stagedScrubbed: 1,
+  noncesDeleted: 1,
+  cursorsReset: 0,
+  more: false,
+};
+
 beforeAll(async () => {
   db = await PGlite.create();
   vi.stubGlobal(
@@ -388,12 +664,16 @@ beforeAll(async () => {
       select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
     $$;
   `);
-  await db.exec(
-    await readFile(
-      new URL('../migrations/202610120001_house_scanner.sql', import.meta.url),
-      'utf8',
-    ),
-  );
+  for (const migration of [
+    '202610120001_house_scanner.sql',
+    '202610120002_house_scanner_retention.sql',
+  ])
+    await db.exec(
+      await readFile(
+        new URL(`../migrations/${migration}`, import.meta.url),
+        'utf8',
+      ),
+    );
 });
 
 afterAll(async () => {
@@ -502,12 +782,13 @@ describe('actual migration and private RPC grants', () => {
       from pg_proc p join pg_namespace n on n.oid=p.pronamespace
       where n.nspname='public' and p.proname like 'hs_%'
     `);
-    expect(result.rows).toHaveLength(11);
+    expect(result.rows).toHaveLength(12);
     const serviceFunctions = [
       'hs_ingest_credential',
       'hs_consume_nonce',
       'hs_ingest_policies',
       'hs_ingest',
+      'hs_purge_expired',
     ];
     for (const row of result.rows)
       expect(row).toMatchObject({
@@ -1432,5 +1713,930 @@ describe('historical replay and retention edges', () => {
       ingest(publishRequest(begin.runId, ['alpha', 'beta'], 'failed')),
     ).rejects.toMatchObject({ code: '42501' });
     expect((await snapshot()).edition).toBeNull();
+  });
+});
+
+describe('bounded retention purge', () => {
+  it('reports no work for an empty household and rejects malformed requests without a write', async () => {
+    expect(await purge({ dryRun: true })).toEqual(NO_WORK);
+    expect(await purge()).toEqual(NO_WORK);
+    expect(await purge({ householdId: HOUSE_B })).toEqual(NO_WORK);
+    const before = await digest();
+    for (const limit of [0, -1, 1001])
+      await expect(purge({ limit })).rejects.toThrow('Invalid purge request');
+    await expect(purge({ householdId: randomUUID() })).rejects.toThrow(
+      'Household unavailable',
+    );
+    expect(await digest()).toEqual(before);
+  });
+
+  it('purges one expired unsaved listing with its history and staged payload and keeps run records', async () => {
+    await publishOne(observation({ observedAt: aged(2) }));
+    await setPolicy({ retentionDays: 1 });
+    const before = await snapshot();
+    expect(before.listings).toEqual([]);
+    const expected = {
+      ...NO_WORK,
+      observationsDeleted: 1,
+      stagedDeleted: 1,
+      listingsDeleted: 1,
+    };
+    expect(await purge({ dryRun: true })).toEqual(expected);
+    expect(await count('select count(*)::int count from hs.listings')).toBe(1);
+    expect(await purge()).toEqual(expected);
+    for (const table of ['listings', 'observations', 'staged_observations'])
+      expect(await count(`select count(*)::int count from hs.${table}`)).toBe(
+        0,
+      );
+    for (const table of ['runs', 'batches', 'editions'])
+      expect(await count(`select count(*)::int count from hs.${table}`)).toBe(
+        1,
+      );
+    expect(await snapshot()).toEqual(before);
+    expect(
+      await stored(
+        "select cursor value from hs.source_policies where household_id=$1 and source_id='alpha'",
+        [HOUSE_A],
+      ),
+    ).toEqual(['cursor-alpha']);
+  });
+
+  it('purges source rows once their origin leaves the policy', async () => {
+    await publishOne();
+    await setPolicy({ listingOrigins: ['https://other.invalid'] });
+    expect((await snapshot()).listings).toEqual([]);
+    expect(await purge()).toEqual({
+      ...NO_WORK,
+      observationsDeleted: 1,
+      stagedDeleted: 1,
+      listingsDeleted: 1,
+    });
+    expect(await count('select count(*)::int count from hs.listings')).toBe(0);
+  });
+
+  it('reports the same counts in a dry run as in the first real run and changes nothing', async () => {
+    await seedMixedState();
+    const before = await digest();
+    const defaulted = await asRole('service_role', null, async () =>
+      purgeSchema.parse(
+        await rpc('select public.hs_purge_expired($1,$2) as value', [
+          HOUSE_A,
+          100,
+        ]),
+      ),
+    );
+    expect(defaulted).toEqual(MIXED_TOTALS);
+    const nulled = await asRole('service_role', null, async () =>
+      purgeSchema.parse(
+        await rpc('select public.hs_purge_expired($1,$2,null) as value', [
+          HOUSE_A,
+          100,
+        ]),
+      ),
+    );
+    expect(nulled).toEqual(MIXED_TOTALS);
+    expect(await purge({ dryRun: true })).toEqual(MIXED_TOTALS);
+    expect(await digest()).toEqual(before);
+    expect(await purge()).toEqual(MIXED_TOTALS);
+    expect(await digest()).not.toEqual(before);
+  });
+
+  it('converges across bounded calls and matches a single unbounded pass', async () => {
+    await seedMixedState();
+    const totals = { ...NO_WORK, more: undefined } as Record<
+      string,
+      number | boolean | undefined
+    >;
+    delete totals.more;
+    let calls = 0;
+    for (;;) {
+      const { more, ...counts } = await purge({ limit: 2 });
+      calls += 1;
+      expect(
+        Object.values(counts).reduce((sum, value) => sum + value, 0),
+      ).toBeLessThanOrEqual(2);
+      for (const [key, value] of Object.entries(counts))
+        totals[key] = Number(totals[key]) + value;
+      if (!more) break;
+      expect(calls).toBeLessThan(20);
+    }
+    expect(calls).toBeGreaterThan(3);
+    expect({ ...totals, more: false }).toEqual(MIXED_TOTALS);
+    const settled = await digest();
+    expect(await purge({ limit: 2 })).toEqual(NO_WORK);
+    expect(await digest()).toEqual(settled);
+  });
+
+  it('removes hidden nested coordinates, evidence, photo, facts and previous price and leaves snapshots unchanged', async () => {
+    const original = observation();
+    await publishOne(
+      observation({
+        observedAt: aged(2),
+        facts: { ...original.facts, askingPriceSek: 2_500_000 },
+      }),
+    );
+    await setPolicy({ listingOrigins: [ORIGIN, 'https://other.invalid'] });
+    const fresh = new Date(baseTime).toISOString();
+    const keptClaim = evidenceItem('facts', fresh);
+    const keptMeasurement = evidenceItem('facts', fresh, null, 'measurement');
+    await publishOne(
+      observation({
+        facts: { ...original.facts, askingPriceSek: 2_000_000 },
+        coordinates: coordinateItem(aged(2)),
+        photo: photoItem(aged(2)),
+        evidence: [
+          keptClaim,
+          evidenceItem('facts', aged(2)),
+          evidenceItem('nearby_nature', fresh),
+          evidenceItem('facts', fresh, 'https://other.invalid/x'),
+          keptMeasurement,
+        ],
+      }),
+    );
+    await setPolicy({
+      retentionDays: 1,
+      allowedFactFields: ['askingPriceSek', 'rooms'],
+      allowedEvidenceSubjects: ['facts'],
+    });
+    const before = await snapshot();
+    expect(before.listings[0]).toMatchObject({
+      coordinates: null,
+      photo: null,
+      previousAskingPriceSek: null,
+      facts: { askingPriceSek: 2_000_000, rooms: 2, livingAreaM2: null },
+    });
+    expect(before.listings[0].evidence.map((item) => item.id)).toEqual([
+      keptClaim.id,
+      keptMeasurement.id,
+    ]);
+    const row = await listingByUrl('home');
+    expect(row.value.evidence).toHaveLength(5);
+    expect(row.value.coordinates).not.toBeNull();
+    expect(row.previous_asking_price).toBe(2_500_000);
+    expect(await purge()).toEqual({
+      ...NO_WORK,
+      observationsDeleted: 1,
+      stagedDeleted: 1,
+      listingsScrubbed: 1,
+      observationsScrubbed: 1,
+      stagedScrubbed: 1,
+    });
+    expect(await snapshot()).toEqual(before);
+    const after = await listingByUrl('home');
+    expect(after).toMatchObject({
+      id: row.id,
+      revision: row.revision,
+      previous_asking_price: null,
+      previous_price_observed_at: null,
+    });
+    expect(after.observed_at).toEqual(row.observed_at);
+    expect(after.last_checked_at).toEqual(row.last_checked_at);
+    expect(after.value).toMatchObject({
+      title: 'Synthetic home',
+      sourceUrl: `${ORIGIN}/home`,
+      conflicts: [],
+      coordinates: null,
+      photo: null,
+      facts: {
+        ...Object.fromEntries(
+          Object.keys(original.facts).map((key) => [key, null]),
+        ),
+        tenure: 'unknown',
+        status: 'unknown',
+        askingPriceSek: 2_000_000,
+        rooms: 2,
+      },
+    });
+    expect(
+      (after.value.evidence as { id: string }[]).map((item) => item.id),
+    ).toEqual([keptClaim.id, keptMeasurement.id]);
+    for (const table of ['observations', 'staged_observations'])
+      expect(await stored(`select value from hs.${table}`)).toEqual([
+        after.value,
+      ]);
+    expect(await purge()).toEqual(NO_WORK);
+  });
+
+  it('clears the previous price when the policy stops allowing asking prices', async () => {
+    const original = observation();
+    await publishOne(
+      observation({
+        observedAt: new Date(baseTime - HOUR).toISOString(),
+        facts: { ...original.facts, askingPriceSek: 2_500_000 },
+      }),
+    );
+    await publishOne(
+      observation({ facts: { ...original.facts, askingPriceSek: 2_000_000 } }),
+    );
+    expect((await snapshot()).listings[0].previousAskingPriceSek).toBe(
+      2_500_000,
+    );
+    await setPolicy({
+      allowedFactFields: Object.keys(original.facts).filter(
+        (key) => key !== 'askingPriceSek',
+      ) as SourcePolicy['allowedFactFields'],
+    });
+    const hidden = await snapshot();
+    expect(hidden.listings[0].previousAskingPriceSek).toBeNull();
+    expect(await purge()).toMatchObject({
+      listingsScrubbed: 1,
+      observationsScrubbed: 2,
+      stagedScrubbed: 2,
+    });
+    expect(await snapshot()).toEqual(hidden);
+    expect(
+      await count(
+        'select count(*)::int count from hs.listings where previous_asking_price is not null or previous_price_observed_at is not null',
+      ),
+    ).toBe(0);
+    expect(
+      await stored(
+        "select value->'facts'->'askingPriceSek' value from hs.listings",
+      ),
+    ).toEqual([null]);
+  });
+
+  it.each<[string, Partial<SourcePolicy> | null]>([
+    ['image display is off', { imageDisplay: false }],
+    ['image hotlinking is off', { imageHotlink: false }],
+    ['the image origin is no longer approved', { imageOrigins: [] }],
+    ['the photo observation is outside retention', { retentionDays: 1 }],
+    ['the photo has expired', null],
+  ])('drops the stored photo when %s', async (_name, patch) => {
+    const observedAt =
+      patch && 'retentionDays' in patch
+        ? aged(2)
+        : new Date(baseTime).toISOString();
+    await publishOne(observation({ photo: photoItem(observedAt) }));
+    if (patch) await setPolicy(patch);
+    else
+      await db.query(
+        "update hs.listings set value=jsonb_set(value,'{photo,expiresAt}',to_jsonb($1::text))",
+        [new Date(Date.now() - HOUR).toISOString()],
+      );
+    const before = await snapshot();
+    expect(before.listings[0].photo).toBeNull();
+    expect((await listingByUrl('home')).value.photo).not.toBeNull();
+    expect(await purge()).toMatchObject({
+      listingsScrubbed: 1,
+      listingsDeleted: 0,
+    });
+    expect((await listingByUrl('home')).value.photo).toBeNull();
+    expect(await snapshot()).toEqual(before);
+    expect(await purge()).toEqual(NO_WORK);
+  });
+
+  it('leaves fresh nested data and previous prices byte-identical', async () => {
+    const original = observation();
+    const fresh = new Date(baseTime).toISOString();
+    await publishOne(
+      observation({
+        observedAt: new Date(baseTime - HOUR).toISOString(),
+        facts: { ...original.facts, askingPriceSek: 2_500_000 },
+      }),
+    );
+    await publishOne(
+      observation({
+        facts: { ...original.facts, askingPriceSek: 2_000_000 },
+        coordinates: coordinateItem(fresh),
+        photo: photoItem(fresh),
+        evidence: [evidenceItem('facts', fresh)],
+      }),
+    );
+    const before = await digest();
+    const snapshotBefore = await snapshot();
+    expect(snapshotBefore.listings[0]).toMatchObject({
+      previousAskingPriceSek: 2_500_000,
+    });
+    expect(snapshotBefore.listings[0].coordinates).not.toBeNull();
+    expect(snapshotBefore.listings[0].photo).not.toBeNull();
+    const valuesSql =
+      'select value::text value from hs.listings union all select value::text from hs.observations union all select value::text from hs.staged_observations';
+    const text = await stored(valuesSql);
+    expect(await purge()).toEqual(NO_WORK);
+    expect(await stored(valuesSql)).toEqual(text);
+    expect(await digest()).toEqual(before);
+    expect(await snapshot()).toEqual(snapshotBefore);
+  });
+
+  it('uses each source policy at purge time, resets cursors only for lapsed sources and keeps saved records', async () => {
+    await db.query(
+      "insert into hs.source_policies(household_id,source_id,policy,cursor) values($1,'gamma',$2::jsonb,'previous-cursor')",
+      [HOUSE_A, JSON.stringify(policy('gamma'))],
+    );
+    await db.query(
+      "update hs.ingest_credentials set source_ids=array['alpha','beta','gamma'] where key_id=$1",
+      [KEY_A],
+    );
+    await publishOne(
+      observation({ sourceListingId: 'alpha-home', observedAt: aged(2) }),
+      'alpha',
+    );
+    await publishOne(
+      observation({ sourceListingId: 'beta-home', observedAt: aged(2) }),
+      'beta',
+    );
+    await publishOne(
+      observation({
+        sourceListingId: 'gamma-unsaved',
+        sourceUrl: `${ORIGIN}/gamma-unsaved`,
+      }),
+      'gamma',
+    );
+    await publishOne(
+      observation({
+        sourceListingId: 'gamma-saved',
+        sourceUrl: `${ORIGIN}/gamma-saved`,
+      }),
+      'gamma',
+    );
+    const staging = beginRequest(randomUUID(), ['gamma']);
+    await ingest(staging);
+    await ingest(
+      stageRequest(
+        staging.runId,
+        [observation({ sourceListingId: 'gamma-open' })],
+        'gamma',
+      ),
+    );
+    const saved = (await snapshot()).listings.find(
+      (item) => item.sourceUrls[0] === `${ORIGIN}/gamma-saved`,
+    );
+    if (!saved) throw new Error('Synthetic gamma listing missing');
+    await favorite(saved.id, true);
+    await setPolicy({ retentionDays: 1 }, 'alpha');
+    await lapse('gamma');
+    const betaRows = () =>
+      stored(
+        "select jsonb_build_object('l',(select jsonb_agg(to_jsonb(l)) from hs.listings l where source_id='beta'),'o',(select jsonb_agg(to_jsonb(o)) from hs.observations o join hs.listings l on l.id=o.listing_id where l.source_id='beta'),'s',(select jsonb_agg(to_jsonb(s)) from hs.staged_observations s where source_id='beta')) value",
+      );
+    const betaBefore = await betaRows();
+    const before = await snapshot();
+    expect(before.listings.map((item) => item.sourceUrls[0]).sort()).toEqual([
+      `${ORIGIN}/gamma-saved`,
+      `${ORIGIN}/home`,
+    ]);
+    expect(await purge()).toEqual({
+      ...NO_WORK,
+      observationsDeleted: 3,
+      stagedDeleted: 4,
+      listingsDeleted: 2,
+      listingsTombstoned: 1,
+      cursorsReset: 1,
+    });
+    expect(await snapshot()).toEqual(before);
+    expect(await betaRows()).toEqual(betaBefore);
+    const cursors = await db.query<{
+      source_id: string;
+      cursor: string | null;
+    }>(
+      'select source_id,cursor from hs.source_policies where household_id=$1 order by source_id',
+      [HOUSE_A],
+    );
+    expect(cursors.rows).toEqual([
+      { source_id: 'alpha', cursor: 'cursor-alpha' },
+      { source_id: 'beta', cursor: 'cursor-beta' },
+      { source_id: 'gamma', cursor: null },
+    ]);
+    expect(await purge()).toEqual(NO_WORK);
+  });
+
+  it('turns an expired saved or noted listing into a tombstone and keeps every user record', async () => {
+    const { saved, noted } = await seedMixedState();
+    const userTables = ['favorites', 'notes', 'members'];
+    const userRecords = await digest(userTables);
+    const identity = () =>
+      db
+        .query(
+          'select id,source_id,source_listing_id,episode_id,canonical_url,revision,last_checked_at from hs.listings where id in ($1,$2) order by id',
+          [saved, noted],
+        )
+        .then((result) => result.rows);
+    const rows = await identity();
+    expect(rows).toHaveLength(2);
+    const before = await snapshot();
+    const placeholders = before.listings.filter((item) =>
+      [saved, noted].includes(item.id),
+    );
+    expect(placeholders).toHaveLength(2);
+    for (const item of placeholders)
+      expect(item.title).toBe('Saved listing: source facts unavailable');
+    expect(await purge()).toEqual(MIXED_TOTALS);
+    expect(await digest(userTables)).toEqual(userRecords);
+    expect(await identity()).toEqual(rows);
+    const tombstones = await db.query<{
+      value: unknown;
+      observed_at: Date;
+      previous_asking_price: number | null;
+      previous_price_observed_at: Date | null;
+      history: number;
+      staged: number;
+    }>(
+      `select value,observed_at,previous_asking_price,previous_price_observed_at,
+        (select count(*)::int from hs.observations o where o.listing_id=l.id) history,
+        (select count(*)::int from hs.staged_observations s where s.source_listing_id=l.source_listing_id) staged
+       from hs.listings l where id in ($1,$2) order by value->>'sourceUrl'`,
+      [saved, noted],
+    );
+    expect(tombstones.rows.map((row) => row.value)).toEqual([
+      { sourceUrl: `${ORIGIN}/noted` },
+      { sourceUrl: `${ORIGIN}/saved` },
+    ]);
+    for (const row of tombstones.rows)
+      expect(row).toMatchObject({
+        observed_at: new Date(0),
+        previous_asking_price: null,
+        previous_price_observed_at: null,
+        history: 0,
+        staged: 0,
+      });
+    const state = await snapshot();
+    expect(state).toEqual(before);
+    expect(state.favorites.map((item) => item.listingId)).toEqual([
+      saved,
+      saved,
+    ]);
+    expect((await notes(noted))[0].body).toBe('Seeded note');
+    expect(
+      await stored(
+        'select bookmark_url value from hs.favorites union all select bookmark_url from hs.notes order by 1',
+      ),
+    ).toEqual([`${ORIGIN}/noted`, `${ORIGIN}/saved`, `${ORIGIN}/saved`]);
+  });
+
+  it('rehydrates a tombstone on re-observation without a conflict and keeps its saves', async () => {
+    const { saved } = await seedMixedState();
+    await purge();
+    const tombstone = await listingByUrl('saved');
+    await publishOne(
+      observation({
+        sourceListingId: 'saved',
+        sourceUrl: `${ORIGIN}/saved`,
+        title: 'Returned listing',
+      }),
+    );
+    const row = await listingByUrl('saved');
+    expect(row).toMatchObject({ id: saved, revision: tombstone.revision + 1 });
+    expect(row.observed_at.getTime()).toBe(baseTime);
+    const state = await snapshot();
+    expect(state.listings.find((item) => item.id === saved)).toMatchObject({
+      title: 'Returned listing',
+      facts: { livingAreaM2: 60 },
+    });
+    expect(
+      state.favorites.filter((item) => item.listingId === saved),
+    ).toHaveLength(2);
+    expect(
+      await count(
+        'select count(*)::int count from hs.observations where listing_id=$1',
+        [saved],
+      ),
+    ).toBe(1);
+    expect(await purge()).toEqual(NO_WORK);
+  });
+
+  it('deletes a tombstone once its last favorite and note are gone', async () => {
+    await publishOne(observation({ observedAt: aged(2) }));
+    const id = (await snapshot()).listings[0].id;
+    await favorite(id, true);
+    await setPolicy({ retentionDays: 1 });
+    expect(await purge()).toMatchObject({
+      listingsTombstoned: 1,
+      listingsDeleted: 0,
+    });
+    expect(await purge()).toEqual(NO_WORK);
+    await favorite(id, false);
+    expect(await purge()).toEqual({ ...NO_WORK, listingsDeleted: 1 });
+    expect(await count('select count(*)::int count from hs.listings')).toBe(0);
+  });
+
+  it('deletes staging-run payloads that would need scrubbing and scrubs closed-run payloads in place', async () => {
+    const stale = {
+      coordinates: coordinateItem(aged(2)),
+      evidence: [evidenceItem('facts', aged(2))],
+    };
+    await publishOne(
+      observation({
+        sourceListingId: 'closed',
+        sourceUrl: `${ORIGIN}/closed`,
+        ...stale,
+      }),
+    );
+    const open = beginRequest();
+    await ingest(open);
+    const stage = stageRequest(open.runId, [
+      observation({
+        sourceListingId: 'open',
+        sourceUrl: `${ORIGIN}/open`,
+        ...stale,
+      }),
+    ]);
+    await ingest(stage);
+    await setPolicy({ retentionDays: 1 });
+    const expected = {
+      ...NO_WORK,
+      stagedDeleted: 1,
+      stagedScrubbed: 1,
+      observationsScrubbed: 1,
+      listingsScrubbed: 1,
+    };
+    expect(await purge({ dryRun: true })).toEqual(expected);
+    expect(await purge()).toEqual(expected);
+    expect(
+      await stored(
+        "select jsonb_build_object('url',value->>'sourceUrl','coordinates',value->'coordinates','evidence',value->'evidence') value from hs.staged_observations",
+      ),
+    ).toEqual([{ url: `${ORIGIN}/closed`, coordinates: null, evidence: [] }]);
+    expect((await ingest(stage)).state).toBe('staging');
+    await expect(ingest(publishRequest(open.runId))).rejects.toThrow(
+      'Empty results lack coverage proof',
+    );
+  });
+
+  it('is a no-op on a second run with an equal state digest', async () => {
+    await seedMixedState();
+    expect(await purge()).toEqual(MIXED_TOTALS);
+    const settled = await digest();
+    expect(await purge()).toEqual(NO_WORK);
+    expect(await purge({ dryRun: true })).toEqual(NO_WORK);
+    expect(await digest()).toEqual(settled);
+  });
+
+  it('rolls the whole call back when a write fails and succeeds on a rerun', async () => {
+    await seedMixedState();
+    const before = await digest();
+    await db.exec(`
+      create function hs.test_fail_listing_write() returns trigger language plpgsql as $$ begin raise exception 'Synthetic listing write failure'; end $$;
+      create trigger test_fail_listing_write before update or delete on hs.listings for each row execute function hs.test_fail_listing_write();
+    `);
+    try {
+      await expect(purge()).rejects.toThrow('Synthetic listing write failure');
+      expect(await digest()).toEqual(before);
+      expect(
+        await count('select count(*)::int count from hs.observations'),
+      ).toBe(5);
+    } finally {
+      await db.exec(
+        'drop trigger test_fail_listing_write on hs.listings; drop function hs.test_fail_listing_write()',
+      );
+    }
+    expect(await purge()).toEqual(MIXED_TOTALS);
+    expect(await count('select count(*)::int count from hs.observations')).toBe(
+      2,
+    );
+  });
+
+  it('keeps replay protection: live nonces stay, old nonces go, stale timestamps stay rejected', async () => {
+    const consume = (
+      nonce: string,
+      timestamp = Math.floor(Date.now() / 1000),
+      key = KEY_A,
+    ) =>
+      asRole('service_role', null, () =>
+        rpc('select public.hs_consume_nonce($1,$2,$3) as value', [
+          key,
+          nonce,
+          timestamp,
+        ]),
+      );
+    await consume('live_nonce_000001');
+    await consume('hour_nonce_000001');
+    await consume('older_nonce_00001');
+    await consume('other_house_nonce', undefined, KEY_B);
+    await db.query(
+      "update hs.ingest_nonces set used_at=now()-interval '59 minutes' where nonce='hour_nonce_000001'",
+    );
+    await db.query(
+      "update hs.ingest_nonces set used_at=now()-interval '61 minutes' where nonce in ('older_nonce_00001','other_house_nonce')",
+    );
+    expect(await purge({ dryRun: true })).toEqual({
+      ...NO_WORK,
+      noncesDeleted: 1,
+    });
+    expect(await purge()).toEqual({ ...NO_WORK, noncesDeleted: 1 });
+    expect(
+      await stored('select nonce value from hs.ingest_nonces order by nonce'),
+    ).toEqual(['hour_nonce_000001', 'live_nonce_000001', 'other_house_nonce']);
+    await expect(consume('live_nonce_000001')).rejects.toMatchObject({
+      code: '23505',
+    });
+    await expect(
+      consume('older_nonce_00001', Math.floor(Date.now() / 1000) - 3700),
+    ).rejects.toMatchObject({ code: '42501' });
+    await expect(
+      consume('older_nonce_00001', Math.floor(Date.now() / 1000) - 301),
+    ).rejects.toMatchObject({ code: '42501' });
+  });
+
+  it('returns identical run, batch and publish replays after the payload is purged', async () => {
+    const begin = beginRequest();
+    const stage = stageRequest(begin.runId, [
+      observation({ observedAt: aged(2) }),
+    ]);
+    const publish = publishRequest(begin.runId);
+    await ingest(begin);
+    await ingest(stage);
+    const published = await ingest(publish);
+    const replays = [
+      await ingest(begin),
+      await ingest(stage),
+      await ingest(publish),
+    ];
+    expect(published.state).toBe('published');
+    await setPolicy({ retentionDays: 1 });
+    expect(await purge()).toMatchObject({ stagedDeleted: 1 });
+    expect(
+      await count('select count(*)::int count from hs.staged_observations'),
+    ).toBe(0);
+    expect([
+      await ingest(begin),
+      await ingest(stage),
+      await ingest(publish),
+    ]).toEqual(replays);
+    for (const [table, expected] of [
+      ['staged_observations', 0],
+      ['observations', 0],
+      ['listings', 0],
+      ['batches', 1],
+      ['runs', 1],
+      ['editions', 1],
+    ] as const)
+      expect(await count(`select count(*)::int count from hs.${table}`)).toBe(
+        expected,
+      );
+  });
+
+  it('never touches a manual listing, however old its observed_at', async () => {
+    const bookmark = await manual(
+      HOUSE_A,
+      OWNER_A,
+      `${ORIGIN}/old`,
+      'Old note',
+    );
+    await favorite(bookmark.listingId, true);
+    await db.query(
+      "update hs.listings set observed_at=now()-interval '400 days' where id=$1",
+      [bookmark.listingId],
+    );
+    await publishOne(observation({ observedAt: aged(2) }));
+    await setPolicy({ retentionDays: 1 });
+    const userRecords = await digest(['favorites', 'notes']);
+    const read = () =>
+      db
+        .query('select * from hs.listings where id=$1', [bookmark.listingId])
+        .then((result) => result.rows);
+    const row = await read();
+    expect(row).toHaveLength(1);
+    expect(await purge()).toMatchObject({ listingsDeleted: 1 });
+    expect(await read()).toEqual(row);
+    expect(await digest(['favorites', 'notes'])).toEqual(userRecords);
+    expect((await snapshot()).listings.map((item) => item.id)).toEqual([
+      bookmark.listingId,
+    ]);
+  });
+
+  it('never touches another household, including its lapsed cursors and old nonces', async () => {
+    await seedMixedState();
+    await seedMixedState(HOUSEHOLD_B);
+    await lapse('beta', HOUSE_B);
+    const houseB = await digest(TABLES, HOUSE_B);
+    expect(await purge()).toEqual(MIXED_TOTALS);
+    expect(await digest(TABLES, HOUSE_B)).toEqual(houseB);
+    expect(
+      await stored(
+        "select cursor value from hs.source_policies where household_id=$1 and source_id='beta'",
+        [HOUSE_B],
+      ),
+    ).toEqual(['previous-cursor']);
+    expect(await purge({ householdId: HOUSE_B })).toEqual({
+      ...MIXED_TOTALS,
+      cursorsReset: 1,
+    });
+  });
+
+  it('nulls coordinates dated beyond the clock skew allowance', async () => {
+    await publishOne(
+      observation({
+        coordinates: coordinateItem(new Date(baseTime).toISOString()),
+      }),
+    );
+    await db.query(
+      "update hs.listings set value=jsonb_set(value,'{coordinates,observedAt}',to_jsonb($1::text))",
+      [new Date(Date.now() + HOUR).toISOString()],
+    );
+    const before = await snapshot();
+    expect(before.listings[0].coordinates).toBeNull();
+    expect(await purge()).toMatchObject({ listingsScrubbed: 1 });
+    expect((await listingByUrl('home')).value.coordinates).toBeNull();
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it('clears the previous price when an expired saved listing becomes a tombstone', async () => {
+    const original = observation();
+    await publishOne(
+      observation({
+        observedAt: aged(3),
+        facts: { ...original.facts, askingPriceSek: 2_500_000 },
+      }),
+    );
+    await publishOne(
+      observation({
+        observedAt: aged(2),
+        facts: { ...original.facts, askingPriceSek: 2_000_000 },
+      }),
+    );
+    const id = (await snapshot()).listings[0].id;
+    await favorite(id, true);
+    expect((await listingByUrl('home')).previous_asking_price).toBe(2_500_000);
+    await setPolicy({ retentionDays: 1 });
+    expect(await purge()).toEqual({
+      ...NO_WORK,
+      observationsDeleted: 2,
+      stagedDeleted: 2,
+      listingsTombstoned: 1,
+    });
+    expect(await listingByUrl('home')).toMatchObject({
+      previous_asking_price: null,
+      previous_price_observed_at: null,
+    });
+  });
+
+  it('deletes all history of a listing that is no longer live even when each row is individually live', async () => {
+    await publishOne(
+      observation({ observedAt: new Date(baseTime - HOUR).toISOString() }),
+    );
+    await publishOne(observation({ title: 'Newer title' }));
+    expect(await count('select count(*)::int count from hs.observations')).toBe(
+      2,
+    );
+    await db.query(
+      "update hs.listings set value=jsonb_set(value,'{sourceUrl}','\"https://other.invalid/x\"')",
+    );
+    expect((await snapshot()).listings).toEqual([]);
+    expect(await purge()).toEqual({
+      ...NO_WORK,
+      observationsDeleted: 2,
+      listingsDeleted: 1,
+    });
+    expect(await count('select count(*)::int count from hs.listings')).toBe(0);
+  });
+
+  it.each([
+    [
+      'listingsDeleted',
+      async () => {
+        await seedThree({ observedAt: aged(2) });
+        await setPolicy({ retentionDays: 1 });
+        await db.exec(
+          'delete from hs.observations; delete from hs.staged_observations',
+        );
+      },
+    ],
+    [
+      'listingsTombstoned',
+      async () => {
+        for (const id of await seedThree({ observedAt: aged(2) }))
+          await favorite(id, true);
+        await setPolicy({ retentionDays: 1 });
+        await db.exec(
+          'delete from hs.observations; delete from hs.staged_observations',
+        );
+      },
+    ],
+    [
+      'listingsScrubbed',
+      async () => {
+        await seedThree({ coordinates: coordinateItem(aged(2)) });
+        await setPolicy({ retentionDays: 1 });
+        await db.exec(
+          'delete from hs.observations; delete from hs.staged_observations',
+        );
+      },
+    ],
+    [
+      'observationsDeleted',
+      async () => {
+        // Tombstones remain after their history goes, so this class is the only work left.
+        for (const id of await seedThree({ observedAt: aged(2) }))
+          await favorite(id, true);
+        await setPolicy({ retentionDays: 1 });
+        await db.exec('delete from hs.staged_observations');
+        await purge();
+        await db.query(
+          "insert into hs.observations(household_id,listing_id,run_id,value) select l.household_id,l.id,(select id from hs.runs limit 1),jsonb_build_object('sourceUrl',l.value->>'sourceUrl','observedAt',$1::text) from hs.listings l",
+          [aged(2)],
+        );
+      },
+    ],
+    [
+      'observationsScrubbed',
+      async () => {
+        await seedThree({ coordinates: coordinateItem(aged(2)) });
+        await setPolicy({ retentionDays: 1 });
+        await db.exec(
+          "update hs.listings set value=jsonb_set(value,'{coordinates}','null'::jsonb); delete from hs.staged_observations",
+        );
+      },
+    ],
+    [
+      'stagedDeleted',
+      async () => {
+        await seedThree({ observedAt: aged(2) });
+        await setPolicy({ retentionDays: 1 });
+        await db.exec('delete from hs.observations; delete from hs.listings');
+      },
+    ],
+    [
+      'stagedScrubbed',
+      async () => {
+        await seedThree({ coordinates: coordinateItem(aged(2)) });
+        await setPolicy({ retentionDays: 1 });
+        await db.exec(
+          "update hs.listings set value=jsonb_set(value,'{coordinates}','null'::jsonb); update hs.observations set value=jsonb_set(value,'{coordinates}','null'::jsonb)",
+        );
+      },
+    ],
+    [
+      'noncesDeleted',
+      async () => {
+        for (const nonce of [
+          'old_nonce_0000001',
+          'old_nonce_0000002',
+          'old_nonce_0000003',
+        ])
+          await db.query(
+            "insert into hs.ingest_nonces(key_id,nonce,used_at) values($1,$2,now()-interval '2 hours')",
+            [KEY_A, nonce],
+          );
+      },
+    ],
+    [
+      'cursorsReset',
+      async () => {
+        for (const id of ['lapsed-one', 'lapsed-two', 'lapsed-three'])
+          await db.query(
+            "insert into hs.source_policies(household_id,source_id,policy,cursor) values($1,$2,$3::jsonb,'stale')",
+            [
+              HOUSE_A,
+              id,
+              JSON.stringify({
+                ...policy(id),
+                reviewDueAt: new Date(baseTime - HOUR / 2).toISOString(),
+              }),
+            ],
+          );
+      },
+    ],
+  ] as const)(
+    'reports more and converges when %s exceeds the call budget',
+    async (key, arrange) => {
+      await arrange();
+      const first = await purge({ limit: 2 });
+      expect(first).toMatchObject({ [key]: 2, more: true });
+      for (let call = 0; call < 10; call += 1)
+        if (!(await purge({ limit: 2 })).more) break;
+      expect(await purge({ limit: 2 })).toEqual(NO_WORK);
+    },
+  );
+
+  it('lets only the service role execute the purge', async () => {
+    const privileges = await db.query<{
+      anon: boolean;
+      browser: boolean;
+      service: boolean;
+      private_service: boolean;
+    }>(`
+      select has_function_privilege('anon',p.oid,'EXECUTE') anon,
+        has_function_privilege('authenticated',p.oid,'EXECUTE') browser,
+        has_function_privilege('service_role',p.oid,'EXECUTE') service,
+        has_function_privilege('service_role','hs.purge_expired(uuid,integer,boolean)','EXECUTE') private_service
+      from pg_proc p where p.oid='public.hs_purge_expired(uuid,integer,boolean)'::regprocedure
+    `);
+    expect(privileges.rows).toEqual([
+      { anon: false, browser: false, service: true, private_service: false },
+    ]);
+    const call = [HOUSE_A, 10, false];
+    await expect(
+      asRole('authenticated', OWNER_A, () =>
+        rpc('select public.hs_purge_expired($1,$2,$3) as value', call),
+      ),
+    ).rejects.toThrow('permission denied for function hs_purge_expired');
+    await expect(
+      asRole('anon', null, () =>
+        rpc('select public.hs_purge_expired($1,$2,$3) as value', call),
+      ),
+    ).rejects.toThrow('permission denied for function hs_purge_expired');
+    await expect(
+      asRole('service_role', null, () =>
+        rpc('select hs.purge_expired($1,$2,$3) as value', call),
+      ),
+    ).rejects.toThrow('permission denied for schema hs');
+    const tables = await db.query<{ granted: boolean }>(`
+      select has_table_privilege(r,c.oid,'SELECT,INSERT,UPDATE,DELETE') granted
+      from pg_class c join pg_namespace n on n.oid=c.relnamespace,unnest(array['anon','authenticated','service_role']) r
+      where n.nspname='hs' and c.relkind='r'
+    `);
+    expect(tables.rows).toHaveLength(45);
+    expect(tables.rows.every((row) => !row.granted)).toBe(true);
   });
 });
