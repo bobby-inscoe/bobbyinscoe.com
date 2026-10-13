@@ -163,3 +163,26 @@ Open follow-ups:
 2. A note that saved but whose reload failed reports "could not save"; a retry resolves through the conflict path.
 3. Export copies need a rights decision before activation, and a real source's terms must be checked for retention of saved listings after permission lapses.
 4. Private administration, source rights and the collector, digests and hosted acceptance gates are unchanged from the handoff.
+
+## Saved listings kept, with a stale notice (13 October 2026)
+
+The user decided that listings someone favorited or put a non-empty note on stay with their content, and that cleanup of them is manual. This replaces the tombstone design recorded earlier in this file. Work ran in worktrees created from codex/house-scanner and was integrated here; `main` at d6dbbb3 was merged first as fa5d96f.
+
+| Task | State | Owner/model | Integrated commit |
+| --- | --- | --- | --- |
+| K1 snapshot and purge exemption | accepted | worker, claude-sonnet-5-5 high | 842dc47 and 3001684 from 9e953a6 and b1ecc1e |
+| K2 stale notice and demo listing | accepted | worker, claude-sonnet-5-5 medium | 7d43ad1 (fast-forward) |
+| R4 independent review | no confirmed defect; limits recorded | Plan agent, claude-sonnet-5-5 high | none (read only) |
+
+Behavior: `hs_snapshot` returns an interacted source listing with its real title and policy-allowed facts even past retention, with a lapsed policy or an uncovered origin; the blank placeholder branch is gone. Time-bound items (coordinates, evidence, previous price) still age out at read time, and the photo shows only while the policy is current. `hs.purge_expired` never deletes, scrubs or rewrites an interacted listing or its history. A favorite or a note with non-blank text pins a listing; an emptied note does not. When the last favorite and note go, the next purge deletes the listing, which is the manual removal path. The card shows "Not in latest scan" and a notice when a source listing was last observed more than 24 hours before the latest edition. No contract change.
+
+Fresh integrated evidence on 3001684: `npm test` 14 files, 260 tests passed (78 in the PostgreSQL file); `npm run test:browser` 16 passed; `check`, `typecheck`, `test:typecheck`, `house-scanner:typecheck`, `build`, the fixture CLI, the offline Deno handler check and `git diff --check` passed. The worker broke each exemption, the blank-note rule and the photo gate on purpose, one at a time, and each broke the suite. Untested: the 5,000-favorite ceiling, lock behavior under concurrency, and a real PostgREST error shape.
+
+Limits and follow-ups:
+
+1. More than 500 visible homes makes the snapshot raise; saved listings no longer age out. Paginate before a household approaches it.
+2. A deactivated member's favorite keeps a listing. Handle it in the private administration flow.
+3. Add the household lock to `hs_set_favorite` and `hs_save_note` once concurrent tests exist.
+4. Validate source policies (`retentionDays` is an integer from 1 to 180) in the private bootstrap.
+5. Stale detection is inferred from the daily edition, not link checking.
+6. A real source's terms must be checked for keeping saved listings after its permission lapses.
