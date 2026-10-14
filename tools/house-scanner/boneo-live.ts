@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { readBoneoSearchPage } from '@house-scanner-tools/boneo-parser';
 import {
+  MAX_BATCH_OBSERVATIONS,
   MAX_RUN_OBSERVATIONS,
   sourceIdentity,
 } from '@house-scanner-tools/collector';
+import { prefilterObservations } from '@house-scanner-tools/prefilter';
 import {
   planQueries,
   type queryPlanInputSchema,
@@ -25,8 +27,8 @@ export const USER_AGENT =
   'HouseScannerPersonalReader/0.1 (private household tool)';
 const ROBOTS_TOKEN = 'housescannerpersonalreader';
 export const MIN_INTERVAL_MS = 2000;
-export const MAX_PAGES_PER_PARTITION = 5;
-export const MAX_REQUESTS_PER_RUN = 30;
+export const MAX_PAGES_PER_PARTITION = 40;
+export const MAX_REQUESTS_PER_RUN = 60;
 export const REQUEST_TIMEOUT_MS = 15_000;
 export const MAX_BODY_CHARS = 3_000_000;
 
@@ -425,6 +427,16 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
   );
   for (const observation of result.observations)
     assertAdapterOutput(options.capability.policy, observation);
+  // ponytail: the run ceiling counts collected observations, so a run that hits
+  // it can lose matching listings to non-matching ones. Move this filter into
+  // the page loop if runs ever approach the ceiling.
+  const { kept, dropped } = prefilterObservations(
+    result.observations,
+    options.planning.profiles
+      .filter((profile) => profile.enabled)
+      .map((profile) => profile.criteria),
+  );
+  const droppedCount = Object.values(dropped).reduce((a, b) => a + b, 0);
 
   const read = result.partitions.filter((p) => p.status === 'read').length;
   const pages = result.partitions.reduce((sum, p) => sum + p.pages, 0);
@@ -436,10 +448,21 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
   const coverageNote = [
     `Boneo personal read, query plan v${queryPlan.version}.`,
     `${read} of ${result.partitions.length} partitions read from ${pages} pages and ${result.requestCount} requests.`,
-    `${result.observations.length} observations.`,
+    `${kept.length} observations kept, ${droppedCount} dropped by confirmed profile bounds.`,
     result.stopped ? `Stopped: ${result.stopped}.` : 'Run completed.',
     'Not covered: upcoming and unknown-price views, houses, other municipalities, pages beyond the cap.',
   ].join(' ');
+  const stages = [];
+  for (let at = 0; at < kept.length; at += MAX_BATCH_OBSERVATIONS)
+    stages.push(
+      ingestRequestSchema.parse({
+        ...common,
+        action: 'stage',
+        batchId: (at === 0 && options.batchId) || randomUUID(),
+        sourceId: BONEO_SOURCE_ID,
+        observations: kept.slice(at, at + MAX_BATCH_OBSERVATIONS),
+      }),
+    );
   const requests = [
     ingestRequestSchema.parse({
       ...common,
@@ -447,17 +470,7 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
       profileVersions: queryPlan.profileVersions,
       sourceIds: [BONEO_SOURCE_ID],
     }),
-    ...(result.observations.length > 0
-      ? [
-          ingestRequestSchema.parse({
-            ...common,
-            action: 'stage',
-            batchId: options.batchId ?? randomUUID(),
-            sourceId: BONEO_SOURCE_ID,
-            observations: result.observations,
-          }),
-        ]
-      : []),
+    ...stages,
     ingestRequestSchema.parse({
       ...common,
       action: 'publish',
@@ -476,6 +489,7 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
     requests,
     queryPlan,
     result,
+    prefilter: { kept: kept.length, dropped },
     publishStatus: failed ? ('failed' as const) : ('partial' as const),
   };
 }

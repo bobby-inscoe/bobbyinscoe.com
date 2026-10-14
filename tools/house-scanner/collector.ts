@@ -17,7 +17,9 @@ import {
 } from '@/features/house-scanner/types/contracts';
 import { assertObservationAllowed } from '@/features/house-scanner/utils/source-policy';
 
-export const MAX_RUN_OBSERVATIONS = 100;
+// The server allows 100 observations per stage request and 100 requests per run.
+export const MAX_RUN_OBSERVATIONS = 1000;
+export const MAX_BATCH_OBSERVATIONS = 100;
 export const MAX_REQUEST_BYTES = 256 * 1024;
 const runOptionsSchema = z.strictObject({
   runId: z.uuid(),

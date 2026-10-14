@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import {
   defaultLiveDeps,
@@ -5,6 +6,8 @@ import {
   prepareLiveRun,
 } from '@house-scanner-tools/boneo-live';
 import { prepareFixtureRun } from '@house-scanner-tools/collector';
+import { queryPlanInputSchema } from '@house-scanner-tools/query-plan';
+import { senderConfig, sendRequests } from '@house-scanner-tools/sender';
 import {
   BONEO_SOURCE_ID,
   DEMO_SOURCE_ID,
@@ -40,13 +43,16 @@ type Values = {
   source?: string;
   at?: string;
   'confirm-personal-read': boolean;
-  municipality?: string[];
+  profiles?: string;
+  send: boolean;
+  'confirm-send': boolean;
   'run-id'?: string;
   'batch-id'?: string;
 };
 
-// Live reads need three explicit flags and cover Boneo only. Output is counts,
-// statuses and partition names; observations are never printed or saved.
+// Live reads need three explicit flags and cover Boneo only. Sending adds
+// --send --confirm-send. Output is counts, statuses and partition names;
+// observations are never printed or saved.
 async function live(values: Values) {
   if (values.source !== BONEO_SOURCE_ID)
     throw new Error('Live reading exists for boneo only.');
@@ -54,49 +60,56 @@ async function live(values: Values) {
     throw new Error('Live reading needs --confirm-personal-read.');
   if (values.at !== undefined)
     throw new Error('Live reads use the fetch time; --at does not apply.');
+  if (values.profiles === undefined)
+    throw new Error('Live reading needs --profiles <private file>.');
   const capability = sourceRegistry().find(
     (entry) => entry.policy.sourceId === BONEO_SOURCE_ID,
   );
   if (!capability) throw new Error('Unknown source.');
+  const profiles = queryPlanInputSchema.shape.profiles.parse(
+    JSON.parse(readFileSync(values.profiles, 'utf8')),
+  );
+  // Checked before the read so a bad environment costs no requests to the source.
+  const sender = values.send ? senderConfig(process.env) : null;
   const events: LiveEvent[] = [];
   const prepared = await prepareLiveRun(
     {
       runId: values['run-id'],
       batchId: values['batch-id'],
       capability,
-      planning: {
-        profiles: [
-          {
-            id: '00000000-0000-4000-8000-000000000103',
-            revision: 1,
-            enabled: true,
-            criteria: fixtureCriteria(values.municipality ?? ['Göteborg']),
-          },
-        ],
-        collectionPriceCapSek: null,
-        maxPartitions: 5,
-      },
+      planning: { profiles, collectionPriceCapSek: null, maxPartitions: 5 },
     },
     defaultLiveDeps((event) => events.push(event)),
   );
+  const delivery = sender
+    ? await sendRequests(prepared.requests, sender)
+    : null;
   console.info(
     JSON.stringify(
       {
         mode: prepared.mode,
         liveCoverage: false,
-        notice:
-          'Partial personal read. Nothing sent or saved; the source is not approved.',
+        notice: delivery
+          ? 'Partial personal read, sent to the ingest function. Nothing saved locally.'
+          : 'Partial personal read. Nothing sent or saved; the source is not approved.',
         publishStatus: prepared.publishStatus,
         stopped: prepared.result.stopped,
         requestCount: prepared.result.requestCount,
-        observationCount: prepared.result.observations.length,
+        collectedCount: prepared.result.observations.length,
+        observationCount: prepared.prefilter.kept,
+        droppedByReason: prepared.prefilter.dropped,
+        stageRequestCount: prepared.requests.filter(
+          (request) => request.action === 'stage',
+        ).length,
         partitions: prepared.result.partitions,
+        delivery,
         events,
       },
       null,
       2,
     ),
   );
+  if (delivery?.stopped) process.exitCode = 1;
 }
 
 async function main() {
@@ -109,7 +122,9 @@ async function main() {
       'batch-id': { type: 'string' },
       live: { type: 'boolean', default: false },
       'confirm-personal-read': { type: 'boolean', default: false },
-      municipality: { type: 'string', multiple: true },
+      profiles: { type: 'string' },
+      send: { type: 'boolean', default: false },
+      'confirm-send': { type: 'boolean', default: false },
     },
     allowPositionals: false,
     strict: true,
@@ -117,6 +132,10 @@ async function main() {
   if (values.mode !== 'fixture') throw new Error('Only fixture mode exists.');
   if (values['confirm-personal-read'] && !values.live)
     throw new Error('The confirmation flag applies to live reads only.');
+  if (values.send !== values['confirm-send'])
+    throw new Error('Sending needs --send and --confirm-send together.');
+  if (values.send && !values.live)
+    throw new Error('Sending applies to live reads only.');
   if (values.live) return live(values);
   const capability = sourceRegistry().find(
     (entry) => entry.policy.sourceId === values.source,

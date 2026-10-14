@@ -177,23 +177,44 @@ describe('guarded run', () => {
     await run;
   });
 
-  it('stops at five pages per partition and reports truncation', async () => {
+  it('stops at forty pages per partition and reports truncation', async () => {
     let id = 0;
     const { impl, calls } = fakeFetch(
       robotsOr(() => ({ body: nextPage([++id, ++id], 500) })),
     );
     const result = await runBoneoCollection(goteborg, deps(impl));
-    expect(calls.filter((c) => !c.url.endsWith('robots.txt'))).toHaveLength(5);
-    expect(calls.at(-1)?.url).toContain('?page=5');
+    expect(calls.filter((c) => !c.url.endsWith('robots.txt'))).toHaveLength(40);
+    expect(calls.at(-1)?.url).toContain('?page=40');
     expect(result.partitions[0]).toMatchObject({
       status: 'truncated',
       reason: 'page-cap',
-      pages: 5,
+      pages: 40,
       total: 500,
     });
   });
 
-  it('stops at thirty requests per run including robots.txt', async () => {
+  it('stops at one thousand observations per run and reports truncation', async () => {
+    let id = 0;
+    const { impl, calls } = fakeFetch(
+      robotsOr(() => ({
+        body: nextPage(
+          Array.from({ length: 30 }, () => ++id),
+          5000,
+        ),
+      })),
+    );
+    const result = await runBoneoCollection(goteborg, deps(impl));
+    expect(result.observations).toHaveLength(1000);
+    expect(calls).toHaveLength(35);
+    expect(result.partitions[0]).toMatchObject({
+      status: 'truncated',
+      reason: 'observation-cap',
+      pages: 34,
+      observations: 1000,
+    });
+  });
+
+  it('stops at sixty requests per run including robots.txt', async () => {
     let id = 0;
     const { impl, calls } = fakeFetch(
       robotsOr(() => ({ body: nextPage([++id], 500) })),
@@ -203,8 +224,8 @@ describe('guarded run', () => {
       id: `municipality-${index + 1}`,
     }));
     const result = await runBoneoCollection(many, deps(impl));
-    expect(calls).toHaveLength(30);
-    expect(result.requestCount).toBe(30);
+    expect(calls).toHaveLength(60);
+    expect(result.requestCount).toBe(60);
     expect(result.stopped).toBe('request-cap');
   });
 
@@ -316,6 +337,9 @@ describe('prepared run', () => {
         enabled: true,
         criteria: {
           ...profile.criteria,
+          minAreaM2: 20,
+          minRooms: 1,
+          stretchPriceSek: 10_000_000,
           geography: {
             ...profile.criteria.geography,
             municipalities: ['Göteborg'],
@@ -376,6 +400,85 @@ describe('prepared run', () => {
       cursor: null,
     });
     expect(prepared.result.observations).toHaveLength(8);
+  });
+
+  it('drops confirmed misfits, counts them by reason and still publishes partial', async () => {
+    const { impl } = fakeFetch(
+      robotsOr(() => ({ body: fixture('search-page.html') })),
+    );
+    const strict = {
+      ...planning,
+      profiles: [
+        {
+          ...planning.profiles[0],
+          criteria: {
+            ...planning.profiles[0].criteria,
+            minAreaM2: 5000,
+            maxAreaM2: null,
+          },
+        },
+      ],
+    };
+    const prepared = await prepareLiveRun(
+      { capability, planning: strict },
+      deps(impl),
+    );
+    expect(prepared.result.observations).toHaveLength(8);
+    expect(prepared.prefilter.kept).toBe(0);
+    expect(
+      Object.values(prepared.prefilter.dropped).reduce((a, b) => a + b, 0),
+    ).toBe(8);
+    expect(prepared.requests.map((r) => r.action)).toEqual([
+      'begin',
+      'publish',
+    ]);
+    const publish = prepared.requests[1];
+    expect(publish.action === 'publish' && publish.results[0]).toMatchObject({
+      status: 'partial',
+    });
+    expect(
+      publish.action === 'publish' && publish.results[0].coverageNote,
+    ).toContain('0 observations kept, 8 dropped');
+  });
+
+  it('splits kept observations into stage requests of at most one hundred', async () => {
+    const { impl } = fakeFetch(
+      robotsOr((url) => {
+        const page = Number(new URL(url).searchParams.get('page') ?? '1');
+        return {
+          body: nextPage(
+            Array.from({ length: 25 }, (_v, i) => page * 100 + i),
+            250,
+          ),
+        };
+      }),
+    );
+    const prepared = await prepareLiveRun(
+      {
+        batchId: '00000000-0000-4000-8000-000000000202',
+        capability,
+        planning,
+      },
+      deps(impl),
+    );
+    expect(prepared.requests.map((r) => r.action)).toEqual([
+      'begin',
+      'stage',
+      'stage',
+      'stage',
+      'publish',
+    ]);
+    const stages = prepared.requests.flatMap((r) =>
+      r.action === 'stage' ? [r] : [],
+    );
+    expect(stages.map((s) => s.observations.length)).toEqual([100, 100, 50]);
+    expect(stages[0].batchId).toBe('00000000-0000-4000-8000-000000000202');
+    expect(new Set(stages.map((s) => s.batchId)).size).toBe(3);
+    expect(
+      new Set(
+        stages.flatMap((s) => s.observations.map((o) => o.sourceListingId)),
+      ).size,
+    ).toBe(250);
   });
 
   it('publishes failed coverage and no stage when the first page lacks data', async () => {
