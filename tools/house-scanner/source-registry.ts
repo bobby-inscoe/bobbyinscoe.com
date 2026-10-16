@@ -196,6 +196,12 @@ export function approvedPolicy(
     status: 'approved',
     automatedCollection: true,
     privateDisplay: true,
+    capabilities: {
+      ...entry.policy.capabilities,
+      coverageGaps: entry.policy.capabilities.coverageGaps.filter(
+        (gap) => !gap.includes('not approved'),
+      ),
+    },
     // Five minutes back so database clock skew cannot put the review in the future.
     reviewedAt: new Date(now.getTime() - 5 * 60 * 1000).toISOString(),
     reviewDueAt: new Date(now.getTime() + 90 * day).toISOString(),
