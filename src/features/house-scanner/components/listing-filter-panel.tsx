@@ -73,20 +73,18 @@ export function ListingFilterPanel({
         >
           Filters
         </Button>
-        <Badge
-          variant="light"
-          color="gray"
-          aria-label={`${active} active filters`}
-        >
-          {active} active
-        </Badge>
+        {active > 0 && (
+          <Badge
+            variant="light"
+            color="gray"
+            aria-label={`${active} active filters`}
+          >
+            {active} active
+          </Badge>
+        )}
       </Flex>
       <Collapse expanded={open} id="listing-filters">
         <Stack gap="sm">
-          <Text size="sm">
-            Filters are personal to this screen. They do not change the shared
-            criteria and are not saved.
-          </Text>
           <Flex gap="sm" wrap="wrap">
             {number('Min price', 'minPriceMsek', 'MSEK')}
             {number('Max price', 'maxPriceMsek', 'MSEK')}

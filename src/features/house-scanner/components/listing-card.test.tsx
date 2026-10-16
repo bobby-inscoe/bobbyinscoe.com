@@ -105,9 +105,6 @@ it('shows the badge and the notice with the last seen date on a stale listing', 
   expect(notice.textContent).toContain(
     'Not seen in the latest scan. Last seen',
   );
-  expect(notice.textContent).toContain(
-    'Remove your favorite and clear your note',
-  );
   expect(notice.textContent).not.toContain('—');
 });
 

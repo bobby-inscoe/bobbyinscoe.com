@@ -48,6 +48,12 @@ trigger down is what makes that happen.
 
 <!-- Add new entries directly below this line, newest first. -->
 
+## 2026-10-17 House Scanner screens say less and let layout carry the meaning
+**Decision.** Explanatory sentences are removed or shrunk to muted one-liners: the map caption, the "homes with usable positions" line, the page descriptions under Suggestions and Favorites, the Settings footer, the filter note and the long sentences on the stale notice and cards. Collapsed cards show the status, price, size and match label only; reasons, caveats and conflicts appear in Details, and a card says who saved it only when someone did. Map pins show a compact price or "?". The tile provider notice stays as a small muted line under the map.
+**Why.** The owner wants first impressions to come from the photos, prices and map, not from disclaimers. The removed lines either repeated what the attribution control, the counts or the card already show, or restated rules the code enforces.
+**Instead of.** Moving the caption into an info popover, which adds a control for text almost nobody opens. Dropping the tile provider notice, because it is the only place that states what the map shares.
+**Costs.** The sentence that pins locate a building, not an apartment, and that map shading does not prove nature access, no longer appears in the app. The stale notice no longer tells the member to remove their favorite.
+**Revisit if.** Members misread a pin as an exact apartment, or ask what the match labels mean.
 ## 2026-10-16 House Scanner reads each kept Boneo listing page for balcony and glazing
 **Decision.** After the profile pre-filter, the reader fetches the page of each kept listing, up to 150 per run, and takes balcony and terrace from the page's structured fields and glazed only from clear wording in the description. A ticked box becomes `balcony`, `terrace` or `both`. An unticked or missing box stays unknown, never "none". Floor, lift and build year are not collected.
 **Why.** Without these facts every home sits under Needs details and the owner's balcony and glazed-balcony rules cannot act. Fetching only the roughly 70 kept pages costs about 5 minutes and 30 MB a day, similar to browsing them by hand, under the same guards as the search pages: robots check, honest user agent, two seconds between requests, stop at once on 403, 429 or a network error, and a total cap of 250 requests.

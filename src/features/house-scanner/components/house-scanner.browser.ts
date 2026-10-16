@@ -18,7 +18,7 @@ async function openDemo(page: import('@playwright/test').Page) {
     .getByRole('button', { name: 'Explore the synthetic demo' })
     .click();
   await expect(
-    page.getByText('5 homes · 3 list only', { exact: false }),
+    page.getByText('5 homes · 3 not on the map', { exact: false }),
   ).toBeVisible();
 }
 
@@ -42,7 +42,7 @@ test('private access is closed by default and demo state leaves no browser stora
   await expect(
     page
       .getByRole('article', { name: 'Example balcony home', exact: true })
-      .getByText('Saved by: Demo Morgan', { exact: true }),
+      .getByText('Saved by Demo Morgan', { exact: true }),
   ).toBeVisible();
   expect(
     await page.evaluate(() => ({
@@ -73,11 +73,11 @@ test('favorites preserve the other member save and filters identify the saver', 
     .getByRole('button', { name: 'Save favorite', exact: true })
     .click();
   await expect(
-    home.getByText('Saved by: Demo Morgan, Demo Alex', { exact: true }),
+    home.getByText('Saved by Demo Morgan, Demo Alex', { exact: true }),
   ).toBeVisible();
   await home.getByRole('button', { name: 'Remove my favorite' }).click();
   await expect(
-    home.getByText('Saved by: Demo Morgan', { exact: true }),
+    home.getByText('Saved by Demo Morgan', { exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Favorites', exact: true }).click();
   await expect(page.getByRole('article')).toHaveCount(2);
@@ -164,7 +164,7 @@ test('criteria revisions re-evaluate suggestions and keep favorites', async ({
   page,
 }) => {
   await openDemo(page);
-  await page.getByRole('button', { name: 'Settings and status' }).click();
+  await page.getByRole('button', { name: 'Settings' }).click();
   await page
     .getByRole('textbox', { name: 'Preferred budget (SEK)' })
     .fill('1000000');
@@ -199,9 +199,6 @@ test('map is opt-in and a failed tile request leaves details and list controls u
   expect(external).toEqual([]);
   await page.getByRole('button', { name: 'Map', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText(/map|Map/);
-  await expect(
-    page.getByText('2 homes with usable positions.', { exact: false }),
-  ).toBeVisible();
   expect(
     external.every(
       (url) => url === 'https://tiles.openfreemap.org/styles/liberty',
@@ -299,28 +296,20 @@ test('personal filters change the list and the map together, and Clear restores 
   await expect(page.getByLabel('Min living area (m²)')).toBeHidden();
   await page.getByRole('button', { name: 'Filters', exact: true }).click();
   await page.getByRole('textbox', { name: 'Min living area (m²)' }).fill('90');
-  await expect(
-    page.getByText('1 homes · 0 list only', { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByText('1 homes', { exact: false })).toBeVisible();
   await expect(page.getByText('Showing 1 of 5 homes')).toBeVisible();
   await expect(page.getByText('1 active')).toBeVisible();
   await expect(page.getByRole('article')).toHaveCount(1);
   await page.getByRole('button', { name: 'Map', exact: true }).click();
   await expect(
-    page.getByText('1 homes with usable positions.', { exact: false }),
-  ).toBeVisible();
-  await expect(
     page.getByRole('button', { name: /Example detached home/ }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Clear filters' }).click();
   await expect(page.getByText('Showing 5 of 5 homes')).toBeVisible();
-  await expect(
-    page.getByText('2 homes with usable positions.', { exact: false }),
-  ).toBeVisible();
   await page.getByRole('button', { name: 'List', exact: true }).click();
   await expect(page.getByRole('article')).toHaveCount(5);
   await expect(
-    page.getByText('5 homes · 3 list only', { exact: false }),
+    page.getByText('5 homes · 3 not on the map', { exact: false }),
   ).toBeVisible();
 });
 
@@ -340,7 +329,7 @@ test('unknown prices are kept or hidden by the checkbox, and an empty result say
   await page.getByRole('textbox', { name: 'Max price (MSEK)' }).fill('1');
   await expect(page.getByRole('article')).toHaveCount(0);
   await expect(
-    page.getByText('Personal filters are active', { exact: false }),
+    page.getByText('Clear the filters', { exact: false }),
   ).toBeVisible();
 });
 
@@ -363,13 +352,22 @@ test('the satellite toggle swaps the basemap, names the provider and keeps the m
   });
   await expect(marker).toBeVisible();
   await expect(
-    page.getByText('OpenFreeMap base tiles.', { exact: false }),
+    page.getByText('Map tiles come from OpenFreeMap', { exact: false }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Street map' }),
   ).toHaveAttribute('aria-pressed', 'true');
   expect(imagery).toEqual([]);
-  const before = await marker.boundingBox();
+  // Relative to the map, so a scroll change from the toggle click does not count.
+  const offset = () =>
+    marker.evaluate((element) => {
+      const a = element.getBoundingClientRect();
+      const b = element
+        .closest('[aria-label="Listing map"]')
+        ?.getBoundingClientRect();
+      return [a.x - (b?.x ?? 0), a.y - (b?.y ?? 0)];
+    });
+  const before = await offset();
   await page.getByRole('button', { name: 'Satellite', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Satellite', exact: true }),
@@ -378,17 +376,14 @@ test('the satellite toggle swaps the basemap, names the provider and keeps the m
     page.getByText('Imagery © Esri, Maxar, Earthstar Geographics'),
   ).toBeVisible();
   await expect(
-    page.getByText('Esri base tiles.', { exact: false }),
-  ).toBeVisible();
-  await expect(
-    page.getByText('viewed region to Esri', { exact: false }),
+    page.getByText('Map tiles come from Esri', { exact: false }),
   ).toBeVisible();
   await expect(marker).toBeVisible();
   await expect.poll(() => imagery.length).toBeGreaterThan(0);
-  expect(await marker.boundingBox()).toEqual(before);
+  expect(await offset()).toEqual(before);
   await page.getByRole('button', { name: 'Street map' }).click();
   await expect(
-    page.getByText('OpenFreeMap base tiles.', { exact: false }),
+    page.getByText('Map tiles come from OpenFreeMap', { exact: false }),
   ).toBeVisible();
   await expect(marker).toBeVisible();
 });
@@ -491,7 +486,7 @@ test('a saved listing missing from the latest scan shows a notice and can be unf
   await expect(notice).toContainText('Not seen in the latest scan. Last seen');
   await expect(notice).toContainText('open it to check');
   await expect(
-    home.getByText('Saved by: Demo Alex', { exact: true }),
+    home.getByText('Saved by Demo Alex', { exact: true }),
   ).toBeVisible();
   const remove = home.getByRole('button', { name: 'Remove my favorite' });
   await remove.focus();
@@ -499,9 +494,7 @@ test('a saved listing missing from the latest scan shows a notice and can be unf
   await expect(
     page.getByText('Your favorite was removed.', { exact: false }),
   ).toBeVisible();
-  await expect(
-    home.getByText('Saved by: Nobody', { exact: true }),
-  ).toBeVisible();
+  await expect(home.getByText(/^Saved by/)).toHaveCount(0);
   await expect(
     home.getByRole('button', { name: 'Save favorite', exact: true }),
   ).toBeVisible();

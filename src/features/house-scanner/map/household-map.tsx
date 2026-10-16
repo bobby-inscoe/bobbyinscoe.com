@@ -156,15 +156,11 @@ export function HouseholdMap({
   );
   return (
     <Stack gap="sm">
-      <Text size="sm">
-        {provider} base tiles. Pins locate a building or supplied position, not
-        a particular apartment. Map shading does not verify nature access.
-      </Text>
       {error ? (
         <Text role="alert">{error}</Text>
       ) : (
         <>
-          {!loaded && <Text role="status">Loading mapâ€¦</Text>}
+          {!loaded && <Text role="status">Loading map…</Text>}
           <div className={styles.stage}>
             <section
               ref={container}
@@ -175,10 +171,6 @@ export function HouseholdMap({
           </div>
         </>
       )}
-      <Text size="sm">
-        {points.length} homes with usable positions. Overlapping homes share a
-        numbered point.
-      </Text>
       {availableStack.length > 1 && (
         <Group aria-label="Homes at selected point">
           {availableStack.map((id, index) => (
@@ -192,9 +184,9 @@ export function HouseholdMap({
           ))}
         </Group>
       )}
-      <Text size="xs">
-        Tiles reveal your network address and viewed region to {provider}.
-        Household notes, favorites and credentials are not sent.
+      <Text size="xs" c="dimmed">
+        Map tiles come from {provider}, which sees your address and the area you
+        view.
       </Text>
     </Stack>
   );

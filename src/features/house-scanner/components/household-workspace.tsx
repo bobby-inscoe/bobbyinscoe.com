@@ -154,13 +154,15 @@ export function HouseholdWorkspace({
               {
                 id: listing.id,
                 coordinates: listing.coordinates,
+                // Compact pin text; the label and card carry the full price or dispute.
                 markerText:
                   listing.facts.askingPriceSek === null ||
                   listing.conflicts.includes('askingPriceSek')
-                    ? listing.conflicts.includes('askingPriceSek')
-                      ? 'Price disputed'
-                      : 'Price unknown'
-                    : `${new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(listing.facts.askingPriceSek)} SEK`,
+                    ? '?'
+                    : new Intl.NumberFormat(undefined, {
+                        notation: 'compact',
+                        maximumFractionDigits: 1,
+                      }).format(listing.facts.askingPriceSek),
                 label: `${listing.title}: ${listing.conflicts.includes('askingPriceSek') ? 'Price disputed' : formatPrice(listing.facts.askingPriceSek)} · ${listing.conflicts.includes('status') ? 'Status disputed' : listing.facts.status}`,
               },
             ]
@@ -264,7 +266,7 @@ export function HouseholdWorkspace({
               : value === 'sources'
                 ? 'Sources'
                 : value === 'settings'
-                  ? 'Settings and status'
+                  ? 'Settings'
                   : value === 'favorites'
                     ? 'Favorites'
                     : 'Suggestions'}
@@ -341,12 +343,12 @@ export function HouseholdWorkspace({
         </Stack>
       ) : tab === 'settings' ? (
         <Stack>
-          <Title order={2}>Search criteria and status</Title>
-          <Text>
-            {synthetic
-              ? 'These criteria are fictional. Edits affect this demo only.'
-              : 'Shared profiles belong to this household. Existing favorites remain when criteria change.'}
-          </Text>
+          <Title order={2}>Search criteria</Title>
+          {synthetic && (
+            <Text size="sm" c="dimmed">
+              These criteria are fictional. Edits affect this demo only.
+            </Text>
+          )}
           {snapshot.profiles.length ? (
             snapshot.profiles.map((profile) => (
               <ProfileEditor
@@ -357,27 +359,16 @@ export function HouseholdWorkspace({
               />
             ))
           ) : (
-            <Text>
-              No search profiles are configured. No defaults have been applied.
-            </Text>
+            <Text>No search profiles yet.</Text>
           )}
-          <Text>
-            Source collection and optional digests are not configured by this
-            screen. Map availability is independent of listing freshness.
-          </Text>
         </Stack>
       ) : (
         <>
           <Group align="flex-end" justify="space-between">
             <Stack gap="xs">
               <Title order={2}>
-                {tab === 'favorites' ? 'Shared favorites' : 'Suggestions'}
+                {tab === 'favorites' ? 'Favorites' : 'Suggestions'}
               </Title>
-              <Text size="sm">
-                {tab === 'favorites'
-                  ? 'One home per card, with each member’s save shown.'
-                  : 'Potential matches across enabled profiles. Suggestions do not indicate buyer interest.'}
-              </Text>
             </Stack>
             {tab === 'favorites' ? (
               <Select
@@ -418,9 +409,10 @@ export function HouseholdWorkspace({
             total={scoped.length}
           />
           <Group justify="space-between">
-            <Text size="sm">
-              {visible.length} homes · {visible.length - points.length} list
-              only (unknown or approximate location)
+            <Text size="sm" c="dimmed">
+              {visible.length} homes
+              {visible.length > points.length &&
+                ` · ${visible.length - points.length} not on the map`}
             </Text>
             <Group gap="xs" role="group" aria-label="View">
               <Button
@@ -441,9 +433,9 @@ export function HouseholdWorkspace({
           </Group>
           {!visible.length && (
             <Text>
-              No homes in this view. Change the filter or add a listing link.
+              No homes here.
               {activeFilterCount(filters) > 0 &&
-                ' Personal filters are active; clear them to see more homes.'}
+                ' Clear the filters to see more.'}
             </Text>
           )}
           {view === 'list' ? (
@@ -489,9 +481,7 @@ export function HouseholdWorkspace({
                       Satellite
                     </Button>
                   </Group>
-                  <Suspense
-                    fallback={<Text role="status">Loading map module…</Text>}
-                  >
+                  <Suspense fallback={<Text role="status">Loading map…</Text>}>
                     <LazyMap
                       styleUrl={mapStyleUrl}
                       satellite={satellite}
@@ -511,10 +501,7 @@ export function HouseholdWorkspace({
                   </Suspense>
                 </MapLoadBoundary>
               ) : (
-                <Text>
-                  No usable positions in this view. Unknown and approximate
-                  locations remain list only.
-                </Text>
+                <Text>None of these homes has a map position.</Text>
               )}
             </div>
           )}

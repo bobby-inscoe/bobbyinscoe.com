@@ -175,9 +175,7 @@ export function ProfileEditor({
             onChange={(event) => setType('house', event.currentTarget.checked)}
           />
         </Group>
-        <Text size="sm">
-          The following floor, lift and outdoor rules apply to apartments.
-        </Text>
+        <Text size="sm">Apartment rules</Text>
         {toggle(
           'excludeGroundFloor',
           'Exclude confirmed ground-floor apartments',
@@ -251,9 +249,8 @@ export function ProfileEditor({
           'Preferred walk to substantial nature (minutes)',
           criteria.nature.preferredWalkMinutes,
         )}
-        <Text size="sm">
-          Walking preferences need route evidence; they do not imply a measured
-          distance or exclusion.
+        <Text size="sm" c="dimmed">
+          Walking times are preferences, not measured distances.
         </Text>
         <Group grow>
           {nestedNumber(
