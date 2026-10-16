@@ -23,7 +23,7 @@ import type {
 
 // The owner creates each member in the Supabase dashboard as <name>@<this domain>
 // with the access code as the password. No mailboxes exist on this subdomain.
-const ACCESS_EMAIL_DOMAIN = 'access.bobbyinscoe.com';
+const ACCESS_EMAIL_DOMAIN = 'house-scanner.bobbyinscoe.com';
 const ACCESS_CODE = /^([a-z0-9]{2,30})-(\S{6,72})$/i;
 
 export type HouseholdSessionState =

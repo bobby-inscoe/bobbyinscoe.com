@@ -458,7 +458,7 @@ describe('House Scanner session privacy', () => {
       hook.result.current.signInWithCode(' Casey-k7Qm29xP ', false),
     );
     expect(sdk.auth.signInWithPassword).toHaveBeenCalledWith({
-      email: 'casey@access.bobbyinscoe.com',
+      email: 'casey@house-scanner.bobbyinscoe.com',
       password: 'Casey-k7Qm29xP',
     });
     expect(window.sessionStorage.getItem('house-scanner.remember')).toBe(
