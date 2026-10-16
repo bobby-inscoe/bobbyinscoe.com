@@ -10,9 +10,17 @@ export const DEMO_SOURCE_ID = 'synthetic-demo';
 export const BONEO_SOURCE_ID = 'boneo';
 export const BONEO_ORIGIN = 'https://www.boneo.se';
 export const BONEO_IMAGE_ORIGIN = 'https://files.boneo.se';
+export const BJURFORS_SOURCE_ID = 'bjurfors';
+// Photos come from the same host as the listing pages.
+export const BJURFORS_ORIGIN = 'https://www.bjurfors.se';
 export const capabilitySchema = z.strictObject({
   policy: sourcePolicySchema,
-  executor: z.enum(['demo-only', 'boneo-personal-read', 'none']),
+  executor: z.enum([
+    'demo-only',
+    'boneo-personal-read',
+    'bjurfors-personal-read',
+    'none',
+  ]),
   nativeNumericFiltersVerified: z.boolean(),
   geographicPartitioning: z.enum(['municipality', 'unverified']),
 });
@@ -34,7 +42,6 @@ const noCapabilities: SourcePolicy['capabilities'] = {
 };
 
 const candidates = [
-  ['bjurfors', 'https://www.bjurfors.se', 'pending'],
   ['erik-olsson', 'https://www.erikolsson.se', 'pending'],
   ['stadshem', 'https://stadshem.se', 'pending'],
   ['alvhem', 'https://www.alvhem.com', 'pending'],
@@ -98,8 +105,8 @@ export function sourceRegistry(): SourceCapability[] {
         sourceId: BONEO_SOURCE_ID,
         // Pending is not approved: the operator sets approval in the database.
         status: 'pending',
-        // Revision 2 turned on hotlinked photos from the image host. Revision 3 adds outdoor and glazed.
-        revision: 3,
+        // Revision 2 turned on hotlinked photos from the image host. Revision 3 adds outdoor and glazed. Revision 4 adds groundFloor.
+        revision: 4,
         retentionDays: 14,
         listingOrigins: [BONEO_ORIGIN],
         imageOrigins: [BONEO_IMAGE_ORIGIN],
@@ -122,6 +129,7 @@ export function sourceRegistry(): SourceCapability[] {
           'status',
           'outdoor',
           'glazed',
+          'groundFloor',
         ],
         capabilities: {
           discovery: true,
@@ -136,7 +144,7 @@ export function sourceRegistry(): SourceCapability[] {
             'Whether listings without a price appear in the default view is unproven.',
             'The page query is accepted but page size and multi-page ordering are unproven. Coverage is never reported complete.',
             'Only apartment paths for Goteborg are supported. Houses and other municipalities are not covered.',
-            'Outdoor and glazing come from each kept listing page; glazing only from description wording. Floor, lift and build year are not collected.',
+            'Outdoor, glazing and floor come from each kept listing page; glazing only from description wording. Only floor 2 or higher (or an explicit ground floor) is a fact; floor 1 stays unknown. Lift and build year are not collected.',
             'Only the first photo is shown, hotlinked from the broker image host. Nothing is copied or stored.',
             'Listing identity and episode rules come from property_id and created_date and are unproven across relistings.',
             'Known listings cannot be refreshed outside discovery.',
@@ -144,6 +152,63 @@ export function sourceRegistry(): SourceCapability[] {
         },
       },
       executor: 'boneo-personal-read',
+      nativeNumericFiltersVerified: false,
+      geographicPartitioning: 'unverified',
+    }),
+    capabilitySchema.parse({
+      policy: {
+        ...common,
+        sourceId: BJURFORS_SOURCE_ID,
+        // Pending is not approved: the operator sets approval in the database.
+        status: 'pending',
+        retentionDays: 14,
+        listingOrigins: [BJURFORS_ORIGIN],
+        imageOrigins: [BJURFORS_ORIGIN],
+        imageDisplay: true,
+        imageHotlink: true,
+        automatedCollection: false,
+        privateDisplay: false,
+        rightsBasis:
+          'Permission unresolved. The household owner chose to read public search pages for personal use at their own judgment. Technical access is not a reuse license.',
+        allowedFactFields: [
+          'propertyType',
+          'tenure',
+          'purchase',
+          'livingAreaM2',
+          'secondaryAreaM2',
+          'rooms',
+          'askingPriceSek',
+          'municipality',
+          'baseFeeSek',
+          'status',
+          'outdoor',
+          'groundFloor',
+          'lift',
+        ],
+        capabilities: {
+          discovery: true,
+          knownListingRefresh: false,
+          unknownPrice: false,
+          upcoming: false,
+          pagination: false,
+          resultCap: null,
+          coverageGaps: [
+            'Permission is unresolved and the source is not approved.',
+            'Only the Goteborg municipality search is supported. Other municipalities are not covered.',
+            'The search page lists its total and page links, so a full read is detected, but only the default Till salu view was observed. Whether upcoming homes or homes without a price are all included is unproven.',
+            'Cards give area, rooms and sometimes a price; the property type is only known from the listing page, so houses are dropped after that page is read.',
+            'A card that links outside the for-sale listing path, such as a project page, is skipped and not read.',
+            'Listing pages are read for kept listings only, up to the per-run cap. Balcony, floor, fee, lift, tenure and coordinates come from the page; glazing is not collected.',
+            'Balcony is a fact only when the page says Ja. An absent or unticked box stays unknown. Lift is a fact only when the page says Ja. Only floor 2 or higher (or an explicit ground floor) is a floor fact.',
+            'Coordinates come from the listing page and matched an independent geocoder within 12 m on four of four listings. Precision is address for a title with a house number.',
+            'Upcoming status is inferred from the PreOrder availability value on one page and is unproven.',
+            'Only the first photo is shown, hotlinked from the broker host. It loaded without a referrer. Nothing is copied or stored.',
+            'Listing identity is the listing page path and the episode never changes, so a relisting of the same home is not told apart.',
+            'Known listings cannot be refreshed outside discovery.',
+          ],
+        },
+      },
+      executor: 'bjurfors-personal-read',
       nativeNumericFiltersVerified: false,
       geographicPartitioning: 'unverified',
     }),

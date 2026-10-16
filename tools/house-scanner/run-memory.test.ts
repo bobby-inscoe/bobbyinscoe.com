@@ -1,7 +1,7 @@
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { runBoneoCollection } from '@house-scanner-tools/boneo-live';
+import { runCollection } from '@house-scanner-tools/live-reader';
 import {
   DETAIL_TTL_MS,
   freshDetail,
@@ -15,6 +15,7 @@ import {
   saveMemory,
   startLiveRun,
 } from '@house-scanner-tools/run-memory';
+import { boneoAdapter } from '@house-scanner-tools/source-adapters';
 import { describe, expect, it, vi } from 'vitest';
 
 const failWrite = vi.hoisted(() => ({ on: false }));
@@ -65,6 +66,27 @@ describe('loading', () => {
     expect(loadMemory(path)).toEqual({ memory, reset: false });
   });
 
+  const listingFacts = {
+    ...entry(DAY),
+    groundFloor: false,
+    lift: true,
+    propertyType: 'apartment' as const,
+    tenure: 'cooperative' as const,
+    status: 'available' as const,
+    baseFeeSek: 3997,
+    askingPriceSek: 3_250_000,
+    livingAreaM2: 62,
+    rooms: 2,
+    latitude: 57.7,
+    longitude: 11.9,
+  };
+  it('reads entries with the listing page facts, and old entries without them', () => {
+    const path = tempFile();
+    const memory = memoryWith({ a: listingFacts, '7': entry(DAY) });
+    saveMemory(path, memory, NOW);
+    expect(loadMemory(path)).toEqual({ memory, reset: false });
+  });
+
   const tooMany = Object.fromEntries(
     Array.from({ length: MAX_MEMORY_ENTRIES + 1 }, (_v, i) => [
       String(i),
@@ -94,6 +116,27 @@ describe('loading', () => {
       }),
     ],
     ['bad timestamp', JSON.stringify(memoryWith({}, 'yesterday'))],
+    [
+      'a latitude out of range',
+      JSON.stringify({
+        ...memoryWith({}),
+        details: { '1': { ...listingFacts, latitude: 91 } },
+      }),
+    ],
+    [
+      'a text value where a number belongs',
+      JSON.stringify({
+        ...memoryWith({}),
+        details: { '1': { ...listingFacts, baseFeeSek: 'about 4000' } },
+      }),
+    ],
+    [
+      'an address key beside the listing page facts',
+      JSON.stringify({
+        ...memoryWith({}),
+        details: { '1': { ...listingFacts, address: 'Exempelgatan 1' } },
+      }),
+    ],
     ['too many entries', JSON.stringify(memoryWith(tooMany))],
     [
       'oversize file',
@@ -238,7 +281,8 @@ describe('run interval guard', () => {
   it('counts a run that stops at a 403 on its first search page', async () => {
     const path = tempFile();
     const { memory } = startLiveRun(path, NOW, false);
-    const result = await runBoneoCollection(
+    const result = await runCollection(
+      boneoAdapter,
       [{ id: 'p', municipality: 'Göteborg', propertyTypes: ['apartment'] }],
       {
         fetch: (async (url: string) =>
@@ -246,6 +290,7 @@ describe('run interval guard', () => {
             ? new Response('User-agent: *\nAllow: /\n')
             : new Response('', { status: 403 })) as unknown as typeof fetch,
         now: () => NOW,
+        random: () => 0,
         sleep: async () => undefined,
         log: () => undefined,
       },

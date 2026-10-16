@@ -17,16 +17,34 @@ export const MAX_MEMORY_ENTRIES = 5000;
 export const MAX_MEMORY_BYTES = 2 * 1024 * 1024;
 export const DEFAULT_CACHE_PATH = 'house-scanner.cache.json';
 
-// Listing ids and two facts only. No titles, addresses, prices, URLs or page text.
+const { shape } = factsSchema;
+// What one listing page supplied: small enums and numbers. Outdoor and glazed are always
+// present; the rest is optional so entries written before they existed still load.
+export const detailFactsSchema = z.strictObject({
+  outdoor: shape.outdoor,
+  glazed: shape.glazed,
+  groundFloor: shape.groundFloor.optional(),
+  lift: shape.lift.optional(),
+  propertyType: shape.propertyType.optional(),
+  tenure: shape.tenure.optional(),
+  status: shape.status.optional(),
+  baseFeeSek: shape.baseFeeSek.optional(),
+  askingPriceSek: shape.askingPriceSek.optional(),
+  livingAreaM2: shape.livingAreaM2.optional(),
+  rooms: shape.rooms.optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+});
+export type DetailFacts = z.infer<typeof detailFactsSchema>;
+
+// Listing ids and the facts a listing page supplied. No titles, addresses, URLs or page text.
 export const runMemorySchema = z.strictObject({
   version: z.literal(1),
   lastLiveRunAt: z.iso.datetime().nullable(),
   details: z
     .record(
       z.string().min(1).max(200),
-      factsSchema
-        .pick({ outdoor: true, glazed: true })
-        .extend({ readAt: z.iso.datetime() }),
+      detailFactsSchema.extend({ readAt: z.iso.datetime() }),
     )
     .refine((details) => Object.keys(details).length <= MAX_MEMORY_ENTRIES),
 });
