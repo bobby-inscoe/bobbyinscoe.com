@@ -49,16 +49,24 @@ export function ListingPhoto({ listing }: { listing: Listing }) {
     );
   return (
     <Stack gap="xs">
-      <img
-        className={styles.photo}
-        src={photo.url}
-        alt={listing.title}
-        loading="lazy"
+      <a
+        className={styles.photoLink}
+        href={listing.sourceUrls[0]}
+        target="_blank"
+        rel="noopener noreferrer"
         referrerPolicy="no-referrer"
-        width={400}
-        height={180}
-        onError={() => setFailedUrl(photo.url)}
-      />
+      >
+        <img
+          className={styles.photo}
+          src={photo.url}
+          alt={listing.title}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          width={550}
+          height={366}
+          onError={() => setFailedUrl(photo.url)}
+        />
+      </a>
       <Text size="xs">{photo.attribution}</Text>
     </Stack>
   );

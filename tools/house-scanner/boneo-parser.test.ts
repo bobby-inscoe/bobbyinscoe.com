@@ -77,9 +77,9 @@ describe('Boneo parser', () => {
     expect(byListing(2).photo).toBeNull();
     expect(byListing(3).photo).toBeNull();
   });
-  it('marks coordinates approximate and reads numeric strings', () => {
+  it('labels a street address point as address precision and reads numeric strings', () => {
     expect(byListing(1).coordinates).toMatchObject({
-      precision: 'approximate_area',
+      precision: 'address',
       source: 'boneo-search-data',
     });
     expect(byListing(2).coordinates).toMatchObject({
@@ -88,6 +88,18 @@ describe('Boneo parser', () => {
     });
   });
 
+  it('keeps an area listing without a house number approximate', () => {
+    const areaOnly = fixture('search-page.html').replace(
+      '"title_field": "Exempelgatan 1"',
+      '"title_field": "Exempelomradet"',
+    );
+    const read = readBoneoSearchPage(areaOnly, context);
+    if (read.kind !== 'page') throw new Error('Fixture failed');
+    const changed = read.observations.find(
+      (observation) => observation.title === 'Exempelomradet',
+    );
+    expect(changed?.coordinates?.precision).toBe('approximate_area');
+  });
   it('keeps a missing price unknown, never zero', () => {
     expect(byListing(2).facts.askingPriceSek).toBeNull();
     expect(byListing(9).facts.askingPriceSek).toBeNull();
