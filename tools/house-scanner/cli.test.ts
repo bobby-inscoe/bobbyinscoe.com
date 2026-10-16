@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { beforeAll, expect, it } from 'vitest';
@@ -210,4 +210,86 @@ it.each([
   const result = runPrinter(...args);
   expect(result.status).toBe(1);
   expect(result.stdout).toBe('');
+});
+
+// These runs block fetch in the child process, so a missing guard fails a test
+// instead of reaching the source.
+const noFetch = join(
+  mkdtempSync(join(tmpdir(), 'hs-nofetch-')),
+  'no-fetch.cjs',
+);
+writeFileSync(
+  noFetch,
+  "globalThis.fetch = async () => { throw new TypeError('blocked in test'); };",
+);
+const runLive = (cwd: string, ...args: string[]) =>
+  spawnSync(
+    process.execPath,
+    [
+      '--require',
+      noFetch,
+      resolve('.house-scanner-build/collector.mjs'),
+      ...LIVE,
+      '--profiles',
+      profilesPath,
+      ...args,
+    ],
+    { encoding: 'utf8', timeout: 20_000, cwd },
+  );
+
+it('never creates the run memory file in fixture mode and rejects its flags there', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'hs-cwd-'));
+  const run = (...args: string[]) =>
+    spawnSync(
+      process.execPath,
+      [resolve('.house-scanner-build/collector.mjs'), ...args],
+      { encoding: 'utf8', cwd },
+    );
+  expect(run().status).toBe(0);
+  expect(run('--cache', join(cwd, 'c.json')).status).toBe(1);
+  expect(run('--force').status).toBe(1);
+  expect(readdirSync(cwd)).toEqual([]);
+});
+
+it('refuses a live read within 6 hours of the last one before any request, and --force bypasses it', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'hs-cwd-'));
+  const cache = join(cwd, 'memory.json');
+
+  const first = runLive(cwd, '--cache', cache);
+  expect(first.status).toBe(0);
+  expect(JSON.parse(first.stdout)).toMatchObject({
+    stopped: 'robots-unavailable',
+    requestCount: 1,
+    detailCached: 0,
+  });
+  const written = JSON.parse(readFileSync(cache, 'utf8'));
+  expect(Math.abs(Date.parse(written.lastLiveRunAt) - Date.now())).toBeLessThan(
+    60_000,
+  );
+
+  const second = runLive(cwd, '--cache', cache);
+  expect(second.status).toBe(1);
+  expect(second.stdout).toBe('');
+  const rejected = JSON.parse(second.stderr);
+  expect(rejected).toMatchObject({
+    status: 'rejected',
+    category: 'run-interval',
+  });
+  expect(rejected.notice).toMatch(/5h \d+m|6h 0m/);
+  expect(rejected.notice).toContain('--force');
+  expect(readFileSync(cache, 'utf8')).toBe(JSON.stringify(written));
+
+  const forced = runLive(cwd, '--cache', cache, '--force');
+  expect(forced.status).toBe(0);
+  expect(JSON.parse(forced.stdout)).toMatchObject({ requestCount: 1 });
+});
+
+it('reports an unreadable run memory file and carries on', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'hs-cwd-'));
+  const cache = join(cwd, 'memory.json');
+  writeFileSync(cache, 'not json');
+  const result = runLive(cwd, '--cache', cache);
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ cacheReset: true });
+  expect(readFileSync(cache, 'utf8')).toContain('"lastLiveRunAt"');
 });

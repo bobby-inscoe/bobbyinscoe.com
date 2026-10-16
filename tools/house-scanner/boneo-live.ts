@@ -13,6 +13,11 @@ import {
   planQueries,
   type queryPlanInputSchema,
 } from '@house-scanner-tools/query-plan';
+import {
+  freshDetail,
+  type LoadedMemory,
+  type RunMemory,
+} from '@house-scanner-tools/run-memory';
 import type { SourceCapability } from '@house-scanner-tools/source-registry';
 import {
   BONEO_IMAGE_ORIGIN,
@@ -199,6 +204,7 @@ export interface LiveRunResult {
   detailRead: number;
   detailFailed: number;
   detailSkipped: number;
+  detailCached: number;
   stopped: StopReason | null;
 }
 
@@ -207,11 +213,14 @@ export async function runBoneoCollection(
   deps: LiveDeps,
   // Picks the observations whose own listing page is read for outdoor and glazed.
   selectKept: (observations: Observation[]) => Observation[] = () => [],
+  // Listing pages read recently are merged from here instead of requested again.
+  memory: RunMemory | null = null,
 ): Promise<LiveRunResult> {
   let requestCount = 0;
   let detailRead = 0;
   let detailFailed = 0;
   let detailSkipped = 0;
+  let detailCached = 0;
   let lastFinishedAt: number | null = null;
   const observations: Observation[] = [];
   const seen = new Set<string>();
@@ -285,6 +294,7 @@ export async function runBoneoCollection(
       detailRead,
       detailFailed,
       detailSkipped,
+      detailCached,
       stopped,
     };
   }
@@ -392,25 +402,37 @@ export async function runBoneoCollection(
     }
   }
 
-  // One request per kept listing, under the same guards. A failed page leaves
-  // that listing's outdoor and glazed unknown; 403, 429 and network errors
-  // still stop the whole run.
+  // One request per kept listing, under the same guards, unless the run memory
+  // holds a recent read. A failed page leaves that listing's outdoor and glazed
+  // unknown and is never remembered; 403, 429 and network errors still stop the
+  // whole run.
   const targets = selectKept(observations);
-  for (const [index, observation] of targets.entries()) {
-    if (detailRead + detailFailed >= MAX_DETAIL_PAGES_PER_RUN) {
-      detailSkipped += targets.length - index;
-      break;
-    }
+  for (const observation of targets) {
     const url = new URL(observation.sourceUrl);
     if (!robotsAllows(robots, `${url.pathname}${url.search}`)) {
+      detailSkipped += 1;
+      continue;
+    }
+    const cached = memory
+      ? freshDetail(memory, observation.sourceListingId, deps.now())
+      : undefined;
+    if (cached) {
+      Object.assign(observation.facts, {
+        outdoor: cached.outdoor,
+        glazed: cached.glazed,
+      });
+      detailCached += 1;
+      continue;
+    }
+    if (detailRead + detailFailed >= MAX_DETAIL_PAGES_PER_RUN) {
       detailSkipped += 1;
       continue;
     }
     const fetched = await request(observation.sourceUrl);
     if (!fetched.ok) {
       if (fetched.stop === 'request-cap') {
-        detailSkipped += targets.length - index;
-        break;
+        detailSkipped += 1;
+        continue;
       }
       deps.log({
         event: 'detail-failed',
@@ -431,6 +453,12 @@ export async function runBoneoCollection(
       outdoor: detail.outdoor,
       glazed: detail.glazed,
     });
+    if (memory)
+      memory.details[observation.sourceListingId] = {
+        outdoor: detail.outdoor,
+        glazed: detail.glazed,
+        readAt: new Date(deps.now()).toISOString(),
+      };
     detailRead += 1;
   }
   return finish(null);
@@ -441,6 +469,8 @@ export interface LiveRunOptions {
   batchId?: string;
   capability: SourceCapability;
   planning: Omit<z.input<typeof queryPlanInputSchema>, 'capability'>;
+  // Updated in place with the listing pages this run reads.
+  memory?: LoadedMemory;
 }
 
 export function assertBoneoExecutor(capability: SourceCapability): void {
@@ -508,6 +538,7 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
     })),
     deps,
     (all) => prefilter(all).kept,
+    options.memory?.memory ?? null,
   );
   for (const observation of result.observations)
     assertAdapterOutput(options.capability.policy, observation);
@@ -528,10 +559,13 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
     `Boneo personal read, query plan v${queryPlan.version}.`,
     `${read} of ${result.partitions.length} partitions read from ${pages} pages and ${result.requestCount} requests.`,
     `${kept.length} observations kept, ${droppedCount} dropped by confirmed profile bounds.`,
-    `Listing pages: ${result.detailRead} read, ${result.detailFailed} failed, ${result.detailSkipped} skipped; outdoor and glazing stay unknown for the rest.`,
+    `Listing pages: ${result.detailRead} read, ${result.detailFailed} failed, ${result.detailSkipped} skipped, ${result.detailCached} reused from earlier reads; outdoor and glazing stay unknown for the rest.`,
+    options.memory?.reset ? 'Run memory was unreadable and was reset.' : '',
     result.stopped ? `Stopped: ${result.stopped}.` : 'Run completed.',
     'Not covered: upcoming and unknown-price views, houses, other municipalities, pages beyond the cap.',
-  ].join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ');
   const stages = [];
   for (let at = 0; at < kept.length; at += MAX_BATCH_OBSERVATIONS)
     stages.push(
@@ -571,5 +605,6 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
     result,
     prefilter: { kept: kept.length, dropped },
     publishStatus: failed ? ('failed' as const) : ('partial' as const),
+    cacheReset: options.memory?.reset ?? false,
   };
 }

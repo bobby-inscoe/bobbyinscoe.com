@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import {
   assertAdapterOutput,
   defaultLiveDeps,
@@ -17,6 +18,11 @@ import {
 
 import { readBoneoSearchPage } from '@house-scanner-tools/boneo-parser';
 import { planQueries } from '@house-scanner-tools/query-plan';
+import {
+  emptyMemory,
+  type RunMemory,
+  saveMemory,
+} from '@house-scanner-tools/run-memory';
 import { sourceRegistry } from '@house-scanner-tools/source-registry';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SYNTHETIC_SNAPSHOT } from '@/features/house-scanner/mock/synthetic-household';
@@ -472,6 +478,51 @@ describe('prepared run', () => {
     });
   });
 
+  it('reuses remembered listing pages on a second run and reports it', async () => {
+    const serveAll = () =>
+      fakeFetch(
+        robotsOr((url) => ({
+          body: url.includes('/bostad/')
+            ? fixture('detail-glazed.html')
+            : fixture('search-page.html'),
+        })),
+      );
+    const memory = { memory: emptyMemory(), reset: true };
+    const one = await prepareLiveRun(
+      { capability, planning, memory },
+      deps(serveAll().impl),
+    );
+    const kept = one.prefilter.kept;
+    expect(one.cacheReset).toBe(true);
+    expect(Object.keys(memory.memory.details)).toHaveLength(kept);
+    // The fake clock restarts for each run, so age the entries by a day instead.
+    for (const entry of Object.values(memory.memory.details))
+      entry.readAt = new Date(
+        Date.parse(entry.readAt) - 86_400_000,
+      ).toISOString();
+    const second = serveAll();
+    const two = await prepareLiveRun(
+      { capability, planning, memory: { ...memory, reset: false } },
+      deps(second.impl),
+    );
+    expect(second.calls.filter((c) => c.url.includes('/bostad/'))).toEqual([]);
+    expect(two.result).toMatchObject({ detailRead: 0, detailCached: kept });
+    expect(two.cacheReset).toBe(false);
+    const note = (run: typeof one) => {
+      const publish = run.requests.at(-1);
+      return publish?.action === 'publish'
+        ? publish.results[0].coverageNote
+        : '';
+    };
+    expect(note(one)).toContain('Run memory was unreadable and was reset.');
+    expect(note(two)).toContain(`0 skipped, ${kept} reused from earlier reads`);
+    expect(note(two)).not.toContain('reset');
+    const stage = two.requests[1];
+    expect(
+      stage.action === 'stage' && stage.observations[0].facts,
+    ).toMatchObject({ outdoor: 'balcony', glazed: true });
+  });
+
   it('rejects outdoor and glazed unless the policy allows them', () => {
     const read = readBoneoSearchPage(fixture('search-page.html'), {
       origin: 'https://www.boneo.se',
@@ -824,4 +875,214 @@ describe('listing pages', () => {
       ]);
     },
   );
+
+  describe('run memory', () => {
+    const NOW = 1_760_000_000_000;
+    const DAY = 86_400_000;
+    const remembered = (
+      ago: number,
+      outdoor: 'terrace' | 'balcony' = 'terrace',
+    ) => ({
+      outdoor,
+      glazed: true,
+      readAt: new Date(NOW - ago).toISOString(),
+    });
+    const memoryOf = (details: RunMemory['details']): RunMemory => ({
+      ...emptyMemory(),
+      details,
+    });
+    const rememberedIds = (count: number) =>
+      memoryOf(
+        Object.fromEntries(
+          Array.from({ length: count }, (_v, i) => [
+            String(i + 1),
+            remembered(DAY),
+          ]),
+        ),
+      );
+
+    it('merges a recent read without any request for that listing', async () => {
+      const memory = rememberedIds(3);
+      const before = structuredClone(memory);
+      const { impl, calls } = fakeFetch(
+        robotsOr(serve(3, () => ({ body: BALCONY }))),
+      );
+      const result = await runBoneoCollection(
+        goteborg,
+        deps(impl),
+        keepAll,
+        memory,
+      );
+      expect(detailCalls(calls)).toHaveLength(0);
+      expect(result).toMatchObject({
+        detailRead: 0,
+        detailCached: 3,
+        detailFailed: 0,
+        detailSkipped: 0,
+        requestCount: 2,
+        stopped: null,
+      });
+      expect(
+        result.observations.map((o) => [o.facts.outdoor, o.facts.glazed]),
+      ).toEqual([
+        ['terrace', true],
+        ['terrace', true],
+        ['terrace', true],
+      ]);
+      expect(memory).toEqual(before);
+    });
+
+    it('reads again an entry older than 7 days and replaces it', async () => {
+      const memory = memoryOf({
+        '1': remembered(8 * DAY),
+        '2': remembered(DAY),
+      });
+      const { impl, calls } = fakeFetch(
+        robotsOr(serve(2, () => ({ body: BALCONY }))),
+      );
+      const result = await runBoneoCollection(
+        goteborg,
+        deps(impl),
+        keepAll,
+        memory,
+      );
+      expect(detailCalls(calls).map((c) => c.url)).toEqual([
+        'https://www.boneo.se/bostad/fixture-1',
+      ]);
+      expect(result).toMatchObject({ detailRead: 1, detailCached: 1 });
+      expect(result.observations.map((o) => o.facts.outdoor)).toEqual([
+        'balcony',
+        'terrace',
+      ]);
+      expect(memory.details['1']).toMatchObject({
+        outdoor: 'balcony',
+        glazed: null,
+      });
+      const age = Date.parse(memory.details['1'].readAt) - NOW;
+      expect(age).toBeGreaterThanOrEqual(0);
+      expect(age).toBeLessThan(60_000);
+      expect(memory.details['2']).toEqual(remembered(DAY));
+    });
+
+    it('stores nothing for pages that failed', async () => {
+      const replies: Reply[] = [
+        { status: 500 },
+        { body: fixture('detail-wrong-shape.html') },
+        { body: BALCONY },
+      ];
+      const memory = memoryOf({});
+      const { impl } = fakeFetch(robotsOr(serve(3, (id) => replies[id - 1])));
+      const result = await runBoneoCollection(
+        goteborg,
+        deps(impl),
+        keepAll,
+        memory,
+      );
+      expect(result).toMatchObject({ detailRead: 1, detailFailed: 2 });
+      expect(Object.keys(memory.details)).toEqual(['3']);
+    });
+
+    it('keeps an old entry when the refresh stops the run', async () => {
+      const memory = memoryOf({ '1': remembered(8 * DAY) });
+      const { impl } = fakeFetch(robotsOr(serve(2, () => ({ status: 403 }))));
+      const result = await runBoneoCollection(
+        goteborg,
+        deps(impl),
+        keepAll,
+        memory,
+      );
+      expect(result.stopped).toBe('http-403');
+      expect(memory.details).toEqual({ '1': remembered(8 * DAY) });
+    });
+
+    it('does not count remembered pages toward the 150 page cap', async () => {
+      const memory = rememberedIds(100);
+      const { impl, calls } = fakeFetch(
+        robotsOr(serve(160, () => ({ body: BALCONY }))),
+      );
+      const result = await runBoneoCollection(
+        goteborg,
+        deps(impl),
+        keepAll,
+        memory,
+      );
+      expect(detailCalls(calls)).toHaveLength(60);
+      expect(result).toMatchObject({
+        detailRead: 60,
+        detailCached: 100,
+        detailSkipped: 0,
+      });
+      expect(Object.keys(memory.details)).toHaveLength(160);
+    });
+
+    it('does not count remembered pages toward the 250 request cap', async () => {
+      const memory = rememberedIds(160);
+      let id = 0;
+      const { impl, calls } = fakeFetch(
+        robotsOr((url) =>
+          isDetail(url) ? { body: BALCONY } : { body: nextPage([++id], 500) },
+        ),
+      );
+      const four = Array.from({ length: 4 }, (_v, index) => ({
+        ...goteborg[0],
+        id: `municipality-${index + 1}`,
+      }));
+      const result = await runBoneoCollection(
+        four,
+        deps(impl),
+        keepAll,
+        memory,
+      );
+      // Without the memory, 71 of these 160 listings would be skipped.
+      expect(calls).toHaveLength(161);
+      expect(result).toMatchObject({
+        requestCount: 161,
+        detailCached: 160,
+        detailRead: 0,
+        detailSkipped: 0,
+      });
+    });
+
+    it('still skips a listing robots.txt disallows, remembered or not', async () => {
+      const memory = rememberedIds(1);
+      const { impl } = fakeFetch((url) =>
+        url.endsWith('/robots.txt')
+          ? {
+              body: 'User-agent: *\nAllow: /\nDisallow: /bostad/\n',
+              type: 'text/plain',
+            }
+          : serve(1, () => ({ body: BALCONY }))(url),
+      );
+      const result = await runBoneoCollection(
+        goteborg,
+        deps(impl),
+        keepAll,
+        memory,
+      );
+      expect(result).toMatchObject({ detailCached: 0, detailSkipped: 1 });
+      expect(result.observations[0].facts.outdoor).toBeNull();
+    });
+
+    it('saves listing ids and two facts only', async () => {
+      const memory = memoryOf({});
+      const { impl } = fakeFetch(
+        robotsOr(serve(3, () => ({ body: fixture('detail-glazed.html') }))),
+      );
+      await runBoneoCollection(goteborg, deps(impl), keepAll, memory);
+      const path = join(mkdtempSync(join(tmpdir(), 'hs-saved-')), 'c.json');
+      saveMemory(path, memory, NOW);
+      const text = readFileSync(path, 'utf8');
+      const saved = JSON.parse(text);
+      expect(Object.keys(saved)).toEqual([
+        'version',
+        'lastLiveRunAt',
+        'details',
+      ]);
+      expect(Object.keys(saved.details)).toEqual(['1', '2', '3']);
+      for (const entry of Object.values<object>(saved.details))
+        expect(Object.keys(entry)).toEqual(['outdoor', 'glazed', 'readAt']);
+      for (const value of ['Fixturegatan', 'fixture-', 'https', 'boneo'])
+        expect(text).not.toContain(value);
+    });
+  });
 });

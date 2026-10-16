@@ -1,12 +1,20 @@
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
+  assertBoneoExecutor,
   defaultLiveDeps,
   type LiveEvent,
   prepareLiveRun,
 } from '@house-scanner-tools/boneo-live';
 import { prepareFixtureRun } from '@house-scanner-tools/collector';
 import { queryPlanInputSchema } from '@house-scanner-tools/query-plan';
+import {
+  DEFAULT_CACHE_PATH,
+  RunTooSoonError,
+  saveMemory,
+  startLiveRun,
+} from '@house-scanner-tools/run-memory';
 import { senderConfig, sendRequests } from '@house-scanner-tools/sender';
 import {
   approvedPolicy,
@@ -49,11 +57,15 @@ type Values = {
   'confirm-send': boolean;
   'run-id'?: string;
   'batch-id'?: string;
+  cache?: string;
+  force: boolean;
 };
 
 // Live reads need three explicit flags and cover Boneo only. Sending adds
 // --send --confirm-send. Output is counts, statuses and partition names;
-// observations are never printed or saved.
+// observations are never printed or saved. A small run memory file keeps listing
+// ids and two facts, so listing pages read recently are not requested again and
+// two live reads cannot start close together.
 async function live(values: Values) {
   if (values.source !== BONEO_SOURCE_ID)
     throw new Error('Live reading exists for boneo only.');
@@ -72,6 +84,10 @@ async function live(values: Values) {
   );
   // Checked before the read so a bad environment costs no requests to the source.
   const sender = values.send ? senderConfig(process.env) : null;
+  assertBoneoExecutor(capability);
+  // Refuses a too-soon run here and records this one, before any request.
+  const cachePath = resolve(values.cache ?? DEFAULT_CACHE_PATH);
+  const memory = startLiveRun(cachePath, Date.now(), values.force);
   const events: LiveEvent[] = [];
   const prepared = await prepareLiveRun(
     {
@@ -79,9 +95,16 @@ async function live(values: Values) {
       batchId: values['batch-id'],
       capability,
       planning: { profiles, collectionPriceCapSek: null, maxPartitions: 5 },
+      memory,
     },
     defaultLiveDeps((event) => events.push(event)),
   );
+  let cacheSaved = true;
+  try {
+    saveMemory(cachePath, memory.memory, Date.now());
+  } catch {
+    cacheSaved = false;
+  }
   const delivery = sender
     ? await sendRequests(prepared.requests, sender)
     : null;
@@ -99,6 +122,9 @@ async function live(values: Values) {
         detailRead: prepared.result.detailRead,
         detailFailed: prepared.result.detailFailed,
         detailSkipped: prepared.result.detailSkipped,
+        detailCached: prepared.result.detailCached,
+        ...(prepared.cacheReset ? { cacheReset: true } : {}),
+        ...(cacheSaved ? {} : { cacheSaved: false }),
         collectedCount: prepared.result.observations.length,
         observationCount: prepared.prefilter.kept,
         droppedByReason: prepared.prefilter.dropped,
@@ -145,6 +171,8 @@ async function main() {
       'confirm-send': { type: 'boolean', default: false },
       'print-policy-sql': { type: 'boolean', default: false },
       household: { type: 'string' },
+      cache: { type: 'string' },
+      force: { type: 'boolean', default: false },
     },
     allowPositionals: false,
     strict: true,
@@ -154,6 +182,8 @@ async function main() {
   if (values.mode !== 'fixture') throw new Error('Only fixture mode exists.');
   if (values['confirm-personal-read'] && !values.live)
     throw new Error('The confirmation flag applies to live reads only.');
+  if ((values.cache !== undefined || values.force) && !values.live)
+    throw new Error('--cache and --force apply to live reads only.');
   if (values.send !== values['confirm-send'])
     throw new Error('Sending needs --send and --confirm-send together.');
   if (values.send && !values.live)
@@ -217,9 +247,13 @@ try {
       category:
         error instanceof z.ZodError
           ? 'invalid-input'
-          : 'permission-or-configuration',
+          : error instanceof RunTooSoonError
+            ? 'run-interval'
+            : 'permission-or-configuration',
       notice:
-        'Collector did not send or save data. Review fixture options and source permission.',
+        error instanceof RunTooSoonError
+          ? error.message
+          : 'Collector did not send or save data. Review fixture options and source permission.',
     }),
   );
   process.exitCode = 1;
