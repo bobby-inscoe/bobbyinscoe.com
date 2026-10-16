@@ -197,7 +197,7 @@ test('map is opt-in and a failed tile request leaves details and list controls u
       external.push(request.url());
   });
   expect(external).toEqual([]);
-  await page.getByRole('button', { name: 'Open map', exact: true }).click();
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText(/map|Map/);
   await expect(
     page.getByText('2 homes with usable positions.', { exact: false }),
@@ -207,7 +207,7 @@ test('map is opt-in and a failed tile request leaves details and list controls u
       (url) => url === 'https://tiles.openfreemap.org/styles/liberty',
     ),
   ).toBe(true);
-  await page.getByRole('button', { name: 'Use list only' }).click();
+  await page.getByRole('button', { name: 'List', exact: true }).click();
   await expect(page.getByRole('article')).toHaveCount(5);
   await page
     .getByRole('article', { name: 'Example terrace home', exact: true })
@@ -244,7 +244,7 @@ test('a locally served map style groups overlapping homes and keeps map selectio
       }),
   );
   await openDemo(page);
-  await page.getByRole('button', { name: 'Open map', exact: true }).click();
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
   await page
     .getByRole('button', { name: '2 homes at this point', exact: true })
     .click();

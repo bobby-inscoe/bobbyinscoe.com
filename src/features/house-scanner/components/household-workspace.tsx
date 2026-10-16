@@ -100,8 +100,7 @@ export function HouseholdWorkspace({
   const duplicate = snapshot.listings.find(
     (listing) => listing.id === duplicateId,
   );
-  const [mapOpen, setMapOpen] = useState(false);
-  const [narrowView, setNarrowView] = useState<'list' | 'map'>('list');
+  const [view, setView] = useState<'list' | 'map'>('list');
   const [pending, setPending] = useState<string[]>([]);
   const [message, setMessage] = useState('');
   const member = snapshot.members.find((entry) => entry.userId === userId);
@@ -392,46 +391,35 @@ export function HouseholdWorkspace({
               />
             )}
           </Group>
-          <Group>
+          <Group justify="space-between">
             <Text size="sm">
               {visible.length} homes · {visible.length - points.length} list
               only (unknown or approximate location)
             </Text>
-            <Button
-              variant="default"
-              onClick={() => {
-                setMapOpen(!mapOpen);
-                setNarrowView(mapOpen ? 'list' : 'map');
-              }}
-            >
-              {mapOpen ? 'Close map' : 'Open map'}
-            </Button>
-          </Group>
-          {mapOpen && (
-            <div className={styles.viewSwitch}>
+            <Group gap="xs" role="group" aria-label="View">
               <Button
-                variant={narrowView === 'list' ? 'filled' : 'default'}
-                onClick={() => setNarrowView('list')}
+                variant={view === 'list' ? 'filled' : 'default'}
+                aria-pressed={view === 'list'}
+                onClick={() => setView('list')}
               >
                 List
               </Button>
               <Button
-                variant={narrowView === 'map' ? 'filled' : 'default'}
-                onClick={() => setNarrowView('map')}
+                variant={view === 'map' ? 'filled' : 'default'}
+                aria-pressed={view === 'map'}
+                onClick={() => setView('map')}
               >
                 Map
               </Button>
-            </div>
-          )}
+            </Group>
+          </Group>
           {!visible.length && (
             <Text>
               No homes in this view. Change the filter or add a listing link.
             </Text>
           )}
-          <div className={`${styles.panels} ${mapOpen ? styles.withMap : ''}`}>
-            <div
-              className={`${styles.list} ${mapOpen && narrowView === 'map' ? styles.hideNarrow : ''}`}
-            >
+          {view === 'list' ? (
+            <div className={styles.list}>
               {visible.map((listing) => (
                 <ListingCard
                   key={listing.id}
@@ -440,72 +428,55 @@ export function HouseholdWorkspace({
                   userId={userId}
                   selected={selectedId === listing.id}
                   stale={isListingStale(listing, snapshot.edition)}
-                  details={!mapOpen && selectedId === listing.id}
+                  details={selectedId === listing.id}
                   busy={pending.includes(listing.id)}
                   canSave={canSave(listing.id)}
-                  notes={
-                    !mapOpen && selectedId === listing.id ? notes : undefined
-                  }
-                  onSelect={() => {
-                    setSelectedId(listing.id);
-                    if (mapOpen) setNarrowView('map');
-                  }}
+                  notes={selectedId === listing.id ? notes : undefined}
+                  onSelect={() => setSelectedId(listing.id)}
                   onFavorite={() => void favorite(listing.id)}
                 />
               ))}
             </div>
-            {mapOpen && (
-              <div
-                className={`${styles.mapPanel} ${narrowView === 'list' ? styles.hideNarrow : ''}`}
-              >
-                {points.length ? (
-                  <MapLoadBoundary>
-                    <Suspense
-                      fallback={<Text role="status">Loading map module…</Text>}
-                    >
-                      <LazyMap
-                        styleUrl={mapStyleUrl}
-                        points={points}
-                        selectedId={selected?.id ?? null}
-                        onSelect={setSelectedId}
-                      />
-                    </Suspense>
-                  </MapLoadBoundary>
-                ) : (
-                  <Text>
-                    No usable positions in this view. Unknown and approximate
-                    locations remain list only.
-                  </Text>
-                )}
-                {selected ? (
-                  <ListingCard
-                    listing={selected}
-                    snapshot={snapshot}
-                    userId={userId}
-                    selected
-                    details
-                    stale={isListingStale(selected, snapshot.edition)}
-                    busy={pending.includes(selected.id)}
-                    canSave={canSave(selected.id)}
-                    notes={notes}
-                    onSelect={() => setNarrowView('list')}
-                    onFavorite={() => void favorite(selected.id)}
-                  />
-                ) : (
-                  <Text>Select a listing or map point to see its details.</Text>
-                )}
-                <Button
-                  variant="default"
-                  onClick={() => {
-                    setMapOpen(false);
-                    setNarrowView('list');
-                  }}
-                >
-                  Use list only
-                </Button>
-              </div>
-            )}
-          </div>
+          ) : (
+            <div className={styles.mapPanel}>
+              {points.length ? (
+                <MapLoadBoundary>
+                  <Suspense
+                    fallback={<Text role="status">Loading map module…</Text>}
+                  >
+                    <LazyMap
+                      styleUrl={mapStyleUrl}
+                      points={points}
+                      selectedId={selected?.id ?? null}
+                      onSelect={setSelectedId}
+                    />
+                  </Suspense>
+                </MapLoadBoundary>
+              ) : (
+                <Text>
+                  No usable positions in this view. Unknown and approximate
+                  locations remain list only.
+                </Text>
+              )}
+              {selected ? (
+                <ListingCard
+                  listing={selected}
+                  snapshot={snapshot}
+                  userId={userId}
+                  selected
+                  details
+                  stale={isListingStale(selected, snapshot.edition)}
+                  busy={pending.includes(selected.id)}
+                  canSave={canSave(selected.id)}
+                  notes={notes}
+                  onSelect={() => setView('list')}
+                  onFavorite={() => void favorite(selected.id)}
+                />
+              ) : (
+                <Text>Select a map point to see its details.</Text>
+              )}
+            </div>
+          )}
         </>
       )}
     </section>
