@@ -87,7 +87,7 @@ export function HouseholdWorkspace({
   onSaveNote,
 }: HouseholdWorkspaceProps) {
   const [tab, setTab] = useState<
-    'suggestions' | 'favorites' | 'manual' | 'settings'
+    'suggestions' | 'favorites' | 'manual' | 'sources' | 'settings'
   >('suggestions');
   const [person, setPerson] = useState('everyone');
   const [section, setSection] = useState('all');
@@ -151,7 +151,7 @@ export function HouseholdWorkspace({
   const notesListingId =
     tab === 'manual' ? (duplicate?.id ?? null) : (selected?.id ?? null);
   const notes = useListingNotes({
-    listingId: tab === 'settings' ? null : notesListingId,
+    listingId: tab === 'settings' || tab === 'sources' ? null : notesListingId,
     userId,
     onLoad: onLoadNotes,
     onSave: onSaveNote,
@@ -193,6 +193,15 @@ export function HouseholdWorkspace({
   function openExisting(id: string) {
     setDuplicateId(id);
   }
+  const sources = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const listing of snapshot.listings) {
+      if (listing.origin !== 'source') continue;
+      const host = new URL(listing.sourceUrls[0]).hostname;
+      counts.set(host, (counts.get(host) ?? 0) + 1);
+    }
+    return [...counts].map(([host, homes]) => ({ host, homes }));
+  }, [snapshot.listings]);
   const editionAge = snapshot.edition
     ? Date.now() - Date.parse(snapshot.edition.publishedAt)
     : null;
@@ -207,24 +216,33 @@ export function HouseholdWorkspace({
             : 'No data has been published yet.'}
       </Text>{' '}
       <Group component="nav" aria-label="Shortlist sections">
-        {(['suggestions', 'favorites', 'manual', 'settings'] as const).map(
-          (value) => (
-            <Button
-              key={value}
-              variant={tab === value ? 'filled' : 'default'}
-              aria-pressed={tab === value}
-              onClick={() => setTab(value)}
-            >
-              {value === 'manual'
-                ? 'Add link'
+        {(synthetic
+          ? (['suggestions', 'favorites', 'manual', 'settings'] as const)
+          : ([
+              'suggestions',
+              'favorites',
+              'manual',
+              'sources',
+              'settings',
+            ] as const)
+        ).map((value) => (
+          <Button
+            key={value}
+            variant={tab === value ? 'filled' : 'default'}
+            aria-pressed={tab === value}
+            onClick={() => setTab(value)}
+          >
+            {value === 'manual'
+              ? 'Add link'
+              : value === 'sources'
+                ? 'Sources'
                 : value === 'settings'
                   ? 'Settings and status'
                   : value === 'favorites'
                     ? 'Favorites'
                     : 'Suggestions'}
-            </Button>
-          ),
-        )}
+          </Button>
+        ))}
       </Group>
       <Text role="status" aria-live="polite">
         {message}
@@ -252,28 +270,38 @@ export function HouseholdWorkspace({
             />
           )}
         </Stack>
+      ) : tab === 'sources' ? (
+        <Stack>
+          <Title order={2}>Sources</Title>
+          {sources.length === 0 ? (
+            <Text>No source has delivered homes yet.</Text>
+          ) : (
+            sources.map((source) => (
+              <Stack key={source.host} gap="xs" component="section">
+                <Title order={3}>{source.host}</Title>
+                <Text size="sm">
+                  {source.homes} {source.homes === 1 ? 'home' : 'homes'} · last
+                  scan{' '}
+                  {snapshot.edition
+                    ? formatDate(snapshot.edition.publishedAt)
+                    : 'unknown'}
+                </Text>
+                {snapshot.edition && (
+                  <Spoiler
+                    maxHeight={0}
+                    showLabel="More about this scan"
+                    hideLabel="Hide"
+                  >
+                    <Text size="sm">{snapshot.edition.sourceSummary}</Text>
+                  </Spoiler>
+                )}
+              </Stack>
+            ))
+          )}
+        </Stack>
       ) : tab === 'settings' ? (
         <Stack>
           <Title order={2}>Search criteria and status</Title>
-          {!synthetic && (
-            <Stack gap="xs" aria-label="Latest data">
-              <Title order={3}>Latest data</Title>
-              <Text size="sm">
-                {snapshot.edition
-                  ? `Published ${formatDate(snapshot.edition.publishedAt)} · ${snapshot.edition.coverage} coverage`
-                  : 'No data has been published yet.'}
-              </Text>
-              {snapshot.edition && (
-                <Spoiler
-                  maxHeight={44}
-                  showLabel="Show details"
-                  hideLabel="Hide details"
-                >
-                  <Text size="sm">{snapshot.edition.sourceSummary}</Text>
-                </Spoiler>
-              )}
-            </Stack>
-          )}
           <Text>
             {synthetic
               ? 'These criteria are fictional. Edits affect this demo only.'
