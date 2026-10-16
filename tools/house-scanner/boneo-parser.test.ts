@@ -1,12 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { assertAdapterOutput } from '@house-scanner-tools/boneo-live';
 import {
   parseBoneoDetail,
   parseBoneoNextData,
   readBoneoDetailPage,
   readBoneoSearchPage,
 } from '@house-scanner-tools/boneo-parser';
+import { assertAdapterOutput } from '@house-scanner-tools/live-reader';
 import {
   BONEO_ORIGIN,
   sourceRegistry,
@@ -256,16 +256,23 @@ describe('Boneo listing page parser', () => {
     ['a glazed balcony in the text', 'detail-glazed.html', 'balcony', true],
     ['a negated glazed balcony', 'detail-not-glazed.html', 'balcony', null],
   ])('reads %s', (_name, file, outdoor, glazed) => {
+    // Every fixture page says floor 3.
     expect(readBoneoDetailPage(fixture(file))).toEqual({
       kind: 'detail',
       outdoor,
       glazed,
+      groundFloor: false,
     });
   });
 
-  it('returns only outdoor and glazed, never the description', () => {
+  it('returns only outdoor, glazed and the floor rule, never the description', () => {
     const read = readBoneoDetailPage(fixture('detail-glazed.html'));
-    expect(Object.keys(read).sort()).toEqual(['glazed', 'kind', 'outdoor']);
+    expect(Object.keys(read).sort()).toEqual([
+      'glazed',
+      'groundFloor',
+      'kind',
+      'outdoor',
+    ]);
     expect(JSON.stringify(read)).not.toContain('fixturetext');
   });
 
@@ -310,7 +317,25 @@ describe('Boneo listing page parser', () => {
         kind: 'detail',
         outdoor: null,
         glazed: null,
+        groundFloor: null,
       });
+  });
+
+  it.each([
+    ['3', false],
+    [' 2 ', false],
+    [3, false],
+    ['1', null],
+    ['0', true],
+    ['BV', true],
+    ['Bottenvåning', true],
+    ['', null],
+    [null, null],
+    ['vind', null],
+  ])('reads field_floor %j as groundFloor %j', (field_floor, groundFloor) => {
+    expect(
+      parseBoneoDetail(detail({ field_property_balcony: true, field_floor })),
+    ).toMatchObject({ groundFloor });
   });
 
   it.each([

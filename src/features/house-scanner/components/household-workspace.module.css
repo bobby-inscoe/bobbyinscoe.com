@@ -47,10 +47,28 @@
   border-color: var(--scanner-accent);
   outline: 1px solid var(--scanner-accent);
 }
+/* The expanded card takes the whole row; the others reflow beneath it. */
+.list > .selected {
+  flex-basis: 100%;
+  max-width: none;
+}
 /* 3:2 matches the source thumbnails, so nothing is cropped and the card does not jump while loading. */
 .photoLink {
   display: block;
   width: 100%;
+}
+/* The star sits over the photo's top-right corner. */
+.photoWrap {
+  position: relative;
+}
+.star {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+}
+.selected .photoLink {
+  max-width: 440px;
 }
 .photo {
   display: block;

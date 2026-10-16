@@ -3,6 +3,7 @@ import {
   Map as MapLibreMap,
   Marker,
   NavigationControl,
+  type StyleSpecification,
   setWorkerUrl,
 } from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
@@ -15,17 +16,41 @@ import type { Listing } from '@/features/house-scanner/types/contracts';
 // MapLibre resolves its default worker beside import.meta.url, which Vite rewrites.
 setWorkerUrl(workerUrl);
 
+const MAX_STACK_BUTTONS = 6;
+
+const SATELLITE_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    imagery: {
+      type: 'raster',
+      tiles: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: 'Imagery © Esri, Maxar, Earthstar Geographics',
+    },
+  },
+  layers: [{ id: 'imagery', type: 'raster', source: 'imagery' }],
+};
+
 export interface MapPoint {
   id: string;
   label: string;
   markerText: string;
-  coordinates: NonNullable<Listing['coordinates']>;
+  coordinates: Pick<
+    NonNullable<Listing['coordinates']>,
+    'longitude' | 'latitude'
+  >;
+  // Homes with no usable position share one marker, drawn differently.
+  unlocated?: boolean;
 }
 interface HouseholdMapProps {
   points: MapPoint[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   styleUrl?: string;
+  satellite?: boolean;
   // Drawn over the map, for the selected home's card.
   overlay?: ReactNode;
 }
@@ -35,6 +60,7 @@ export function HouseholdMap({
   selectedId,
   onSelect,
   styleUrl = 'https://tiles.openfreemap.org/styles/liberty',
+  satellite = false,
   overlay,
 }: HouseholdMapProps) {
   const container = useRef<HTMLElement>(null);
@@ -44,7 +70,25 @@ export function HouseholdMap({
   const [stack, setStack] = useState<string[]>([]);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const satelliteRef = useRef(satellite);
+  satelliteRef.current = satellite;
+  const appliedSatellite = useRef(satellite);
   const first = useRef(points[0]?.coordinates).current;
+  // The first view frames every home, including the not-located marker.
+  const bounds = useRef(
+    points.length > 1
+      ? ([
+          [
+            Math.min(...points.map((p) => p.coordinates.longitude)),
+            Math.min(...points.map((p) => p.coordinates.latitude)),
+          ],
+          [
+            Math.max(...points.map((p) => p.coordinates.longitude)),
+            Math.max(...points.map((p) => p.coordinates.latitude)),
+          ],
+        ] as [[number, number], [number, number]])
+      : undefined,
+  ).current;
   const centerLongitude = first?.longitude ?? 0;
   const centerLatitude = first?.latitude ?? 0;
   useEffect(() => {
@@ -53,12 +97,15 @@ export function HouseholdMap({
     try {
       instance = new MapLibreMap({
         container: container.current,
-        style: styleUrl,
+        style: satelliteRef.current ? SATELLITE_STYLE : styleUrl,
         center: [centerLongitude, centerLatitude],
         zoom: 11,
+        bounds,
+        fitBoundsOptions: { padding: 40, maxZoom: 14 },
         attributionControl: { compact: false },
       });
       map.current = instance;
+      appliedSatellite.current = satelliteRef.current;
       instance.addControl(new NavigationControl());
       instance.on('load', () => setLoaded(true));
       instance.on('error', () =>
@@ -75,7 +122,12 @@ export function HouseholdMap({
       instance?.remove();
       map.current = null;
     };
-  }, [styleUrl, centerLongitude, centerLatitude, error]);
+  }, [styleUrl, centerLongitude, centerLatitude, bounds, error]);
+  useEffect(() => {
+    if (!map.current || appliedSatellite.current === satellite) return;
+    appliedSatellite.current = satellite;
+    map.current.setStyle(satellite ? SATELLITE_STYLE : styleUrl);
+  }, [satellite, styleUrl]);
   useEffect(() => {
     if (!map.current || !loaded || error) return;
     const instance = map.current;
@@ -87,14 +139,20 @@ export function HouseholdMap({
     const markers = [...groups.values()].map((group) => {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = styles.marker;
-      button.textContent =
-        group.length === 1 ? group[0].markerText : String(group.length);
+      const unlocated = group[0].unlocated === true;
+      button.className = `${styles.marker} ${unlocated ? styles.unlocated : ''}`;
+      button.textContent = unlocated
+        ? `${group.length} not located`
+        : group.length === 1
+          ? group[0].markerText
+          : String(group.length);
       button.setAttribute(
         'aria-label',
-        group.length === 1
-          ? group[0].label
-          : `${group.length} homes at this point`,
+        unlocated
+          ? `${group.length} homes with no known position`
+          : group.length === 1
+            ? group[0].label
+            : `${group.length} homes at this point`,
       );
       button.setAttribute(
         'aria-pressed',
@@ -122,15 +180,14 @@ export function HouseholdMap({
         center: [point.coordinates.longitude, point.coordinates.latitude],
       });
   }, [points, selectedId, loaded, error]);
+  const provider = satellite ? 'Esri' : 'OpenFreeMap';
   const availableStack = stack.filter((id) =>
     points.some((point) => point.id === id),
   );
+  const count = availableStack.length;
+  const at = Math.max(0, availableStack.indexOf(selectedId ?? ''));
   return (
     <Stack gap="sm">
-      <Text size="sm">
-        OpenFreeMap base tiles. Pins locate a building or supplied position, not
-        a particular apartment. Map shading does not verify nature access.
-      </Text>
       {error ? (
         <Text role="alert">{error}</Text>
       ) : (
@@ -146,26 +203,44 @@ export function HouseholdMap({
           </div>
         </>
       )}
-      <Text size="sm">
-        {points.length} homes with usable positions. Overlapping homes share a
-        numbered point.
-      </Text>
       {availableStack.length > 1 && (
         <Group aria-label="Homes at selected point">
-          {availableStack.map((id, index) => (
-            <Button
-              key={id}
-              variant={id === selectedId ? 'filled' : 'default'}
-              onClick={() => onSelect(id)}
-            >
-              Home {index + 1}
-            </Button>
-          ))}
+          {availableStack.length > MAX_STACK_BUTTONS ? (
+            <>
+              <Button
+                variant="default"
+                onClick={() =>
+                  onSelect(availableStack[(at - 1 + count) % count])
+                }
+              >
+                Previous
+              </Button>
+              <Text size="sm">
+                Home {at + 1} of {count}
+              </Text>
+              <Button
+                variant="default"
+                onClick={() => onSelect(availableStack[(at + 1) % count])}
+              >
+                Next
+              </Button>
+            </>
+          ) : (
+            availableStack.map((id, index) => (
+              <Button
+                key={id}
+                variant={id === selectedId ? 'filled' : 'default'}
+                onClick={() => onSelect(id)}
+              >
+                Home {index + 1}
+              </Button>
+            ))
+          )}
         </Group>
       )}
-      <Text size="xs">
-        Tiles reveal your network address and viewed region to the tile
-        provider. Household notes, favorites and credentials are not sent.
+      <Text size="xs" c="dimmed">
+        Map tiles come from {provider}, which sees your address and the area you
+        view.
       </Text>
     </Stack>
   );

@@ -1,3 +1,4 @@
+import { groundFloorOf } from '@house-scanner-tools/floor';
 import { BONEO_IMAGE_ORIGIN } from '@house-scanner-tools/source-registry';
 import {
   type Observation,
@@ -10,7 +11,7 @@ import {
 export const MAX_HTML_CHARS = 3_000_000;
 export const MAX_ITEMS_PER_PAGE = 100;
 
-export interface BoneoReadContext {
+export interface ReadContext {
   /** Canonical origin; item links must resolve to exactly this origin. */
   origin: string;
   /** Fetch time. Becomes observedAt on every observation. */
@@ -26,12 +27,14 @@ export type MorePages =
 
 export type PageFailure =
   | 'no-embedded-data'
+  // A page without the results list, including an empty body. Bjurfors only.
+  | 'no-results-list'
   | 'invalid-embedded-data'
   | 'unexpected-shape'
   | 'inconsistent-count'
   | 'too-large';
 
-export type BoneoPageRead =
+export type PageRead =
   | {
       kind: 'page';
       observations: Observation[];
@@ -56,7 +59,7 @@ function text(value: unknown): string | null {
   return trimmed === '' ? null : trimmed;
 }
 
-function numberOf(value: unknown): number | null {
+export function numberOf(value: unknown): number | null {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (typeof value === 'string' && /^-?\d+([.,]\d+)?$/.test(value.trim()))
     return Number(value.trim().replace(',', '.'));
@@ -70,7 +73,7 @@ function isoOf(value: unknown): string | null {
   return Number.isNaN(time) ? null : new Date(time).toISOString();
 }
 
-function positiveInt(value: unknown, max: number): number | null {
+export function positiveInt(value: unknown, max: number): number | null {
   const number = numberOf(value);
   return number !== null && Number.isInteger(number) && number > 0
     ? number <= max
@@ -79,7 +82,7 @@ function positiveInt(value: unknown, max: number): number | null {
     : null;
 }
 
-function area(value: unknown, max = 10_000): number | null {
+export function area(value: unknown, max = 10_000): number | null {
   const number = numberOf(value);
   return number !== null && number > 0 && number <= max ? number : null;
 }
@@ -306,8 +309,8 @@ function observationFromItem(
 
 export function parseBoneoNextData(
   data: unknown,
-  context: BoneoReadContext,
-): BoneoPageRead {
+  context: ReadContext,
+): PageRead {
   if (!isRecord(data))
     return { kind: 'failed', reason: 'invalid-embedded-data' };
   const props = isRecord(data.props) ? data.props : null;
@@ -369,8 +372,8 @@ function positiveOrZero(value: unknown): number | null {
 /** Page-level reader: HTML in, observations and a more-pages signal out. */
 export function readBoneoSearchPage(
   html: string,
-  context: BoneoReadContext,
-): BoneoPageRead {
+  context: ReadContext,
+): PageRead {
   if (html.length > MAX_HTML_CHARS)
     return { kind: 'failed', reason: 'too-large' };
   const data = extractNextData(html);
@@ -379,7 +382,12 @@ export function readBoneoSearchPage(
 }
 
 export type BoneoDetailRead =
-  | { kind: 'detail'; outdoor: Facts['outdoor']; glazed: boolean | null }
+  | {
+      kind: 'detail';
+      outdoor: Facts['outdoor'];
+      glazed: boolean | null;
+      groundFloor: boolean | null;
+    }
   | { kind: 'failed'; reason: PageFailure };
 
 // shortcut: only "inglasad balkong" word order is read, so "balkongen är inglasad" stays unknown. Widen if misses show up.
@@ -391,7 +399,7 @@ const isFlag = (value: unknown) =>
   typeof value === 'boolean' || value === null || value === undefined;
 
 /**
- * Reads only balcony, terrace and glazing from a listing page. A false or
+ * Reads only balcony, terrace, glazing and the floor number from a listing page. A false or
  * missing flag is unknown, never "none", because the broker may leave it
  * unticked. The description is matched and dropped, never returned.
  */
@@ -430,6 +438,7 @@ export function parseBoneoDetail(data: unknown): BoneoDetailRead {
             ? 'terrace'
             : null,
     glazed: glazed ? true : null,
+    groundFloor: groundFloorOf(detail.field_floor),
   };
 }
 

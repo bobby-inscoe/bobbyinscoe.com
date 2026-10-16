@@ -72,9 +72,9 @@ export function ManualListingForm({
     <form onSubmit={submit}>
       <Stack>
         <Title order={2}>Add a listing link</Title>
-        <Text>
-          Only a link is required. This bookmarks the page without fetching it.
-          Notes are shared with the household; tags are your annotations.
+        <Text size="sm" c="dimmed">
+          Bookmarks the page without fetching it. Notes are shared with the
+          household.
         </Text>
         <TextInput
           label="Listing link"

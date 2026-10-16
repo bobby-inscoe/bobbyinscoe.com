@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Anchor,
   Badge,
   Button,
@@ -17,6 +18,7 @@ import type {
   Listing,
   Snapshot,
 } from '@/features/house-scanner/types/contracts';
+import { isOnMap } from '@/features/house-scanner/utils/listing-filters';
 import {
   formatDate,
   formatPrice,
@@ -84,6 +86,8 @@ interface ListingCardProps {
   notes?: ListingNotesController;
   onSelect: () => void;
   onFavorite: () => void;
+  // Shown only for homes that have a pin.
+  onSeeOnMap?: () => void;
 }
 
 export function ListingCard({
@@ -98,6 +102,7 @@ export function ListingCard({
   notes,
   onSelect,
   onFavorite,
+  onSeeOnMap,
 }: ListingCardProps) {
   const saved = snapshot.favorites.filter(
     (favorite) => favorite.listingId === listing.id,
@@ -119,7 +124,22 @@ export function ListingCard({
       className={`${styles.card} ${selected ? styles.selected : ''}`}
       aria-label={listing.title}
     >
-      <ListingPhoto listing={listing} />
+      <div className={styles.photoWrap}>
+        <ListingPhoto listing={listing} />
+        <ActionIcon
+          className={styles.star}
+          variant={mine ? 'filled' : 'default'}
+          color="moss"
+          size="lg"
+          radius="xl"
+          aria-label={mine ? 'Remove my favorite' : 'Save favorite'}
+          disabled={!canSave}
+          loading={busy}
+          onClick={onFavorite}
+        >
+          {mine ? '★' : '☆'}
+        </ActionIcon>
+      </div>
       <Group gap="xs">
         <Badge variant="light">
           {listing.conflicts.includes('status')
@@ -164,10 +184,14 @@ export function ListingCard({
           <Text size="sm" fw={600}>
             {profile.name}: {SECTION_LABELS[result.section]}
           </Text>
-          <Text size="sm">{result.reasons.join('; ')}</Text>
-          <Text size="sm">
-            {(details ? result.caveats : result.caveats.slice(0, 3)).join('; ')}
-          </Text>
+          {details && (
+            <>
+              <Text size="sm">{result.reasons.join('; ')}</Text>
+              <Text size="sm" c="dimmed">
+                {result.caveats.join('; ')}
+              </Text>
+            </>
+          )}
         </Stack>
       ))}
       {matches.length === 0 && (
@@ -175,11 +199,12 @@ export function ListingCard({
           No enabled search profiles. This home has not been matched.
         </Text>
       )}
-      <Text size="sm">
-        Saved by:{' '}
-        {saved.map((favorite) => memberName(favorite.userId)).join(', ') ||
-          'Nobody'}
-      </Text>
+      {saved.length > 0 && (
+        <Text size="sm">
+          Saved by{' '}
+          {saved.map((favorite) => memberName(favorite.userId)).join(', ')}
+        </Text>
+      )}
       <Group>
         <Button
           component="a"
@@ -201,14 +226,11 @@ export function ListingCard({
         >
           Details
         </Button>
-        <Button
-          size="xs"
-          disabled={!canSave}
-          loading={busy}
-          onClick={onFavorite}
-        >
-          {mine ? 'Remove my favorite' : 'Save favorite'}
-        </Button>
+        {onSeeOnMap && isOnMap(listing) && (
+          <Button size="xs" variant="default" onClick={onSeeOnMap}>
+            See on map
+          </Button>
+        )}
       </Group>
       {!canSave && (
         <Text size="xs">Favorite changes are unavailable in this view.</Text>
@@ -225,8 +247,7 @@ export function ListingCard({
               <Text size="sm">
                 Not seen in the latest scan. Last seen{' '}
                 {formatDate(listing.observedAt)}. The source page may have
-                changed or been removed, so open it to check. Remove your
-                favorite and clear your note when you no longer want this home.
+                changed or been removed, so open it to check.
               </Text>
             </Paper>
           )}
@@ -268,11 +289,11 @@ export function ListingCard({
                   : 'No'}
             </Text>
           </div>
-          <Text size="sm">
-            {listing.conflicts.length
-              ? `Conflicting fields: ${listing.conflicts.join(', ')}`
-              : 'No reported field conflicts.'}
-          </Text>
+          {listing.conflicts.length > 0 && (
+            <Text size="sm">
+              Conflicting fields: {listing.conflicts.join(', ')}
+            </Text>
+          )}
           <Text size="sm">
             Location:{' '}
             {listing.coordinates
@@ -282,10 +303,7 @@ export function ListingCard({
           {listing.coordinates?.precision === 'approximate_area' && (
             <Text size="sm">Approximate area; no exact pin is shown.</Text>
           )}
-          <Text size="sm">
-            Last observed: {formatDate(listing.observedAt)}. A missing later
-            observation does not prove sale or withdrawal.
-          </Text>
+          <Text size="sm">Last observed: {formatDate(listing.observedAt)}</Text>
           {listing.sourceUrls.map((url) => (
             <Anchor
               key={url}

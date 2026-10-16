@@ -1,13 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { prepareFixtureRun } from '@house-scanner-tools/collector';
 import {
-  assertBoneoExecutor,
+  GEOCODE_CACHE_PATH,
+  loadGeocodeCache,
+  saveGeocodeCache,
+} from '@house-scanner-tools/geocoder';
+import {
   defaultLiveDeps,
   type LiveEvent,
   prepareLiveRun,
-} from '@house-scanner-tools/boneo-live';
-import { prepareFixtureRun } from '@house-scanner-tools/collector';
+} from '@house-scanner-tools/live-reader';
 import { queryPlanInputSchema } from '@house-scanner-tools/query-plan';
 import {
   DEFAULT_CACHE_PATH,
@@ -16,8 +20,10 @@ import {
   startLiveRun,
 } from '@house-scanner-tools/run-memory';
 import { senderConfig, sendRequests } from '@house-scanner-tools/sender';
+import { adapterFor } from '@house-scanner-tools/source-adapters';
 import {
   approvedPolicy,
+  BJURFORS_SOURCE_ID,
   BONEO_SOURCE_ID,
   DEMO_SOURCE_ID,
   sourceRegistry,
@@ -61,14 +67,16 @@ type Values = {
   force: boolean;
 };
 
-// Live reads need three explicit flags and cover Boneo only. Sending adds
+const LIVE_SOURCES = [BONEO_SOURCE_ID, BJURFORS_SOURCE_ID];
+
+// Live reads need three explicit flags and cover Boneo and Bjurfors only. Sending adds
 // --send --confirm-send. Output is counts, statuses and partition names;
 // observations are never printed or saved. A small run memory file keeps listing
 // ids and two facts, so listing pages read recently are not requested again and
 // two live reads cannot start close together.
 async function live(values: Values) {
-  if (values.source !== BONEO_SOURCE_ID)
-    throw new Error('Live reading exists for boneo only.');
+  if (values.source === undefined || !LIVE_SOURCES.includes(values.source))
+    throw new Error('Live reading exists for boneo and bjurfors only.');
   if (!values['confirm-personal-read'])
     throw new Error('Live reading needs --confirm-personal-read.');
   if (values.at !== undefined)
@@ -76,7 +84,7 @@ async function live(values: Values) {
   if (values.profiles === undefined)
     throw new Error('Live reading needs --profiles <private file>.');
   const capability = sourceRegistry().find(
-    (entry) => entry.policy.sourceId === BONEO_SOURCE_ID,
+    (entry) => entry.policy.sourceId === values.source,
   );
   if (!capability) throw new Error('Unknown source.');
   const profiles = queryPlanInputSchema.shape.profiles.parse(
@@ -84,10 +92,12 @@ async function live(values: Values) {
   );
   // Checked before the read so a bad environment costs no requests to the source.
   const sender = values.send ? senderConfig(process.env) : null;
-  assertBoneoExecutor(capability);
+  adapterFor(capability);
   // Refuses a too-soon run here and records this one, before any request.
   const cachePath = resolve(values.cache ?? DEFAULT_CACHE_PATH);
   const memory = startLiveRun(cachePath, Date.now(), values.force);
+  const geocodePath = resolve(GEOCODE_CACHE_PATH);
+  const geocodeCache = loadGeocodeCache(geocodePath);
   const events: LiveEvent[] = [];
   const prepared = await prepareLiveRun(
     {
@@ -96,12 +106,18 @@ async function live(values: Values) {
       capability,
       planning: { profiles, collectionPriceCapSek: null, maxPartitions: 5 },
       memory,
+      geocodeCache,
     },
     defaultLiveDeps((event) => events.push(event)),
   );
   let cacheSaved = true;
   try {
     saveMemory(cachePath, memory.memory, Date.now());
+  } catch {
+    cacheSaved = false;
+  }
+  try {
+    saveGeocodeCache(geocodePath, geocodeCache);
   } catch {
     cacheSaved = false;
   }
@@ -147,8 +163,10 @@ function printPolicySql(
   source: string | undefined,
   household: string | undefined,
 ) {
-  if (source !== BONEO_SOURCE_ID)
-    throw new Error('--print-policy-sql supports --source=boneo only.');
+  if (source === undefined || !LIVE_SOURCES.includes(source))
+    throw new Error(
+      '--print-policy-sql supports --source=boneo and --source=bjurfors only.',
+    );
   if (!household || !z.uuid().safeParse(household).success)
     throw new Error('--print-policy-sql needs --household <household uuid>.');
   const json = JSON.stringify(approvedPolicy(source)).replaceAll("'", "''");

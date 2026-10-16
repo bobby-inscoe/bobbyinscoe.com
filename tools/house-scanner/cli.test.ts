@@ -202,10 +202,36 @@ it('prints the SQL that approves the Boneo policy without any network or file ac
   expect(Date.parse(policy.reviewDueAt)).toBeGreaterThan(Date.now());
 });
 
+it('prints the SQL that approves the Bjurfors policy at revision 1', () => {
+  const result = runPrinter('--source=bjurfors', `--household=${HOUSEHOLD}`);
+  expect(result.status).toBe(0);
+  const match =
+    /^select hs\.admin_set_source_policy\('([^']+)', '(.*)'::jsonb\);\n$/s.exec(
+      result.stdout,
+    );
+  expect(match?.[1]).toBe(HOUSEHOLD);
+  const policy = JSON.parse((match?.[2] ?? '').replaceAll("''", "'"));
+  expect(policy).toMatchObject({
+    sourceId: 'bjurfors',
+    revision: 1,
+    status: 'approved',
+    automatedCollection: true,
+    privateDisplay: true,
+    imageDisplay: true,
+    imageHotlink: true,
+    imageOrigins: ['https://www.bjurfors.se'],
+    listingOrigins: ['https://www.bjurfors.se'],
+    retentionDays: 14,
+  });
+  expect(policy.allowedFactFields).toContain('groundFloor');
+});
+
 it.each([
   [['--source=boneo']],
   [['--source=boneo', '--household=not-a-uuid']],
-  [['--source=bjurfors', `--household=${HOUSEHOLD}`]],
+  [['--source=bjurfors']],
+  [['--source=bjurfors', '--household=not-a-uuid']],
+  [['--source=erik-olsson', `--household=${HOUSEHOLD}`]],
 ])('refuses to print policy SQL for %j', (args) => {
   const result = runPrinter(...args);
   expect(result.status).toBe(1);
@@ -236,6 +262,52 @@ const runLive = (cwd: string, ...args: string[]) =>
     ],
     { encoding: 'utf8', timeout: 20_000, cwd },
   );
+
+it('reads bjurfors live under the same flags, and makes its first request to robots.txt only', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'hs-cwd-'));
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--require',
+      noFetch,
+      resolve('.house-scanner-build/collector.mjs'),
+      '--live',
+      '--source=bjurfors',
+      '--confirm-personal-read',
+      '--profiles',
+      profilesPath,
+    ],
+    { encoding: 'utf8', timeout: 20_000, cwd },
+  );
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({
+    stopped: 'robots-unavailable',
+    requestCount: 1,
+  });
+});
+
+it('refuses a live read of a source that has no executor', () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--require',
+      noFetch,
+      resolve('.house-scanner-build/collector.mjs'),
+      '--live',
+      '--source=erik-olsson',
+      '--confirm-personal-read',
+      '--profiles',
+      profilesPath,
+    ],
+    {
+      encoding: 'utf8',
+      timeout: 20_000,
+      cwd: mkdtempSync(join(tmpdir(), 'hs-cwd-')),
+    },
+  );
+  expect(result.status).toBe(1);
+  expect(result.stdout).toBe('');
+});
 
 it('never creates the run memory file in fixture mode and rejects its flags there', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'hs-cwd-'));

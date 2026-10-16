@@ -17,6 +17,12 @@
   font: 500 var(--mantine-font-size-xs) / 1.4 var(--mantine-font-family);
   cursor: pointer;
 }
+/* A different shape and a dashed edge keep the catch-all from passing for a real home. */
+.unlocated {
+  border-style: dashed;
+  border-radius: var(--mantine-radius-xs);
+  padding: 0 8px;
+}
 .marker[aria-pressed="true"] {
   background: var(--mantine-color-moss-0);
 }

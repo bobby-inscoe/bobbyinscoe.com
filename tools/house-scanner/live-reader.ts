@@ -1,29 +1,27 @@
 import { randomUUID } from 'node:crypto';
-import {
-  readBoneoDetailPage,
-  readBoneoSearchPage,
-} from '@house-scanner-tools/boneo-parser';
+import type { PageRead, ReadContext } from '@house-scanner-tools/boneo-parser';
 import {
   MAX_BATCH_OBSERVATIONS,
   MAX_RUN_OBSERVATIONS,
   sourceIdentity,
 } from '@house-scanner-tools/collector';
+import {
+  type GeocodeCache,
+  geocodeMissing,
+} from '@house-scanner-tools/geocoder';
 import { prefilterObservations } from '@house-scanner-tools/prefilter';
 import {
   planQueries,
   type queryPlanInputSchema,
 } from '@house-scanner-tools/query-plan';
 import {
+  type DetailFacts,
   freshDetail,
   type LoadedMemory,
   type RunMemory,
 } from '@house-scanner-tools/run-memory';
+import { adapterFor } from '@house-scanner-tools/source-adapters';
 import type { SourceCapability } from '@house-scanner-tools/source-registry';
-import {
-  BONEO_IMAGE_ORIGIN,
-  BONEO_ORIGIN,
-  BONEO_SOURCE_ID,
-} from '@house-scanner-tools/source-registry';
 import type { z } from 'zod';
 import {
   CONTRACT_VERSION,
@@ -35,20 +33,14 @@ import {
 export const USER_AGENT =
   'HouseScannerPersonalReader/0.1 (private household tool)';
 const ROBOTS_TOKEN = 'housescannerpersonalreader';
+// Each gap is drawn per request between these, so requests do not land in lockstep.
 export const MIN_INTERVAL_MS = 2000;
+export const MAX_INTERVAL_MS = 4000;
 export const MAX_PAGES_PER_PARTITION = 40;
 export const MAX_REQUESTS_PER_RUN = 250;
 export const MAX_DETAIL_PAGES_PER_RUN = 150;
 export const REQUEST_TIMEOUT_MS = 15_000;
 export const MAX_BODY_CHARS = 3_000_000;
-
-// Path segments proven from one public Goteborg district URL. The municipality
-// level path is derived by dropping the district segment and is unproven. A
-// wrong guess surfaces as a page without embedded data, which fails coverage.
-const APARTMENT_SEGMENT = 'lägenhet';
-const MUNICIPALITY_PATHS: Record<string, readonly [string, string]> = {
-  göteborg: ['västra götalands', 'göteborg'],
-};
 
 // A listing page that fails for any other reason only costs that listing's extra facts.
 const STOPS_RUN: StopReason[] = [
@@ -124,14 +116,6 @@ export function robotsAllows(robots: RobotsRules, pathAndQuery: string) {
   return best === null || best.allow;
 }
 
-export function partitionUrl(municipality: string): string | null {
-  const parts = MUNICIPALITY_PATHS[municipality.trim().toLowerCase()];
-  if (!parts) return null;
-  return `${BONEO_ORIGIN}/sv/till_salu/${[APARTMENT_SEGMENT, ...parts]
-    .map(encodeURIComponent)
-    .join('/')}`;
-}
-
 export type StopReason =
   | 'robots-unavailable'
   | 'robots-disallow'
@@ -144,6 +128,7 @@ export type StopReason =
   | 'not-html'
   | 'oversize'
   | 'no-embedded-data'
+  | 'no-results-list'
   | 'invalid-embedded-data'
   | 'unexpected-shape'
   | 'inconsistent-count'
@@ -184,6 +169,8 @@ export interface LiveEvent {
 export interface LiveDeps {
   fetch: typeof fetch;
   now: () => number;
+  // A number in [0, 1] that sizes each gap between requests: 0 gives the minimum, 1 the maximum.
+  random: () => number;
   sleep: (ms: number) => Promise<void>;
   log: (event: LiveEvent) => void;
 }
@@ -192,8 +179,57 @@ export function defaultLiveDeps(log: (event: LiveEvent) => void): LiveDeps {
   return {
     fetch: (input, init) => fetch(input, init),
     now: () => Date.now(),
+    random: () => Math.random(),
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     log,
+  };
+}
+
+/** What differs between sources. Robots, pacing, caps, stop rules, run memory and the detail phase are shared. */
+export interface SourceAdapter {
+  sourceId: string;
+  executor: SourceCapability['executor'];
+  origin: string;
+  imageOrigin: string;
+  headers: Record<string, string>;
+  // Label for a coordinate this source's listing pages supply.
+  coordinateSource: string;
+  // Sentence parts for the coverage note.
+  detailLabel: string;
+  notCovered: string;
+  /** First page of a partition, or why the partition cannot be read. */
+  partitionUrl(partition: LivePartitionInput): string | { unsupported: string };
+  readSearchPage(html: string, context: ReadContext): PageRead;
+  readDetailPage(
+    html: string,
+  ):
+    | { kind: 'detail'; facts: DetailFacts }
+    | { kind: 'failed'; reason: StopReason };
+}
+
+/** Merges what a listing page supplied; unknown and missing values never overwrite. */
+function applyDetail(
+  adapter: SourceAdapter,
+  observation: Observation,
+  { latitude, longitude, ...facts }: DetailFacts,
+) {
+  Object.assign(
+    observation.facts,
+    Object.fromEntries(
+      Object.entries(facts).filter(
+        ([, value]) =>
+          value !== undefined && value !== null && value !== 'unknown',
+      ),
+    ),
+  );
+  if (latitude === undefined || longitude === undefined) return;
+  observation.coordinates = {
+    latitude,
+    longitude,
+    // A title with a house number is a street address; Bjurfors points sat within 12 m of an independent geocoder on four of four.
+    precision: /\d/.test(observation.title) ? 'address' : 'approximate_area',
+    source: adapter.coordinateSource,
+    observedAt: observation.observedAt,
   };
 }
 
@@ -208,7 +244,8 @@ export interface LiveRunResult {
   stopped: StopReason | null;
 }
 
-export async function runBoneoCollection(
+export async function runCollection(
+  adapter: SourceAdapter,
   partitions: readonly LivePartitionInput[],
   deps: LiveDeps,
   // Picks the observations whose own listing page is read for outdoor and glazed.
@@ -243,7 +280,9 @@ export async function runBoneoCollection(
     if (requestCount >= MAX_REQUESTS_PER_RUN)
       return { ok: false, stop: 'request-cap' };
     if (lastFinishedAt !== null) {
-      const wait = MIN_INTERVAL_MS - (deps.now() - lastFinishedAt);
+      const gap =
+        MIN_INTERVAL_MS + deps.random() * (MAX_INTERVAL_MS - MIN_INTERVAL_MS);
+      const wait = gap - (deps.now() - lastFinishedAt);
       if (wait > 0) await deps.sleep(wait);
     }
     requestCount += 1;
@@ -252,7 +291,7 @@ export async function runBoneoCollection(
     try {
       response = await deps.fetch(url, {
         method: 'GET',
-        headers: { 'user-agent': USER_AGENT, accept: 'text/html,text/plain' },
+        headers: adapter.headers,
         redirect: 'manual',
         credentials: 'omit',
         cache: 'no-store',
@@ -299,7 +338,7 @@ export async function runBoneoCollection(
     };
   }
 
-  const robotsUrl = `${BONEO_ORIGIN}/robots.txt`;
+  const robotsUrl = `${adapter.origin}/robots.txt`;
   const robotsResponse = await request(robotsUrl);
   deps.log({
     event: 'robots',
@@ -310,16 +349,10 @@ export async function runBoneoCollection(
 
   for (const [index, partition] of partitions.entries()) {
     const outcome = outcomes[index];
-    const base = partitionUrl(partition.municipality);
-    if (base === null) {
+    const base = adapter.partitionUrl(partition);
+    if (typeof base !== 'string') {
       outcome.status = 'unsupported';
-      outcome.reason = 'municipality-path-unproven';
-      deps.log({ event: 'partition-unsupported', partition: partition.id });
-      continue;
-    }
-    if (!partition.propertyTypes.includes('apartment')) {
-      outcome.status = 'unsupported';
-      outcome.reason = 'only-apartment-path-known';
+      outcome.reason = base.unsupported;
       deps.log({ event: 'partition-unsupported', partition: partition.id });
       continue;
     }
@@ -345,8 +378,8 @@ export async function runBoneoCollection(
         return finish(fetched.stop);
       }
       outcome.pages = page;
-      const read = readBoneoSearchPage(fetched.body, {
-        origin: BONEO_ORIGIN,
+      const read = adapter.readSearchPage(fetched.body, {
+        origin: adapter.origin,
         observedAt: new Date(deps.now()),
         receivedBefore: outcome.observations + outcome.skipped,
       });
@@ -364,7 +397,7 @@ export async function runBoneoCollection(
       }
       const room = MAX_RUN_OBSERVATIONS - observations.length;
       const fresh = read.observations.filter((observation) => {
-        const key = sourceIdentity(BONEO_SOURCE_ID, observation);
+        const key = sourceIdentity(adapter.sourceId, observation);
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -417,10 +450,8 @@ export async function runBoneoCollection(
       ? freshDetail(memory, observation.sourceListingId, deps.now())
       : undefined;
     if (cached) {
-      Object.assign(observation.facts, {
-        outdoor: cached.outdoor,
-        glazed: cached.glazed,
-      });
+      const { readAt: _readAt, ...stored } = cached;
+      applyDetail(adapter, observation, stored);
       detailCached += 1;
       continue;
     }
@@ -443,20 +474,16 @@ export async function runBoneoCollection(
       detailFailed += 1;
       continue;
     }
-    const detail = readBoneoDetailPage(fetched.body);
+    const detail = adapter.readDetailPage(fetched.body);
     if (detail.kind === 'failed') {
       deps.log({ event: 'detail-failed', status: 200, reason: detail.reason });
       detailFailed += 1;
       continue;
     }
-    Object.assign(observation.facts, {
-      outdoor: detail.outdoor,
-      glazed: detail.glazed,
-    });
+    applyDetail(adapter, observation, detail.facts);
     if (memory)
       memory.details[observation.sourceListingId] = {
-        outdoor: detail.outdoor,
-        glazed: detail.glazed,
+        ...detail.facts,
         readAt: new Date(deps.now()).toISOString(),
       };
     detailRead += 1;
@@ -471,20 +498,8 @@ export interface LiveRunOptions {
   planning: Omit<z.input<typeof queryPlanInputSchema>, 'capability'>;
   // Updated in place with the listing pages this run reads.
   memory?: LoadedMemory;
-}
-
-export function assertBoneoExecutor(capability: SourceCapability): void {
-  const { policy } = capability;
-  if (
-    capability.executor !== 'boneo-personal-read' ||
-    policy.sourceId !== BONEO_SOURCE_ID ||
-    policy.listingOrigins.length !== 1 ||
-    policy.listingOrigins[0] !== BONEO_ORIGIN ||
-    // Photos are allowed from the one image host only, shown by the browser and never fetched here.
-    policy.imageOrigins.length !== 1 ||
-    policy.imageOrigins[0] !== BONEO_IMAGE_ORIGIN
-  )
-    throw new Error('No permitted executor for this source.');
+  // Estimated positions for kept homes the source gave none for; updated in place.
+  geocodeCache?: GeocodeCache;
 }
 
 /**
@@ -518,7 +533,7 @@ export function assertAdapterOutput(
 }
 
 export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
-  assertBoneoExecutor(options.capability);
+  const adapter = adapterFor(options.capability);
   const queryPlan = planQueries({
     ...options.planning,
     capability: options.capability,
@@ -530,7 +545,8 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
         .filter((profile) => profile.enabled)
         .map((profile) => profile.criteria),
     );
-  const result = await runBoneoCollection(
+  const result = await runCollection(
+    adapter,
     queryPlan.partitions.map(({ id, municipality, propertyTypes }) => ({
       id,
       municipality,
@@ -546,6 +562,9 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
   // it can lose matching listings to non-matching ones. Move this filter into
   // the page loop if runs ever approach the ceiling.
   const { kept, dropped } = prefilter(result.observations);
+  const geocoded = options.geocodeCache
+    ? await geocodeMissing(kept, options.geocodeCache, deps)
+    : null;
   const droppedCount = Object.values(dropped).reduce((a, b) => a + b, 0);
 
   const pages = result.partitions.reduce((sum, p) => sum + p.pages, 0);
@@ -558,10 +577,13 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
   // policy's gap list, which the app strips when it shows this.
   const coverageNote = [
     `Read ${result.observations.length} homes across ${pages} pages; kept ${kept.length} that fit your profile and dropped ${droppedCount}.`,
-    `Balcony and glazing: ${result.detailRead} read, ${result.detailCached} reused, ${result.detailFailed} failed, ${result.detailSkipped} skipped.`,
+    `${adapter.detailLabel}: ${result.detailRead} read, ${result.detailCached} reused, ${result.detailFailed} failed, ${result.detailSkipped} skipped.`,
+    geocoded
+      ? `Positions estimated from addresses: ${geocoded.found} found (${geocoded.cached} reused).`
+      : '',
     options.memory?.reset ? 'Run memory was unreadable and was reset.' : '',
     result.stopped ? `Stopped early: ${result.stopped}.` : '',
-    'Not covered: upcoming and unknown-price listings, houses, other cities.',
+    adapter.notCovered,
   ]
     .filter(Boolean)
     .join(' ');
@@ -572,7 +594,7 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
         ...common,
         action: 'stage',
         batchId: (at === 0 && options.batchId) || randomUUID(),
-        sourceId: BONEO_SOURCE_ID,
+        sourceId: adapter.sourceId,
         observations: kept.slice(at, at + MAX_BATCH_OBSERVATIONS),
       }),
     );
@@ -581,7 +603,7 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
       ...common,
       action: 'begin',
       profileVersions: queryPlan.profileVersions,
-      sourceIds: [BONEO_SOURCE_ID],
+      sourceIds: [adapter.sourceId],
     }),
     ...stages,
     ingestRequestSchema.parse({
@@ -589,7 +611,7 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
       action: 'publish',
       results: [
         {
-          sourceId: BONEO_SOURCE_ID,
+          sourceId: adapter.sourceId,
           status: failed ? 'failed' : 'partial',
           cursor: null,
           coverageNote,

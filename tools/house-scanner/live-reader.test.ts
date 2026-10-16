@@ -1,34 +1,47 @@
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { readBoneoSearchPage } from '@house-scanner-tools/boneo-parser';
 import {
   assertAdapterOutput,
   defaultLiveDeps,
-  type LiveDeps,
   type LiveEvent,
   MAX_DETAIL_PAGES_PER_RUN,
+  MAX_INTERVAL_MS,
   MAX_REQUESTS_PER_RUN,
+  MIN_INTERVAL_MS,
   parseRobots,
-  partitionUrl,
   prepareLiveRun,
   robotsAllows,
-  runBoneoCollection,
-  USER_AGENT,
-} from '@house-scanner-tools/boneo-live';
-
-import { readBoneoSearchPage } from '@house-scanner-tools/boneo-parser';
+  runCollection,
+} from '@house-scanner-tools/live-reader';
+import {
+  deps,
+  fakeFetch,
+  type Reply,
+} from '@house-scanner-tools/live-test-helpers';
 import { planQueries } from '@house-scanner-tools/query-plan';
 import {
   emptyMemory,
   type RunMemory,
   saveMemory,
 } from '@house-scanner-tools/run-memory';
+import {
+  boneoAdapter,
+  partitionUrl,
+  USER_AGENT,
+} from '@house-scanner-tools/source-adapters';
 import { sourceRegistry } from '@house-scanner-tools/source-registry';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SYNTHETIC_SNAPSHOT } from '@/features/house-scanner/mock/synthetic-household';
 import type { Observation } from '@/features/house-scanner/types/contracts';
 import { assertSourceAllowed } from '@/features/house-scanner/utils/source-policy';
 
+const runBoneoCollection = (
+  ...args: Parameters<typeof runCollection> extends [unknown, ...infer Rest]
+    ? Rest
+    : never
+) => runCollection(boneoAdapter, ...args);
 const fixture = (name: string) =>
   readFileSync(resolve('tools/house-scanner/fixtures/boneo', name), 'utf8');
 const ROBOTS = fixture('robots.txt');
@@ -55,34 +68,6 @@ function nextPage(ids: number[], count: number) {
   })}</script>`;
 }
 
-type Reply = { status?: number; body?: string; type?: string } | Error;
-function fakeFetch(handler: (url: string, call: number) => Reply) {
-  const calls: { url: string; init: RequestInit }[] = [];
-  const impl = vi.fn(
-    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-      const url = String(input);
-      calls.push({ url, init: init ?? {} });
-      const reply = handler(url, calls.length);
-      if (reply instanceof Error) throw reply;
-      return new Response(reply.body ?? '', {
-        status: reply.status ?? 200,
-        headers: { 'content-type': reply.type ?? 'text/html; charset=utf-8' },
-      });
-    },
-  );
-  return { impl: impl as unknown as typeof fetch, calls, spy: impl };
-}
-function deps(fetchImpl: typeof fetch, events: LiveEvent[] = []): LiveDeps {
-  let clock = 0;
-  return {
-    fetch: fetchImpl,
-    now: () => 1_760_000_000_000 + clock,
-    sleep: async (ms) => {
-      clock += ms;
-    },
-    log: (event) => events.push(event),
-  };
-}
 const robotsOr =
   (page: (url: string, n: number) => Reply) =>
   (url: string, n: number): Reply =>
@@ -165,7 +150,7 @@ describe('guarded run', () => {
     expect(calls).toHaveLength(1);
   });
 
-  it('waits at least two seconds between requests', async () => {
+  it('waits the two second minimum when the random draw is zero', async () => {
     vi.useFakeTimers();
     const { impl, spy } = fakeFetch(
       robotsOr((_url, n) => ({ body: nextPage([n], 9) })),
@@ -173,6 +158,7 @@ describe('guarded run', () => {
     const run = runBoneoCollection(goteborg, {
       ...defaultLiveDeps(() => undefined),
       fetch: impl,
+      random: () => 0,
     });
     await vi.advanceTimersByTimeAsync(0);
     expect(spy).toHaveBeenCalledTimes(1);
@@ -187,6 +173,58 @@ describe('guarded run', () => {
     await vi.advanceTimersByTimeAsync(20_000);
     await run;
   });
+
+  it('draws each gap between 2000 and 4000 ms from the random source', async () => {
+    expect([MIN_INTERVAL_MS, MAX_INTERVAL_MS]).toEqual([2000, 4000]);
+    const draws = [0, 1, 0.5, 0.25, 0.999, 0.0001];
+    const stamps: number[] = [];
+    const fake = fakeFetch(robotsOr((_url, n) => ({ body: nextPage([n], 9) })));
+    let index = 0;
+    const base = deps(fake.impl, [], () => draws[index++ % draws.length]);
+    await runBoneoCollection(goteborg, {
+      ...base,
+      fetch: ((...args: Parameters<typeof fetch>) => {
+        stamps.push(base.now());
+        return fake.impl(...args);
+      }) as typeof fetch,
+    });
+    const gaps = stamps.slice(1).map((at, i) => at - stamps[i]);
+    expect(gaps).toHaveLength(9);
+    // One draw per request after the first, in order.
+    draws.forEach((draw, i) => {
+      expect(gaps[i]).toBeCloseTo(MIN_INTERVAL_MS + draw * 2000, 2);
+    });
+    for (const gap of gaps) {
+      expect(gap).toBeGreaterThanOrEqual(MIN_INTERVAL_MS);
+      expect(gap).toBeLessThanOrEqual(MAX_INTERVAL_MS);
+    }
+  });
+
+  it.each([0, 0.3, 0.7, 1])(
+    'keeps every gap inside the window when the draw is %s',
+    async (draw) => {
+      const stamps: number[] = [];
+      const fake = fakeFetch(
+        robotsOr((_url, n) => ({ body: nextPage([n], 5) })),
+      );
+      const base = deps(fake.impl, [], () => draw);
+      await runBoneoCollection(
+        goteborg,
+        {
+          ...base,
+          fetch: ((...args: Parameters<typeof fetch>) => {
+            stamps.push(base.now());
+            return fake.impl(...args);
+          }) as typeof fetch,
+        },
+        (all) => all,
+      );
+      const gaps = stamps.slice(1).map((at, i) => at - stamps[i]);
+      expect(gaps.length).toBeGreaterThan(5);
+      expect(Math.min(...gaps)).toBeCloseTo(2000 + draw * 2000, 2);
+      expect(Math.max(...gaps)).toBeCloseTo(2000 + draw * 2000, 2);
+    },
+  );
 
   it('stops at forty pages per partition and reports truncation', async () => {
     let id = 0;
@@ -370,7 +408,7 @@ describe('prepared run', () => {
       imageHotlink: true,
       imageOrigins: ['https://files.boneo.se'],
       retentionDays: 14,
-      revision: 3,
+      revision: 4,
       capabilities: {
         upcoming: false,
         unknownPrice: false,
@@ -381,11 +419,11 @@ describe('prepared run', () => {
       3,
     );
     expect(capability.policy.allowedFactFields).toEqual(
-      expect.arrayContaining(['outdoor', 'glazed']),
+      expect.arrayContaining(['outdoor', 'glazed', 'groundFloor']),
     );
     const gaps = capability.policy.capabilities.coverageGaps.join(' ');
     expect(gaps).not.toContain('not structured fields');
-    expect(gaps).toContain('Floor, lift and build year are not collected');
+    expect(gaps).toContain('Lift and build year are not collected');
     expect(() =>
       assertSourceAllowed(capability.policy, new Date('2026-10-13T00:00:00Z')),
     ).toThrow();
@@ -736,7 +774,7 @@ describe('listing pages', () => {
     );
     const run = runBoneoCollection(
       goteborg,
-      { ...defaultLiveDeps(() => undefined), fetch: impl },
+      { ...defaultLiveDeps(() => undefined), fetch: impl, random: () => 0 },
       keepAll,
     );
     await vi.advanceTimersByTimeAsync(0);
@@ -1065,7 +1103,7 @@ describe('listing pages', () => {
       expect(result.observations[0].facts.outdoor).toBeNull();
     });
 
-    it('saves listing ids and two facts only', async () => {
+    it('saves listing ids and the listing page facts only', async () => {
       const memory = memoryOf({});
       const { impl } = fakeFetch(
         robotsOr(serve(3, () => ({ body: fixture('detail-glazed.html') }))),
@@ -1082,7 +1120,12 @@ describe('listing pages', () => {
       ]);
       expect(Object.keys(saved.details)).toEqual(['1', '2', '3']);
       for (const entry of Object.values<object>(saved.details))
-        expect(Object.keys(entry)).toEqual(['outdoor', 'glazed', 'readAt']);
+        expect(Object.keys(entry)).toEqual([
+          'outdoor',
+          'glazed',
+          'groundFloor',
+          'readAt',
+        ]);
       for (const value of ['Fixturegatan', 'fixture-', 'https', 'boneo'])
         expect(text).not.toContain(value);
     });

@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Button,
   Group,
   Select,
@@ -6,18 +7,21 @@ import {
   Stack,
   Text,
   Title,
+  Tooltip,
 } from '@mantine/core';
 import {
   Component,
   lazy,
   type ReactNode,
   Suspense,
+  useDeferredValue,
   useMemo,
   useState,
 } from 'react';
 
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import { ListingCard } from '@/features/house-scanner/components/listing-card';
+import { ListingFilterPanel } from '@/features/house-scanner/components/listing-filter-panel';
 import { ManualListingForm } from '@/features/house-scanner/components/manual-listing-form';
 import { PinCard } from '@/features/house-scanner/components/pin-card';
 import { ProfileEditor } from '@/features/house-scanner/components/profile-editor';
@@ -31,6 +35,14 @@ import type {
   SearchProfile,
   Snapshot,
 } from '@/features/house-scanner/types/contracts';
+import {
+  activeFilterCount,
+  applyListingFilters,
+  emptyFilters,
+  isOnMap,
+  type ListingFilters,
+  listingHost,
+} from '@/features/house-scanner/utils/listing-filters';
 import { isListingStale } from '@/features/house-scanner/utils/listing-staleness';
 import {
   readScanSummary,
@@ -42,6 +54,14 @@ import {
   listingMatches,
   SECTION_LABELS,
 } from '@/features/house-scanner/utils/workspace-view';
+
+// Homes without a usable position share one marker here, in the water off Gothenburg.
+const UNLOCATED_POSITION = { latitude: 57.69, longitude: 11.78 };
+
+function compactPrice(sek: number) {
+  if (sek < 1_000_000) return `${Math.round(sek / 1000)}k`;
+  return `${(sek / 1_000_000).toFixed(1).replace('.', ',').replace(',0', '')}M`;
+}
 
 const LazyMap = lazy(() =>
   import('@/features/house-scanner/map/household-map').then((module) => ({
@@ -106,7 +126,11 @@ export function HouseholdWorkspace({
   const [message, setMessage] = useState('');
   const member = snapshot.members.find((entry) => entry.userId === userId);
   const synthetic = snapshot.edition?.coverage === 'synthetic';
-  const visible = useMemo(
+  const [filters, setFilters] = useState<ListingFilters>(emptyFilters);
+  const [satellite, setSatellite] = useState(true);
+  // Typing in a filter stays responsive while the list catches up.
+  const deferredFilters = useDeferredValue(filters);
+  const scoped = useMemo(
     () =>
       snapshot.listings.filter((listing) => {
         if (tab === 'favorites')
@@ -127,29 +151,46 @@ export function HouseholdWorkspace({
       }),
     [snapshot, tab, person, userId, section],
   );
+  const visible = useMemo(
+    () => applyListingFilters(scoped, deferredFilters),
+    [scoped, deferredFilters],
+  );
+  const filterHosts = useMemo(
+    () => [...new Set(snapshot.listings.map(listingHost))],
+    [snapshot.listings],
+  );
   const points = useMemo(
     () =>
-      visible.flatMap((listing) =>
-        listing.coordinates &&
-        listing.coordinates.precision !== 'approximate_area'
-          ? [
-              {
-                id: listing.id,
-                coordinates: listing.coordinates,
-                markerText:
-                  listing.facts.askingPriceSek === null ||
-                  listing.conflicts.includes('askingPriceSek')
-                    ? listing.conflicts.includes('askingPriceSek')
-                      ? 'Price disputed'
-                      : 'Price unknown'
-                    : `${new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(listing.facts.askingPriceSek)} SEK`,
-                label: `${listing.title}: ${listing.conflicts.includes('askingPriceSek') ? 'Price disputed' : formatPrice(listing.facts.askingPriceSek)} · ${listing.conflicts.includes('status') ? 'Status disputed' : listing.facts.status}`,
-              },
-            ]
-          : [],
-      ),
+      visible.map((listing) => {
+        const price = listing.conflicts.includes('askingPriceSek')
+          ? 'Price disputed'
+          : formatPrice(listing.facts.askingPriceSek);
+        const status = listing.conflicts.includes('status')
+          ? 'Status disputed'
+          : listing.facts.status;
+        return isOnMap(listing) && listing.coordinates
+          ? {
+              id: listing.id,
+              coordinates: listing.coordinates,
+              // Compact pin text; the label and card carry the full price or dispute.
+              markerText:
+                listing.facts.askingPriceSek === null ||
+                listing.conflicts.includes('askingPriceSek')
+                  ? '?'
+                  : compactPrice(listing.facts.askingPriceSek),
+              label: `${listing.title}: ${price} · ${status}`,
+            }
+          : {
+              id: listing.id,
+              coordinates: UNLOCATED_POSITION,
+              markerText: '?',
+              label: `${listing.title}: ${price} · ${status} · no known position`,
+              unlocated: true,
+            };
+      }),
     [visible],
   );
+  const notLocated = visible.filter((listing) => !isOnMap(listing)).length;
   const selected = visible.find((listing) => listing.id === selectedId) ?? null;
   // At most one card shows details at a time, so one controller serves them all.
   const notesListingId =
@@ -246,10 +287,10 @@ export function HouseholdWorkspace({
               : value === 'sources'
                 ? 'Sources'
                 : value === 'settings'
-                  ? 'Settings and status'
+                  ? 'Settings'
                   : value === 'favorites'
                     ? 'Favorites'
-                    : 'Suggestions'}
+                    : 'Listings'}
           </Button>
         ))}
       </Group>
@@ -323,12 +364,12 @@ export function HouseholdWorkspace({
         </Stack>
       ) : tab === 'settings' ? (
         <Stack>
-          <Title order={2}>Search criteria and status</Title>
-          <Text>
-            {synthetic
-              ? 'These criteria are fictional. Edits affect this demo only.'
-              : 'Shared profiles belong to this household. Existing favorites remain when criteria change.'}
-          </Text>
+          <Title order={2}>Search criteria</Title>
+          {synthetic && (
+            <Text size="sm" c="dimmed">
+              These criteria are fictional. Edits affect this demo only.
+            </Text>
+          )}
           {snapshot.profiles.length ? (
             snapshot.profiles.map((profile) => (
               <ProfileEditor
@@ -339,27 +380,16 @@ export function HouseholdWorkspace({
               />
             ))
           ) : (
-            <Text>
-              No search profiles are configured. No defaults have been applied.
-            </Text>
+            <Text>No search profiles yet.</Text>
           )}
-          <Text>
-            Source collection and optional digests are not configured by this
-            screen. Map availability is independent of listing freshness.
-          </Text>
         </Stack>
       ) : (
         <>
           <Group align="flex-end" justify="space-between">
             <Stack gap="xs">
               <Title order={2}>
-                {tab === 'favorites' ? 'Shared favorites' : 'Suggestions'}
+                {tab === 'favorites' ? 'Favorites' : 'Listings'}
               </Title>
-              <Text size="sm">
-                {tab === 'favorites'
-                  ? 'One home per card, with each member’s save shown.'
-                  : 'Potential matches across enabled profiles. Suggestions do not indicate buyer interest.'}
-              </Text>
             </Stack>
             {tab === 'favorites' ? (
               <Select
@@ -377,25 +407,67 @@ export function HouseholdWorkspace({
                 comboboxProps={{ withinPortal: false }}
               />
             ) : (
-              <Select
-                label="Suggestion section"
-                value={section}
-                onChange={(value) => setSection(value ?? 'all')}
-                data={[
-                  { value: 'all', label: 'All suggestions and manual links' },
-                  ...Object.entries(SECTION_LABELS)
-                    .filter(([value]) => value !== 'outside')
-                    .map(([value, label]) => ({ value, label })),
-                  { value: 'manual', label: 'Added by household' },
-                ]}
-                comboboxProps={{ withinPortal: false }}
-              />
+              <Group gap="xs" align="flex-end" wrap="nowrap">
+                <Select
+                  label="Match"
+                  value={section}
+                  onChange={(value) => setSection(value ?? 'all')}
+                  data={[
+                    { value: 'all', label: 'All' },
+                    ...Object.entries(SECTION_LABELS)
+                      .filter(([value]) => value !== 'outside')
+                      .map(([value, label]) => ({ value, label })),
+                    { value: 'manual', label: 'Links we added' },
+                  ]}
+                  comboboxProps={{ withinPortal: false }}
+                />
+                <Tooltip
+                  multiline
+                  w={300}
+                  events={{ hover: true, focus: true, touch: true }}
+                  label={
+                    <Stack gap={4}>
+                      <Text size="xs">
+                        Within budget: at or under your preferred price.
+                      </Text>
+                      <Text size="xs">
+                        Stretch budget: over it, within your stretch limit.
+                      </Text>
+                      <Text size="xs">
+                        Close to your criteria: misses one rule that can bend.
+                      </Text>
+                      <Text size="xs">
+                        Missing info: facts are unknown, so it can’t be judged.
+                      </Text>
+                      <Text size="xs">
+                        Links we added: pasted in by the household.
+                      </Text>
+                    </Stack>
+                  }
+                >
+                  <ActionIcon
+                    variant="subtle"
+                    color="gray"
+                    size="lg"
+                    aria-label="What the match options mean"
+                  >
+                    ⓘ
+                  </ActionIcon>
+                </Tooltip>
+              </Group>
             )}
           </Group>
+          <ListingFilterPanel
+            filters={filters}
+            onChange={setFilters}
+            hosts={filterHosts}
+            shown={visible.length}
+            total={scoped.length}
+          />
           <Group justify="space-between">
-            <Text size="sm">
-              {visible.length} homes · {visible.length - points.length} list
-              only (unknown or approximate location)
+            <Text size="sm" c="dimmed">
+              {visible.length} homes
+              {notLocated > 0 && ` · ${notLocated} not located`}
             </Text>
             <Group gap="xs" role="group" aria-label="View">
               <Button
@@ -416,7 +488,9 @@ export function HouseholdWorkspace({
           </Group>
           {!visible.length && (
             <Text>
-              No homes in this view. Change the filter or add a listing link.
+              No homes here.
+              {activeFilterCount(filters) > 0 &&
+                ' Clear the filters to see more.'}
             </Text>
           )}
           {view === 'list' ? (
@@ -433,20 +507,43 @@ export function HouseholdWorkspace({
                   busy={pending.includes(listing.id)}
                   canSave={canSave(listing.id)}
                   notes={selectedId === listing.id ? notes : undefined}
-                  onSelect={() => setSelectedId(listing.id)}
+                  onSelect={() =>
+                    setSelectedId((current) =>
+                      current === listing.id ? null : listing.id,
+                    )
+                  }
+                  onSeeOnMap={() => {
+                    setSelectedId(listing.id);
+                    setView('map');
+                  }}
                   onFavorite={() => void favorite(listing.id)}
                 />
               ))}
             </div>
           ) : (
             <div className={styles.mapPanel}>
-              {points.length ? (
+              {visible.length ? (
                 <MapLoadBoundary>
-                  <Suspense
-                    fallback={<Text role="status">Loading map module…</Text>}
-                  >
+                  <Group gap="xs" role="group" aria-label="Basemap">
+                    <Button
+                      variant={satellite ? 'default' : 'filled'}
+                      aria-pressed={!satellite}
+                      onClick={() => setSatellite(false)}
+                    >
+                      Street map
+                    </Button>
+                    <Button
+                      variant={satellite ? 'filled' : 'default'}
+                      aria-pressed={satellite}
+                      onClick={() => setSatellite(true)}
+                    >
+                      Satellite
+                    </Button>
+                  </Group>
+                  <Suspense fallback={<Text role="status">Loading map…</Text>}>
                     <LazyMap
                       styleUrl={mapStyleUrl}
+                      satellite={satellite}
                       points={points}
                       selectedId={selected?.id ?? null}
                       onSelect={setSelectedId}
@@ -463,10 +560,7 @@ export function HouseholdWorkspace({
                   </Suspense>
                 </MapLoadBoundary>
               ) : (
-                <Text>
-                  No usable positions in this view. Unknown and approximate
-                  locations remain list only.
-                </Text>
+                <Text>No homes to show.</Text>
               )}
             </div>
           )}

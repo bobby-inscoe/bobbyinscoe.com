@@ -24,7 +24,7 @@ export function HouseScannerPage() {
             <Title order={1}>House Scanner</Title>
             <Text>A private shared home shortlist.</Text>
           </div>
-          <Button variant="default" onClick={() => setDemo(!demo)}>
+          <Button variant="subtle" onClick={() => setDemo(!demo)}>
             {demo ? 'Leave demo' : 'Explore the synthetic demo'}
           </Button>
         </Group>
