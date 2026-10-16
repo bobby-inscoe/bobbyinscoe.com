@@ -3,6 +3,7 @@ import {
   Map as MapLibreMap,
   Marker,
   NavigationControl,
+  type StyleSpecification,
   setWorkerUrl,
 } from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
@@ -15,6 +16,22 @@ import type { Listing } from '@/features/house-scanner/types/contracts';
 // MapLibre resolves its default worker beside import.meta.url, which Vite rewrites.
 setWorkerUrl(workerUrl);
 
+const SATELLITE_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    imagery: {
+      type: 'raster',
+      tiles: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: 'Imagery © Esri, Maxar, Earthstar Geographics',
+    },
+  },
+  layers: [{ id: 'imagery', type: 'raster', source: 'imagery' }],
+};
+
 export interface MapPoint {
   id: string;
   label: string;
@@ -26,6 +43,7 @@ interface HouseholdMapProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   styleUrl?: string;
+  satellite?: boolean;
   // Drawn over the map, for the selected home's card.
   overlay?: ReactNode;
 }
@@ -35,6 +53,7 @@ export function HouseholdMap({
   selectedId,
   onSelect,
   styleUrl = 'https://tiles.openfreemap.org/styles/liberty',
+  satellite = false,
   overlay,
 }: HouseholdMapProps) {
   const container = useRef<HTMLElement>(null);
@@ -44,6 +63,9 @@ export function HouseholdMap({
   const [stack, setStack] = useState<string[]>([]);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const satelliteRef = useRef(satellite);
+  satelliteRef.current = satellite;
+  const appliedSatellite = useRef(satellite);
   const first = useRef(points[0]?.coordinates).current;
   const centerLongitude = first?.longitude ?? 0;
   const centerLatitude = first?.latitude ?? 0;
@@ -53,12 +75,13 @@ export function HouseholdMap({
     try {
       instance = new MapLibreMap({
         container: container.current,
-        style: styleUrl,
+        style: satelliteRef.current ? SATELLITE_STYLE : styleUrl,
         center: [centerLongitude, centerLatitude],
         zoom: 11,
         attributionControl: { compact: false },
       });
       map.current = instance;
+      appliedSatellite.current = satelliteRef.current;
       instance.addControl(new NavigationControl());
       instance.on('load', () => setLoaded(true));
       instance.on('error', () =>
@@ -76,6 +99,11 @@ export function HouseholdMap({
       map.current = null;
     };
   }, [styleUrl, centerLongitude, centerLatitude, error]);
+  useEffect(() => {
+    if (!map.current || appliedSatellite.current === satellite) return;
+    appliedSatellite.current = satellite;
+    map.current.setStyle(satellite ? SATELLITE_STYLE : styleUrl);
+  }, [satellite, styleUrl]);
   useEffect(() => {
     if (!map.current || !loaded || error) return;
     const instance = map.current;
@@ -122,20 +150,21 @@ export function HouseholdMap({
         center: [point.coordinates.longitude, point.coordinates.latitude],
       });
   }, [points, selectedId, loaded, error]);
+  const provider = satellite ? 'Esri' : 'OpenFreeMap';
   const availableStack = stack.filter((id) =>
     points.some((point) => point.id === id),
   );
   return (
     <Stack gap="sm">
       <Text size="sm">
-        OpenFreeMap base tiles. Pins locate a building or supplied position, not
+        {provider} base tiles. Pins locate a building or supplied position, not
         a particular apartment. Map shading does not verify nature access.
       </Text>
       {error ? (
         <Text role="alert">{error}</Text>
       ) : (
         <>
-          {!loaded && <Text role="status">Loading map…</Text>}
+          {!loaded && <Text role="status">Loading mapâ€¦</Text>}
           <div className={styles.stage}>
             <section
               ref={container}
@@ -164,8 +193,8 @@ export function HouseholdMap({
         </Group>
       )}
       <Text size="xs">
-        Tiles reveal your network address and viewed region to the tile
-        provider. Household notes, favorites and credentials are not sent.
+        Tiles reveal your network address and viewed region to {provider}.
+        Household notes, favorites and credentials are not sent.
       </Text>
     </Stack>
   );

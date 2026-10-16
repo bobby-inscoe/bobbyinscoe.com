@@ -273,6 +273,126 @@ test('a locally served map style groups overlapping homes and keeps map selectio
   });
 });
 
+const LOCAL_STREET_STYLE = {
+  version: 8,
+  sources: {},
+  layers: [
+    {
+      id: 'background',
+      type: 'background',
+      paint: { 'background-color': '#e8e6df' },
+    },
+  ],
+};
+const PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+test('personal filters change the list and the map together, and Clear restores them', async ({
+  page,
+}) => {
+  await page.route('https://tiles.openfreemap.org/styles/liberty', (route) =>
+    route.fulfill({ json: LOCAL_STREET_STYLE }),
+  );
+  await openDemo(page);
+  await expect(page.getByLabel('Min living area (m²)')).toBeHidden();
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Min living area (m²)' }).fill('90');
+  await expect(
+    page.getByText('1 homes · 0 list only', { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByText('Showing 1 of 5 homes')).toBeVisible();
+  await expect(page.getByText('1 active')).toBeVisible();
+  await expect(page.getByRole('article')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await expect(
+    page.getByText('1 homes with usable positions.', { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /Example detached home/ }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(page.getByText('Showing 5 of 5 homes')).toBeVisible();
+  await expect(
+    page.getByText('2 homes with usable positions.', { exact: false }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'List', exact: true }).click();
+  await expect(page.getByRole('article')).toHaveCount(5);
+  await expect(
+    page.getByText('5 homes · 3 list only', { exact: false }),
+  ).toBeVisible();
+});
+
+test('unknown prices are kept or hidden by the checkbox, and an empty result says filters are active', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Max price (MSEK)' }).fill('3');
+  await expect(page.getByRole('article')).toHaveCount(4);
+  await page
+    .getByRole('checkbox', {
+      name: 'Keep homes with unknown or disputed values',
+    })
+    .uncheck();
+  await expect(page.getByRole('article')).toHaveCount(3);
+  await page.getByRole('textbox', { name: 'Max price (MSEK)' }).fill('1');
+  await expect(page.getByRole('article')).toHaveCount(0);
+  await expect(
+    page.getByText('Personal filters are active', { exact: false }),
+  ).toBeVisible();
+});
+
+test('the satellite toggle swaps the basemap, names the provider and keeps the markers', async ({
+  page,
+}) => {
+  await page.route('https://tiles.openfreemap.org/styles/liberty', (route) =>
+    route.fulfill({ json: LOCAL_STREET_STYLE }),
+  );
+  const imagery: string[] = [];
+  await page.route('https://server.arcgisonline.com/**', (route) => {
+    imagery.push(route.request().url());
+    return route.fulfill({ body: PIXEL_PNG, contentType: 'image/png' });
+  });
+  await openDemo(page);
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  const marker = page.getByRole('button', {
+    name: '2 homes at this point',
+    exact: true,
+  });
+  await expect(marker).toBeVisible();
+  await expect(
+    page.getByText('OpenFreeMap base tiles.', { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Street map' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  expect(imagery).toEqual([]);
+  const before = await marker.boundingBox();
+  await page.getByRole('button', { name: 'Satellite', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Satellite', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    page.getByText('Imagery © Esri, Maxar, Earthstar Geographics'),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Esri base tiles.', { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('viewed region to Esri', { exact: false }),
+  ).toBeVisible();
+  await expect(marker).toBeVisible();
+  await expect.poll(() => imagery.length).toBeGreaterThan(0);
+  expect(await marker.boundingBox()).toEqual(before);
+  await page.getByRole('button', { name: 'Street map' }).click();
+  await expect(
+    page.getByText('OpenFreeMap base tiles.', { exact: false }),
+  ).toBeVisible();
+  await expect(marker).toBeVisible();
+});
+
 test('shared notes show every member and the signed-in member edits only their own, by keyboard', async ({
   page,
 }) => {
@@ -319,6 +439,37 @@ test('shared notes show every member and the signed-in member edits only their o
   await home.getByRole('button', { name: 'Details', exact: true }).click();
   await expect(notes.getByRole('listitem')).toHaveCount(1);
   await expect(notes).not.toContainText('Moved the visit to Sunday.');
+});
+
+test('an expanded card spans the whole list row and collapsing returns it to the grid', async ({
+  page,
+}) => {
+  await openDemo(page);
+  const home = page.getByRole('article', {
+    name: 'Example balcony home',
+    exact: true,
+  });
+  const width = async (locator: typeof home) =>
+    (await locator.boundingBox())?.width ?? 0;
+  const list = page
+    .locator('section[aria-label="Household shortlist"] > div')
+    .last();
+  await home.getByRole('button', { name: 'Details', exact: true }).click();
+  const listWidth = await width(list);
+  await expect.poll(() => width(home)).toBeGreaterThanOrEqual(listWidth - 1);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  // Details only opens, so selecting another home is what collapses this one.
+  await page
+    .getByRole('article', { name: 'Example terrace home', exact: true })
+    .getByRole('button', { name: 'Details', exact: true })
+    .click();
+  // A phone grid is one column, so the card is already full width there.
+  if ((page.viewportSize()?.width ?? 0) > 800)
+    await expect.poll(() => width(home)).toBeLessThan(listWidth);
 });
 
 test('a saved listing missing from the latest scan shows a notice and can be unfavorited by keyboard', async ({

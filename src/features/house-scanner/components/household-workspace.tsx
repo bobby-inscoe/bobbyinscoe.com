@@ -18,6 +18,7 @@ import {
 
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import { ListingCard } from '@/features/house-scanner/components/listing-card';
+import { ListingFilterPanel } from '@/features/house-scanner/components/listing-filter-panel';
 import { ManualListingForm } from '@/features/house-scanner/components/manual-listing-form';
 import { PinCard } from '@/features/house-scanner/components/pin-card';
 import { ProfileEditor } from '@/features/house-scanner/components/profile-editor';
@@ -31,6 +32,13 @@ import type {
   SearchProfile,
   Snapshot,
 } from '@/features/house-scanner/types/contracts';
+import {
+  activeFilterCount,
+  applyListingFilters,
+  emptyFilters,
+  type ListingFilters,
+  listingHost,
+} from '@/features/house-scanner/utils/listing-filters';
 import { isListingStale } from '@/features/house-scanner/utils/listing-staleness';
 import {
   readScanSummary,
@@ -106,7 +114,9 @@ export function HouseholdWorkspace({
   const [message, setMessage] = useState('');
   const member = snapshot.members.find((entry) => entry.userId === userId);
   const synthetic = snapshot.edition?.coverage === 'synthetic';
-  const visible = useMemo(
+  const [filters, setFilters] = useState<ListingFilters>(emptyFilters);
+  const [satellite, setSatellite] = useState(false);
+  const scoped = useMemo(
     () =>
       snapshot.listings.filter((listing) => {
         if (tab === 'favorites')
@@ -126,6 +136,14 @@ export function HouseholdWorkspace({
         );
       }),
     [snapshot, tab, person, userId, section],
+  );
+  const visible = useMemo(
+    () => applyListingFilters(scoped, filters),
+    [scoped, filters],
+  );
+  const filterHosts = useMemo(
+    () => [...new Set(snapshot.listings.map(listingHost))],
+    [snapshot.listings],
   );
   const points = useMemo(
     () =>
@@ -392,6 +410,13 @@ export function HouseholdWorkspace({
               />
             )}
           </Group>
+          <ListingFilterPanel
+            filters={filters}
+            onChange={setFilters}
+            hosts={filterHosts}
+            shown={visible.length}
+            total={scoped.length}
+          />
           <Group justify="space-between">
             <Text size="sm">
               {visible.length} homes · {visible.length - points.length} list
@@ -417,6 +442,8 @@ export function HouseholdWorkspace({
           {!visible.length && (
             <Text>
               No homes in this view. Change the filter or add a listing link.
+              {activeFilterCount(filters) > 0 &&
+                ' Personal filters are active; clear them to see more homes.'}
             </Text>
           )}
           {view === 'list' ? (
@@ -442,11 +469,28 @@ export function HouseholdWorkspace({
             <div className={styles.mapPanel}>
               {points.length ? (
                 <MapLoadBoundary>
+                  <Group gap="xs" role="group" aria-label="Basemap">
+                    <Button
+                      variant={satellite ? 'default' : 'filled'}
+                      aria-pressed={!satellite}
+                      onClick={() => setSatellite(false)}
+                    >
+                      Street map
+                    </Button>
+                    <Button
+                      variant={satellite ? 'filled' : 'default'}
+                      aria-pressed={satellite}
+                      onClick={() => setSatellite(true)}
+                    >
+                      Satellite
+                    </Button>
+                  </Group>
                   <Suspense
                     fallback={<Text role="status">Loading map module…</Text>}
                   >
                     <LazyMap
                       styleUrl={mapStyleUrl}
+                      satellite={satellite}
                       points={points}
                       selectedId={selected?.id ?? null}
                       onSelect={setSelectedId}
