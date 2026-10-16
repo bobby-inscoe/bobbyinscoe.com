@@ -173,14 +173,18 @@ export function ListingCard({
           'Nobody'}
       </Text>
       <Group>
-        <Anchor
+        <Button
+          component="a"
+          size="sm"
           href={listing.sourceUrls[0]}
           target="_blank"
           rel="noopener noreferrer"
           referrerPolicy="no-referrer"
+          // The global `a { color: inherit }` rule would otherwise hide the label on the filled button.
+          style={{ color: 'var(--button-color)', textDecoration: 'none' }}
         >
           Open original listing
-        </Anchor>
+        </Button>
         <Button
           size="xs"
           variant="default"
