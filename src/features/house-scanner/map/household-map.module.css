@@ -1,5 +1,9 @@
+.stage {
+  position: relative;
+}
 .map {
-  height: 430px;
+  /* Tall enough that the selected-home card does not cover most of it. */
+  height: clamp(430px, 70vh, 680px);
   width: 100%;
   border: 1px solid var(--scanner-line);
 }

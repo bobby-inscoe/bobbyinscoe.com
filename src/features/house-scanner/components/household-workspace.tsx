@@ -19,6 +19,7 @@ import {
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import { ListingCard } from '@/features/house-scanner/components/listing-card';
 import { ManualListingForm } from '@/features/house-scanner/components/manual-listing-form';
+import { PinCard } from '@/features/house-scanner/components/pin-card';
 import { ProfileEditor } from '@/features/house-scanner/components/profile-editor';
 import {
   type LoadNotes,
@@ -449,6 +450,15 @@ export function HouseholdWorkspace({
                       points={points}
                       selectedId={selected?.id ?? null}
                       onSelect={setSelectedId}
+                      overlay={
+                        selected ? (
+                          <PinCard
+                            listing={selected}
+                            onClose={() => setSelectedId(null)}
+                            onDetails={() => setView('list')}
+                          />
+                        ) : null
+                      }
                     />
                   </Suspense>
                 </MapLoadBoundary>
@@ -457,23 +467,6 @@ export function HouseholdWorkspace({
                   No usable positions in this view. Unknown and approximate
                   locations remain list only.
                 </Text>
-              )}
-              {selected ? (
-                <ListingCard
-                  listing={selected}
-                  snapshot={snapshot}
-                  userId={userId}
-                  selected
-                  details
-                  stale={isListingStale(selected, snapshot.edition)}
-                  busy={pending.includes(selected.id)}
-                  canSave={canSave(selected.id)}
-                  notes={notes}
-                  onSelect={() => setView('list')}
-                  onFavorite={() => void favorite(selected.id)}
-                />
-              ) : (
-                <Text>Select a map point to see its details.</Text>
               )}
             </div>
           )}

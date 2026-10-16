@@ -250,12 +250,23 @@ test('a locally served map style groups overlapping homes and keeps map selectio
     .click();
   await expect(page.getByLabel('Homes at selected point')).toBeVisible();
   await page.getByRole('button', { name: 'Home 2', exact: true }).click();
+  const pinCard = page.getByRole('article', {
+    name: 'Selected home: Example detached home',
+    exact: true,
+  });
+  await expect(pinCard).toBeVisible();
+  await expect(
+    pinCard.getByRole('link', { name: 'Open original listing' }),
+  ).toHaveAttribute('target', '_blank');
+  await pinCard.getByRole('button', { name: 'Details', exact: true }).click();
   await expect(
     page
       .getByRole('article', { name: 'Example detached home', exact: true })
-      .last()
       .getByText('Facts and source evidence', { exact: true }),
   ).toBeVisible();
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('button', { name: 'Close selected home' }).click();
+  await expect(pinCard).toHaveCount(0);
   await page.screenshot({
     path: `.browser-test-results/map-${test.info().project.name}.png`,
     fullPage: true,

@@ -6,7 +6,7 @@ import {
   setWorkerUrl,
 } from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import styles from '@/features/house-scanner/map/household-map.module.css';
@@ -26,6 +26,8 @@ interface HouseholdMapProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   styleUrl?: string;
+  // Drawn over the map, for the selected home's card.
+  overlay?: ReactNode;
 }
 
 export function HouseholdMap({
@@ -33,6 +35,7 @@ export function HouseholdMap({
   selectedId,
   onSelect,
   styleUrl = 'https://tiles.openfreemap.org/styles/liberty',
+  overlay,
 }: HouseholdMapProps) {
   const container = useRef<HTMLElement>(null);
   const map = useRef<MapLibreMap | null>(null);
@@ -133,11 +136,14 @@ export function HouseholdMap({
       ) : (
         <>
           {!loaded && <Text role="status">Loading map…</Text>}
-          <section
-            ref={container}
-            className={styles.map}
-            aria-label="Listing map"
-          />
+          <div className={styles.stage}>
+            <section
+              ref={container}
+              className={styles.map}
+              aria-label="Listing map"
+            />
+            {overlay}
+          </div>
         </>
       )}
       <Text size="sm">
