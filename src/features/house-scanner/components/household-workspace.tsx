@@ -460,7 +460,11 @@ export function HouseholdWorkspace({
                   busy={pending.includes(listing.id)}
                   canSave={canSave(listing.id)}
                   notes={selectedId === listing.id ? notes : undefined}
-                  onSelect={() => setSelectedId(listing.id)}
+                  onSelect={() =>
+                    setSelectedId((current) =>
+                      current === listing.id ? null : listing.id,
+                    )
+                  }
                   onFavorite={() => void favorite(listing.id)}
                 />
               ))}

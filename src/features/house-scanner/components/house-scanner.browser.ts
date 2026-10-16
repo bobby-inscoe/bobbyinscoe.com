@@ -441,7 +441,7 @@ test('shared notes show every member and the signed-in member edits only their o
   await expect(notes).not.toContainText('Moved the visit to Sunday.');
 });
 
-test('an expanded card spans the whole list row and collapsing returns it to the grid', async ({
+test('an expanded card spans the whole list row and a second press returns it to the grid', async ({
   page,
 }) => {
   await openDemo(page);
@@ -462,14 +462,14 @@ test('an expanded card spans the whole list row and collapsing returns it to the
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  // Details only opens, so selecting another home is what collapses this one.
-  await page
-    .getByRole('article', { name: 'Example terrace home', exact: true })
-    .getByRole('button', { name: 'Details', exact: true })
-    .click();
+  // Details is a toggle: a second press collapses the card back into the grid.
+  await home.getByRole('button', { name: 'Details', exact: true }).click();
   // A phone grid is one column, so the card is already full width there.
   if ((page.viewportSize()?.width ?? 0) > 800)
     await expect.poll(() => width(home)).toBeLessThan(listWidth);
+  await expect(
+    home.getByRole('button', { name: 'Details', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('a saved listing missing from the latest scan shows a notice and can be unfavorited by keyboard', async ({
