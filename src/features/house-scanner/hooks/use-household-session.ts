@@ -21,6 +21,11 @@ import type {
   Snapshot,
 } from '@/features/house-scanner/types/contracts';
 
+// The owner creates each member in the Supabase dashboard as <name>@<this domain>
+// with the access code as the password. No mailboxes exist on this subdomain.
+const ACCESS_EMAIL_DOMAIN = 'access.bobbyinscoe.com';
+const ACCESS_CODE = /^([a-z0-9]{2,30})-(\S{6,72})$/i;
+
 export type HouseholdSessionState =
   | { status: 'unconfigured' }
   | { status: 'loading' }
@@ -201,29 +206,19 @@ export function useHouseholdSession() {
       window.clearInterval(timer);
     };
   }, [client, refresh, fail]);
-  async function requestCode(email: string, remember: boolean) {
+  // An access code is "name-secret". The name picks the member's login and the whole
+  // code is the password the owner set for that user, so no email is ever sent.
+  async function signInWithCode(code: string, remember: boolean) {
     if (!client) throw new Error('Private access is not configured.');
-    const address = z.email().max(254).parse(email.trim());
+    const trimmed = code.trim();
+    const match = ACCESS_CODE.exec(trimmed);
+    if (!match) throw new Error('Enter your access code, like name-secret.');
     setRememberDevice(remember);
-    const { error } = await client.auth.signInWithOtp({
-      email: address,
-      options: { shouldCreateUser: false },
+    const { error } = await client.auth.signInWithPassword({
+      email: `${match[1].toLowerCase()}@${ACCESS_EMAIL_DOMAIN}`,
+      password: trimmed,
     });
-    if (error)
-      throw new Error('Could not request a code. Wait briefly and try again.');
-  }
-  async function verifyCode(email: string, token: string) {
-    if (!client) throw new Error('Private access is not configured.');
-    if (!/^\d{6}$/.test(token)) throw new Error('Enter the six-digit code.');
-    const { error } = await client.auth.verifyOtp({
-      email: z.email().parse(email.trim()),
-      token,
-      type: 'email',
-    });
-    if (error)
-      throw new Error(
-        'The code was not accepted. Request a new code and try again.',
-      );
+    if (error) throw new Error('The access code was not accepted.');
     await refresh();
   }
   async function signOut() {
@@ -319,8 +314,7 @@ export function useHouseholdSession() {
   }
   return {
     state,
-    requestCode,
-    verifyCode,
+    signInWithCode,
     signOut,
     refresh,
     selectHousehold: async (id: string) => {

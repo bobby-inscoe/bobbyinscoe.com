@@ -37,10 +37,8 @@ export function HouseScannerAccess({
   children: (household: AuthenticatedHousehold) => ReactNode;
 }) {
   const session = useHouseholdSession();
-  const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [remember, setRemember] = useState(false);
-  const [requested, setRequested] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   async function perform(action: () => Promise<void>) {
@@ -96,70 +94,32 @@ export function HouseScannerAccess({
           onSubmit={(event) => {
             event.preventDefault();
             void perform(async () => {
-              if (requested) {
-                await session.verifyCode(email, code);
-                setCode('');
-                setEmail('');
-                setRequested(false);
-              } else {
-                await session.requestCode(email, remember);
-                setRequested(true);
-              }
+              await session.signInWithCode(code, remember);
+              setCode('');
             });
           }}
         >
           <Stack align="flex-start" gap="md">
-            <Title order={2}>Sign in with your invited email</Title>
+            <Title order={2}>Sign in with your access code</Title>
             <TextInput
-              label="Email"
-              type="email"
-              autoComplete="email"
+              label="Access code"
+              type="password"
+              autoComplete="current-password"
               required
-              value={email}
-              disabled={requested || busy}
-              onChange={(event) => setEmail(event.currentTarget.value)}
+              value={code}
+              disabled={busy}
+              onChange={(event) => setCode(event.currentTarget.value)}
             />
             <Checkbox
               label="Remember this device"
               description="Leave off on shared devices."
               checked={remember}
-              disabled={requested || busy}
+              disabled={busy}
               onChange={(event) => setRemember(event.currentTarget.checked)}
             />
-            {requested && (
-              <>
-                <Text>
-                  If this address is invited, a code will arrive shortly.
-                </Text>
-                <TextInput
-                  label="Six-digit code"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  required
-                  value={code}
-                  onChange={(event) => setCode(event.currentTarget.value)}
-                />
-              </>
-            )}
-            <Group>
-              <Button type="submit" loading={busy}>
-                {requested ? 'Verify code' : 'Request code'}
-              </Button>
-              {requested && (
-                <Button
-                  variant="default"
-                  disabled={busy}
-                  onClick={() => {
-                    setRequested(false);
-                    setCode('');
-                  }}
-                >
-                  Request another code
-                </Button>
-              )}
-            </Group>
+            <Button type="submit" loading={busy}>
+              Sign in
+            </Button>
           </Stack>
         </form>
       ) : state.status === 'choose-household' ? (

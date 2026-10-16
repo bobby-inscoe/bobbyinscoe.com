@@ -48,6 +48,12 @@ trigger down is what makes that happen.
 
 <!-- Add new entries directly below this line, newest first. -->
 
+## 2026-10-16 House Scanner signs in with a personal access code
+**Decision.** Each member signs in with one access code, `name-secret`, which is that member's Supabase password. The site derives the login from the name part (`name@access.bobbyinscoe.com`) and sends the whole code as the password. The owner creates users in the dashboard. Email one-time codes and their SMTP and template setup are removed.
+**Why.** The household is two or three people, nothing sensitive beyond public listings and opinions, and the owner wants no email dependency. Supabase password sign-in already hashes the secret, rate-limits attempts and gives one stable user id across devices, so membership, favorites and notes need no change.
+**Instead of.** A code compiled into the site, which is public in the bundle and checks nothing. Anonymous sign-in with a redemption function, which needed a new table and function and gave every device its own identity, splitting a person's favorites. Keeping email one-time codes, which need a sender and make each sign-in slower.
+**Costs.** A leaked or guessed code is a leaked password, so codes must be long and random, and sign-in attempts are limited only by Supabase's own limits. A code is shared out of band. The synthetic address on a domain the owner controls is untested against a real project.
+**Revisit if.** The household grows past people the owner knows, a code leaks, or members want to reset their own access.
 ## 2026-10-13 House Scanner administration is an operator procedure
 **Decision.** Household setup and changes run as database functions in the `hs` schema, executed by the project owner in the Supabase SQL editor as the `postgres` role. No browser, API or Edge entry point exists. Deactivating a member keeps their favorites and notes. Clearing them is a separate flag, off by default, and only allowed on an inactive member. Member rows are never deleted. Credentials live at most 90 days and the database never stores or returns a secret.
 **Why.** The household is two or three people and one person administers it. A function behind the database owner role adds no attack surface, and it still enforces what raw SQL would leave to memory: valid criteria and policy shape, at least one active owner, no more than ten member rows, and an audit row per change. Migration 0001 revokes `service_role` from the `hs` schema, so the functions are plain invoker functions granted to nobody.

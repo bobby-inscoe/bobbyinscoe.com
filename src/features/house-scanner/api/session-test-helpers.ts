@@ -40,8 +40,11 @@ export const sdk = {
       return { data: { subscription: { unsubscribe: vi.fn() } } };
     }),
     signOut: vi.fn<() => Promise<{ error: { message: string } | null }>>(),
-    signInWithOtp: vi.fn(async () => ({ error: null })),
-    verifyOtp: vi.fn(async () => ({ error: null })),
+    signInWithPassword: vi.fn(
+      async (_credentials: { email: string; password: string }) => ({
+        error: null as { message: string } | null,
+      }),
+    ),
   },
   rpc: vi.fn<(name: string, args: object) => Promise<Reply>>(),
 };
@@ -95,8 +98,7 @@ export function resetSdk() {
   );
   sdk.auth.getUser.mockReset().mockResolvedValue(userReply());
   sdk.auth.signOut.mockReset().mockResolvedValue({ error: null });
-  sdk.auth.signInWithOtp.mockClear();
-  sdk.auth.verifyOtp.mockClear();
+  sdk.auth.signInWithPassword.mockClear();
   sdk.rpc.mockReset().mockImplementation(async (name) => {
     if (name === 'hs_memberships') return reply([fixtureSnapshot().members[0]]);
     if (name === 'hs_snapshot') return reply(fixtureSnapshot());

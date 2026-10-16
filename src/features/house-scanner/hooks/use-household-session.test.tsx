@@ -452,30 +452,46 @@ describe('House Scanner session privacy', () => {
     expect(sdk.auth.getUser).toHaveBeenCalledTimes(1);
     expect(hook.result.current.state.status).toBe('authenticated');
   });
-  it('requests invited-only codes with the selected storage preference', async () => {
+  it('signs in with an access code and the selected storage preference', async () => {
     const hook = renderHook(useHouseholdSession);
     await act(() =>
-      hook.result.current.requestCode(' member@example.invalid ', false),
+      hook.result.current.signInWithCode(' Casey-k7Qm29xP ', false),
     );
-    expect(sdk.auth.signInWithOtp).toHaveBeenCalledWith({
-      email: 'member@example.invalid',
-      options: { shouldCreateUser: false },
+    expect(sdk.auth.signInWithPassword).toHaveBeenCalledWith({
+      email: 'casey@access.bobbyinscoe.com',
+      password: 'Casey-k7Qm29xP',
     });
     expect(window.sessionStorage.getItem('house-scanner.remember')).toBe(
       'false',
     );
     expect(window.localStorage.getItem('house-scanner.remember')).toBeNull();
   });
-  it('rejects invalid addresses and codes before reaching the SDK', async () => {
+  it.each([
+    '',
+    'nodash',
+    'casey-',
+    'casey-short',
+    '-k7Qm29xP',
+    'ca sey-k7Qm29xP',
+    'casey-has space',
+  ])(
+    'rejects the malformed access code %j before reaching the SDK',
+    async (code) => {
+      const hook = renderHook(useHouseholdSession);
+      await expect(
+        hook.result.current.signInWithCode(code, true),
+      ).rejects.toThrow('access code');
+      expect(sdk.auth.signInWithPassword).not.toHaveBeenCalled();
+    },
+  );
+  it('gives one generic message when the SDK refuses the code', async () => {
+    sdk.auth.signInWithPassword.mockResolvedValueOnce({
+      error: { message: 'Invalid login credentials' },
+    });
     const hook = renderHook(useHouseholdSession);
     await expect(
-      hook.result.current.requestCode('invalid', true),
-    ).rejects.toThrow();
-    await expect(
-      hook.result.current.verifyCode('member@example.invalid', '123'),
-    ).rejects.toThrow('six-digit');
-    expect(sdk.auth.signInWithOtp).not.toHaveBeenCalled();
-    expect(sdk.auth.verifyOtp).not.toHaveBeenCalled();
+      hook.result.current.signInWithCode('casey-wrongcode1', true),
+    ).rejects.toThrow('The access code was not accepted.');
   });
   it('ignores a completed mutation from an earlier login of the same user', async () => {
     const hook = await authenticated();

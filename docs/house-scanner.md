@@ -20,7 +20,7 @@ Shared favorites are one row per household/listing/authenticated actor. Removing
 
 ## Security and publication design
 
-Use Supabase Auth with invitation-only email OTP, disabled public signup, custom free SMTP and current-membership RLS. Remember off uses sessionStorage; remember on uses namespaced SDK token storage. Never persist a private listing snapshot. Clear private state on session change and sign-out.
+Use Supabase Auth with invitation-only password sign-in where each member's password is a personal access code, disabled public signup and current-membership RLS. No email is sent. Remember off uses sessionStorage; remember on uses namespaced SDK token storage. Never persist a private listing snapshot. Clear private state on session change and sign-out.
 
 The ingestion endpoint accepts bounded signed requests. A revocable credential binds one household, ingest scope and approved source IDs. Signature covers method, canonical /functions/v1/house-scanner-ingest path, timestamp, nonce and SHA-256 body digest. The function accepts the gateway-forwarded path but always signs the public canonical path. Nonces are atomically consumed after authentication. The server owns keys; the collector never receives a database service key. Request bodies cannot name actors or household IDs.
 
@@ -34,7 +34,7 @@ Rollback before activation: revert feature route/registry exposure or local comm
 
 No live source is approved. Reachable pages do not establish collection, display, retention, image, notification or model rights. All real source policies start disabled or pending. A bounded permitted proof must establish identity, field semantics, coverage, unknown prices, upcoming listings, pagination and an update route before an adapter can activate.
 
-Before live use: provision an approved free Supabase project, apply and verify migrations, bootstrap the initial owner privately, disable signup, configure six-digit ten-minute OTP and eligible free SMTP, restrict return URLs, verify storage behavior and same-origin scripts, establish source permissions, confirm free account allowances and no overages. No accounts, remote schedules, emails, broker contacts or deployments are created by local implementation.
+Before live use: provision an approved free Supabase project, apply and verify migrations, bootstrap the initial owner privately, disable signup, create each member as a Supabase user with their access code as the password (no SMTP needed), verify storage behavior and same-origin scripts, establish source permissions, confirm free account allowances and no overages. No accounts, remote schedules, emails, broker contacts or deployments are created by local implementation.
 
 Map tiles are independent of listing facts and household state. Use a permitted configurable provider with attribution; preserve the list if WebGL or tiles fail. Approximate/unknown positions never become exact pins. Do not batch-geocode arbitrary links.
 
@@ -239,7 +239,7 @@ Steps once the project exists: apply migrations 0001, 0002 and 0003 in the SQL e
 
 Checks: anon is blocked from every `hs_*` function and the `hs` schema is not exposed; a household member sees only their household; user B is denied household A's snapshot, notes, favorites and note writes; favorite and note round trip with the real stale-revision error recorded (and passed only when the code is 40001, which the app assumes); two simultaneous saves of one note yield one winner; signed-in users cannot run the purge or any admin function; an optional check that a deactivated member is denied. The report holds labels, statuses, codes and timings only, and is safe to share.
 
-It cannot prove one-time-code email delivery, the ingest function once deployed, or free-tier limits. Cleanup leaves one manual bookmark per household and an emptied note, because the API has no delete.
+It cannot prove the app's access-code sign-in screen, the ingest function once deployed, or free-tier limits. Cleanup leaves one manual bookmark per household and an emptied note, because the API has no delete.
 
 Fresh evidence: `npm test` 19 files, 589 tests passed (27 new); `check`, `typecheck`, `test:typecheck`, `house-scanner:typecheck`, `house-scanner:accept:typecheck`, `build` and `git diff --check` passed. The script was run only in its refusal and seed-SQL modes, with no network contact.
 ## First live Boneo read (13 October 2026)
@@ -253,3 +253,10 @@ Findings that change the plan:
 1. The run stopped at the collector's 100 observation ceiling, so it read 100 of 621 (16 percent) and correctly reported `truncated` and `partial`. A useful run needs the ceiling raised, or the query narrowed.
 2. 621 apartments is above the snapshot ceiling of 500 listings per household, which makes `hs_snapshot` raise. Delivering the whole municipality is therefore not viable as is. The collector should apply coarse filters from the union of enabled profiles (area, rooms, price cap) and keep unknowns before delivery, or the snapshot needs pagination.
 3. Upcoming listings and houses are still unproven. Only apartments in Göteborg are mapped.
+## Access codes replace email sign-in (16 October 2026)
+
+The owner chose one access code per person over email one-time codes, because there is no email sender to set up and nothing for anyone to type but one code. A code looks like `casey-k7Qm29xPrt`: the part before the first dash names the member and the whole string is that member's password.
+
+To add a person: in the Supabase dashboard, Authentication, Users, Add user, tick auto confirm, use the email `<name>@access.bobbyinscoe.com` (lowercase letters and digits, no mailbox exists there) and the full code as the password; then add them to the household with `hs.admin_set_member`. To rotate a code, change that user's password in the dashboard. To remove access, deactivate the member with `hs.admin_set_member` or delete the user. Use at least ten random characters after the dash; Supabase rate-limits sign-in attempts, which is the only brute-force defense.
+
+The sign-in form is a single masked field. The same user id is used on every device, so favorites and notes stay with the person. Not verified: how Supabase handles the synthetic address and its sign-in rate limits on a real project, which the hosted acceptance run and the first real sign-in will show.
