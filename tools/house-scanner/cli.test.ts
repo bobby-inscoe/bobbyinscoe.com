@@ -171,3 +171,42 @@ it.each([
     expect(JSON.parse(result.stderr)).toMatchObject({ status: 'rejected' });
   },
 );
+
+const HOUSEHOLD = '00000000-0000-4000-8000-0000000000aa';
+const runPrinter = (...args: string[]) =>
+  spawnSync(
+    process.execPath,
+    ['.house-scanner-build/collector.mjs', '--print-policy-sql', ...args],
+    { encoding: 'utf8' },
+  );
+
+it('prints the SQL that approves the Boneo policy without any network or file access', () => {
+  const result = runPrinter('--source=boneo', `--household=${HOUSEHOLD}`);
+  expect(result.status).toBe(0);
+  const match =
+    /^select hs\.admin_set_source_policy\('([^']+)', '(.*)'::jsonb\);\n$/s.exec(
+      result.stdout,
+    );
+  expect(match?.[1]).toBe(HOUSEHOLD);
+  const policy = JSON.parse((match?.[2] ?? '').replaceAll("''", "'"));
+  expect(policy).toMatchObject({
+    sourceId: 'boneo',
+    status: 'approved',
+    automatedCollection: true,
+    privateDisplay: true,
+    imageDisplay: false,
+    imageHotlink: false,
+  });
+  expect(Date.parse(policy.reviewedAt)).toBeLessThan(Date.now());
+  expect(Date.parse(policy.reviewDueAt)).toBeGreaterThan(Date.now());
+});
+
+it.each([
+  [['--source=boneo']],
+  [['--source=boneo', '--household=not-a-uuid']],
+  [['--source=bjurfors', `--household=${HOUSEHOLD}`]],
+])('refuses to print policy SQL for %j', (args) => {
+  const result = runPrinter(...args);
+  expect(result.status).toBe(1);
+  expect(result.stdout).toBe('');
+});

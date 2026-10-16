@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
+import { approvedPolicy } from '@house-scanner-tools/source-registry';
 import {
   afterAll,
   beforeAll,
@@ -1774,6 +1775,21 @@ describe('hs.valid_policy and hs.admin_set_source_policy', () => {
     expect(await value('select hs.valid_policy(null) as value')).toBe(false);
   });
 
+  it('accepts the approved Boneo policy the collector prints', async () => {
+    const { householdId } = await bootstrap();
+    const printed = approvedPolicy('boneo');
+    expect(sourcePolicySchema.safeParse(printed).success).toBe(true);
+    expect(
+      await value('select hs.valid_policy($1::jsonb) as value', [
+        JSON.stringify(printed),
+      ]),
+    ).toBe(true);
+    expect(await setPolicy(householdId, printed)).toEqual({
+      sourceId: 'boneo',
+      created: true,
+      revision: printed.revision,
+    });
+  });
   it('creates a policy with a null cursor and logs the keys it set', async () => {
     const { householdId } = await bootstrap();
     const { result, entry } = await expectOneLogRow(

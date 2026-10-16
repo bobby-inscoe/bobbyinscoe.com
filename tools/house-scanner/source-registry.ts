@@ -179,3 +179,25 @@ export function assertDemoExecution(
     );
   }
 }
+
+// The registry keeps real sources pending, so approval is an explicit owner step. This builds
+// the approved policy the owner writes to the database. Valid for 90 days.
+export function approvedPolicy(
+  sourceId: string,
+  now = new Date(),
+): SourcePolicy {
+  const entry = sourceRegistry().find(
+    (item) => item.policy.sourceId === sourceId,
+  );
+  if (!entry) throw new Error('Unknown source.');
+  const day = 24 * 60 * 60 * 1000;
+  return sourcePolicySchema.parse({
+    ...entry.policy,
+    status: 'approved',
+    automatedCollection: true,
+    privateDisplay: true,
+    // Five minutes back so database clock skew cannot put the review in the future.
+    reviewedAt: new Date(now.getTime() - 5 * 60 * 1000).toISOString(),
+    reviewDueAt: new Date(now.getTime() + 90 * day).toISOString(),
+  });
+}

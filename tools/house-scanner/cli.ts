@@ -9,6 +9,7 @@ import { prepareFixtureRun } from '@house-scanner-tools/collector';
 import { queryPlanInputSchema } from '@house-scanner-tools/query-plan';
 import { senderConfig, sendRequests } from '@house-scanner-tools/sender';
 import {
+  approvedPolicy,
   BONEO_SOURCE_ID,
   DEMO_SOURCE_ID,
   sourceRegistry,
@@ -112,6 +113,20 @@ async function live(values: Values) {
   if (delivery?.stopped) process.exitCode = 1;
 }
 
+// Prints the SQL that approves a source for one household. Review the source's rights first.
+function printPolicySql(
+  source: string | undefined,
+  household: string | undefined,
+) {
+  if (source !== BONEO_SOURCE_ID)
+    throw new Error('--print-policy-sql supports --source=boneo only.');
+  if (!household || !z.uuid().safeParse(household).success)
+    throw new Error('--print-policy-sql needs --household <household uuid>.');
+  const json = JSON.stringify(approvedPolicy(source)).replaceAll("'", "''");
+  console.log(
+    `select hs.admin_set_source_policy('${household}', '${json}'::jsonb);`,
+  );
+}
 async function main() {
   const { values } = parseArgs({
     options: {
@@ -125,10 +140,14 @@ async function main() {
       profiles: { type: 'string' },
       send: { type: 'boolean', default: false },
       'confirm-send': { type: 'boolean', default: false },
+      'print-policy-sql': { type: 'boolean', default: false },
+      household: { type: 'string' },
     },
     allowPositionals: false,
     strict: true,
   });
+  if (values['print-policy-sql'])
+    return printPolicySql(values.source, values.household);
   if (values.mode !== 'fixture') throw new Error('Only fixture mode exists.');
   if (values['confirm-personal-read'] && !values.live)
     throw new Error('The confirmation flag applies to live reads only.');
