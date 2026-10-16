@@ -32,6 +32,10 @@ import type {
 } from '@/features/house-scanner/types/contracts';
 import { isListingStale } from '@/features/house-scanner/utils/listing-staleness';
 import {
+  readScanSummary,
+  SCAN_STATUS_LABEL,
+} from '@/features/house-scanner/utils/scan-summary';
+import {
   formatDate,
   formatPrice,
   listingMatches,
@@ -202,6 +206,11 @@ export function HouseholdWorkspace({
     }
     return [...counts].map(([host, homes]) => ({ host, homes }));
   }, [snapshot.listings]);
+  const scanNotes = useMemo(
+    () =>
+      snapshot.edition ? readScanSummary(snapshot.edition.sourceSummary) : [],
+    [snapshot.edition],
+  );
   const editionAge = snapshot.edition
     ? Date.now() - Date.parse(snapshot.edition.publishedAt)
     : null;
@@ -276,27 +285,40 @@ export function HouseholdWorkspace({
           {sources.length === 0 ? (
             <Text>No source has delivered homes yet.</Text>
           ) : (
-            sources.map((source) => (
-              <Stack key={source.host} gap="xs" component="section">
-                <Title order={3}>{source.host}</Title>
-                <Text size="sm">
-                  {source.homes} {source.homes === 1 ? 'home' : 'homes'} · last
-                  scan{' '}
-                  {snapshot.edition
-                    ? formatDate(snapshot.edition.publishedAt)
-                    : 'unknown'}
-                </Text>
-                {snapshot.edition && (
-                  <Spoiler
-                    maxHeight={0}
-                    showLabel="More about this scan"
-                    hideLabel="Hide"
-                  >
-                    <Text size="sm">{snapshot.edition.sourceSummary}</Text>
-                  </Spoiler>
-                )}
-              </Stack>
-            ))
+            sources.map((source) => {
+              const matching = scanNotes.filter((scan) =>
+                source.host.includes(scan.sourceId),
+              );
+              const notes = matching.length ? matching : scanNotes;
+              return (
+                <Stack key={source.host} gap="xs" component="section">
+                  <Title order={3}>{source.host}</Title>
+                  <Text size="sm">
+                    {source.homes} {source.homes === 1 ? 'home' : 'homes'} ·
+                    last scan{' '}
+                    {snapshot.edition
+                      ? formatDate(snapshot.edition.publishedAt)
+                      : 'unknown'}
+                    {notes[0] ? ` · ${SCAN_STATUS_LABEL[notes[0].status]}` : ''}
+                  </Text>
+                  {notes.length > 0 && (
+                    <Spoiler
+                      maxHeight={0}
+                      showLabel="More about this scan"
+                      hideLabel="Hide"
+                    >
+                      <Stack gap="xs">
+                        {notes.map((scan) => (
+                          <Text key={scan.sourceId} size="sm">
+                            {scan.note}
+                          </Text>
+                        ))}
+                      </Stack>
+                    </Spoiler>
+                  )}
+                </Stack>
+              );
+            })
           )}
         </Stack>
       ) : tab === 'settings' ? (

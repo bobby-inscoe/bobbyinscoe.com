@@ -441,7 +441,9 @@ describe('prepared run', () => {
     const publish = prepared.requests.at(-1);
     expect(
       publish?.action === 'publish' && publish.results[0].coverageNote,
-    ).toContain(`Listing pages: ${pages.length} read, 0 failed, 0 skipped`);
+    ).toContain(
+      `Balcony and glazing: ${pages.length} read, 0 reused, 0 failed, 0 skipped.`,
+    );
   });
 
   it('never reads the page of a listing the pre-filter drops', async () => {
@@ -515,7 +517,7 @@ describe('prepared run', () => {
         : '';
     };
     expect(note(one)).toContain('Run memory was unreadable and was reset.');
-    expect(note(two)).toContain(`0 skipped, ${kept} reused from earlier reads`);
+    expect(note(two)).toContain(`${kept} reused, 0 failed, 0 skipped`);
     expect(note(two)).not.toContain('reset');
     const stage = two.requests[1];
     expect(
@@ -582,7 +584,7 @@ describe('prepared run', () => {
     });
     expect(
       publish.action === 'publish' && publish.results[0].coverageNote,
-    ).toContain('0 observations kept, 8 dropped');
+    ).toContain('kept 0 that fit your profile and dropped 8');
   });
 
   it('splits kept observations into stage requests of at most one hundred', async () => {

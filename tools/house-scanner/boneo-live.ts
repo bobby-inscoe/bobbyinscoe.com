@@ -548,21 +548,20 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
   const { kept, dropped } = prefilter(result.observations);
   const droppedCount = Object.values(dropped).reduce((a, b) => a + b, 0);
 
-  const read = result.partitions.filter((p) => p.status === 'read').length;
   const pages = result.partitions.reduce((sum, p) => sum + p.pages, 0);
   const runId = options.runId ?? randomUUID();
   const common = { contractVersion: CONTRACT_VERSION, runId };
   const failed = result.stopped !== null && result.observations.length === 0;
   // Never "success": upcoming and unknown-price views are not queried and
   // pagination is unproven.
+  // Plain sentences for people. The database prefixes the source and status and appends the
+  // policy's gap list, which the app strips when it shows this.
   const coverageNote = [
-    `Boneo personal read, query plan v${queryPlan.version}.`,
-    `${read} of ${result.partitions.length} partitions read from ${pages} pages and ${result.requestCount} requests.`,
-    `${kept.length} observations kept, ${droppedCount} dropped by confirmed profile bounds.`,
-    `Listing pages: ${result.detailRead} read, ${result.detailFailed} failed, ${result.detailSkipped} skipped, ${result.detailCached} reused from earlier reads; outdoor and glazing stay unknown for the rest.`,
+    `Read ${result.observations.length} homes across ${pages} pages; kept ${kept.length} that fit your profile and dropped ${droppedCount}.`,
+    `Balcony and glazing: ${result.detailRead} read, ${result.detailCached} reused, ${result.detailFailed} failed, ${result.detailSkipped} skipped.`,
     options.memory?.reset ? 'Run memory was unreadable and was reset.' : '',
-    result.stopped ? `Stopped: ${result.stopped}.` : 'Run completed.',
-    'Not covered: upcoming and unknown-price views, houses, other municipalities, pages beyond the cap.',
+    result.stopped ? `Stopped early: ${result.stopped}.` : '',
+    'Not covered: upcoming and unknown-price listings, houses, other cities.',
   ]
     .filter(Boolean)
     .join(' ');
