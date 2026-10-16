@@ -37,12 +37,6 @@
   gap: var(--mantine-spacing-md);
   min-width: 0;
 }
-/* Sizing applies only inside the list; the card is reused in column layouts elsewhere. */
-.list > .card {
-  flex: 1 1 320px;
-  max-width: 480px;
-  min-width: 0;
-}
 .card {
   background: var(--scanner-surface);
   border: 1px solid var(--scanner-line);
@@ -50,6 +44,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--mantine-spacing-sm);
+}
+/* Sizing applies only inside the list; the card is reused in column layouts elsewhere. */
+.list > .card {
+  flex: 1 1 320px;
+  max-width: 480px;
+  min-width: 0;
 }
 .selected {
   border-color: var(--scanner-accent);

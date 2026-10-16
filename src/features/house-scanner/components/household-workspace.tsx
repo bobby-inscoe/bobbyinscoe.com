@@ -1,8 +1,8 @@
 import {
   Button,
   Group,
-  Paper,
   Select,
+  Spoiler,
   Stack,
   Text,
   Title,
@@ -196,41 +196,16 @@ export function HouseholdWorkspace({
   const editionAge = snapshot.edition
     ? Date.now() - Date.parse(snapshot.edition.publishedAt)
     : null;
+  const stale = editionAge !== null && editionAge > 36 * 60 * 60 * 1000;
   return (
     <section className={styles.scope} aria-label="Household shortlist">
-      <Paper withBorder p="md">
-        <Stack gap="xs">
-          <Text fw={600}>
-            {synthetic
-              ? 'Synthetic demo. Fictional homes and people; changes stay in memory.'
-              : `Household workspace · ${member?.displayName ?? 'Member'}`}
-          </Text>
-          <Text size="sm">
-            {snapshot.edition
-              ? `Edition ${formatDate(snapshot.edition.publishedAt)} · ${snapshot.edition.coverage} coverage`
-              : 'No edition published.'}
-          </Text>
-          <Text size="sm">
-            {snapshot.edition?.sourceSummary ??
-              'No collection coverage is available.'}
-          </Text>
-          {synthetic ? (
-            <Text size="sm">
-              No live sources are connected. These examples do not represent
-              market coverage.
-            </Text>
-          ) : (
-            <Text size="sm">
-              {editionAge === null
-                ? 'Freshness unknown.'
-                : editionAge > 36 * 60 * 60 * 1000
-                  ? 'Edition is over 36 hours old. Facts may be stale.'
-                  : 'Published within the past 36 hours. Listing facts may be older.'}{' '}
-              Per-source collection status is not available in this snapshot.
-            </Text>
-          )}
-        </Stack>
-      </Paper>
+      <Text size="sm" c={stale ? 'red.8' : 'dimmed'} role="status">
+        {synthetic
+          ? 'Synthetic demo. Fictional homes and people; changes stay in memory.'
+          : snapshot.edition
+            ? `Updated ${formatDate(snapshot.edition.publishedAt)}${stale ? '. Over 36 hours old, so facts may be stale.' : ''}`
+            : 'No data has been published yet.'}
+      </Text>{' '}
       <Group component="nav" aria-label="Shortlist sections">
         {(['suggestions', 'favorites', 'manual', 'settings'] as const).map(
           (value) => (
@@ -280,6 +255,25 @@ export function HouseholdWorkspace({
       ) : tab === 'settings' ? (
         <Stack>
           <Title order={2}>Search criteria and status</Title>
+          {!synthetic && (
+            <Stack gap="xs" aria-label="Latest data">
+              <Title order={3}>Latest data</Title>
+              <Text size="sm">
+                {snapshot.edition
+                  ? `Published ${formatDate(snapshot.edition.publishedAt)} · ${snapshot.edition.coverage} coverage`
+                  : 'No data has been published yet.'}
+              </Text>
+              {snapshot.edition && (
+                <Spoiler
+                  maxHeight={44}
+                  showLabel="Show details"
+                  hideLabel="Hide details"
+                >
+                  <Text size="sm">{snapshot.edition.sourceSummary}</Text>
+                </Spoiler>
+              )}
+            </Stack>
+          )}
           <Text>
             {synthetic
               ? 'These criteria are fictional. Edits affect this demo only.'
