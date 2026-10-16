@@ -98,8 +98,8 @@ export function sourceRegistry(): SourceCapability[] {
         sourceId: BONEO_SOURCE_ID,
         // Pending is not approved: the operator sets approval in the database.
         status: 'pending',
-        // Revision 2 turns on hotlinked photos from the image host; the stored policy is revision 1.
-        revision: 2,
+        // Revision 2 turned on hotlinked photos from the image host. Revision 3 adds outdoor and glazed.
+        revision: 3,
         retentionDays: 14,
         listingOrigins: [BONEO_ORIGIN],
         imageOrigins: [BONEO_IMAGE_ORIGIN],
@@ -120,6 +120,8 @@ export function sourceRegistry(): SourceCapability[] {
           'municipality',
           'baseFeeSek',
           'status',
+          'outdoor',
+          'glazed',
         ],
         capabilities: {
           discovery: true,
@@ -134,7 +136,7 @@ export function sourceRegistry(): SourceCapability[] {
             'Whether listings without a price appear in the default view is unproven.',
             'The page query is accepted but page size and multi-page ordering are unproven. Coverage is never reported complete.',
             'Only apartment paths for Goteborg are supported. Houses and other municipalities are not covered.',
-            'Floor, lift, outdoor and glazing are not structured fields and stay unknown.',
+            'Outdoor and glazing come from each kept listing page; glazing only from description wording. Floor, lift and build year are not collected.',
             'Only the first photo is shown, hotlinked from the broker image host. Nothing is copied or stored.',
             'Listing identity and episode rules come from property_id and created_date and are unproven across relistings.',
             'Known listings cannot be refreshed outside discovery.',

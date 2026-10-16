@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { assertAdapterOutput } from '@house-scanner-tools/boneo-live';
 import {
+  parseBoneoDetail,
   parseBoneoNextData,
+  readBoneoDetailPage,
   readBoneoSearchPage,
 } from '@house-scanner-tools/boneo-parser';
 import {
@@ -230,5 +232,105 @@ describe('Boneo parser', () => {
       kind: 'failed',
       reason,
     });
+  });
+});
+
+describe('Boneo listing page parser', () => {
+  it.each([
+    ['balcony only', 'detail-balcony.html', 'balcony', null],
+    ['terrace only', 'detail-terrace.html', 'terrace', null],
+    ['balcony and terrace', 'detail-both.html', 'both', null],
+    ['neither flag ticked', 'detail-neither.html', null, null],
+    ['a glazed balcony in the text', 'detail-glazed.html', 'balcony', true],
+    ['a negated glazed balcony', 'detail-not-glazed.html', 'balcony', null],
+  ])('reads %s', (_name, file, outdoor, glazed) => {
+    expect(readBoneoDetailPage(fixture(file))).toEqual({
+      kind: 'detail',
+      outdoor,
+      glazed,
+    });
+  });
+
+  it('returns only outdoor and glazed, never the description', () => {
+    const read = readBoneoDetailPage(fixture('detail-glazed.html'));
+    expect(Object.keys(read).sort()).toEqual(['glazed', 'kind', 'outdoor']);
+    expect(JSON.stringify(read)).not.toContain('fixturetext');
+  });
+
+  it.each([
+    ['a page with no embedded data', 'blocked-page.html', 'no-embedded-data'],
+    ['the wrong shape', 'detail-wrong-shape.html', 'unexpected-shape'],
+  ])('fails closed on %s', (_name, file, reason) => {
+    expect(readBoneoDetailPage(fixture(file))).toEqual({
+      kind: 'failed',
+      reason,
+    });
+  });
+
+  const detail = (property: unknown) => ({
+    props: { pageProps: { property_detail: property } },
+  });
+  it.each([
+    ['a non-object', 'text', 'invalid-embedded-data'],
+    ['no pageProps', {}, 'unexpected-shape'],
+    ['an empty detail object', detail({}), 'unexpected-shape'],
+    [
+      'a non-boolean balcony',
+      detail({ field_property_balcony: 'yes' }),
+      'unexpected-shape',
+    ],
+    [
+      'a non-boolean terrace',
+      detail({ field_property_balcony: true, field_property_terrace: 1 }),
+      'unexpected-shape',
+    ],
+  ])('fails closed on %s in parsed data', (_name, data, reason) => {
+    expect(parseBoneoDetail(data)).toEqual({ kind: 'failed', reason });
+  });
+
+  it('treats a false, null or missing flag as unknown, never none', () => {
+    for (const flags of [
+      { field_property_balcony: false, field_property_terrace: false },
+      { field_property_balcony: null, field_property_terrace: null },
+      { field_property_balcony: false },
+    ])
+      expect(parseBoneoDetail(detail(flags))).toEqual({
+        kind: 'detail',
+        outdoor: null,
+        glazed: null,
+      });
+  });
+
+  it.each([
+    ['Inglasad balkong i söderläge', true],
+    ['Stor INGLASAD BALKONG', true],
+    ['Den inglasade balkongen har kvällssol', true],
+    ['Inglasad uteplats och ett litet kök', true],
+    ['Ett inglasat uterum mot gården', true],
+    ['En glasad balkong', true],
+    ['Delvis inglasad terrass', true],
+    ['Balkong ej inglasad', null],
+    ['Ej inglasad balkong', null],
+    ['Balkongen är inte inglasad balkong', null],
+    ['Lägenheten har inte en inglasad balkong', null],
+    ['Balkong utan inglasning', null],
+    ['Ej inglasad balkong men inglasad uteplats', true],
+    ['Bostaden är inte stor. Inglasad balkong', true],
+    ['Bostaden präglas av ljus', null],
+    ['Oinglasad balkong', null],
+    ['Inglasad hall', null],
+    ['Balkongen är inglasad', null],
+    ['Balkong', null],
+    ['', null],
+  ])('reads glazing wording %j', (body, glazed) => {
+    expect(
+      parseBoneoDetail(detail({ field_property_balcony: true, body })),
+    ).toMatchObject({ kind: 'detail', glazed });
+  });
+
+  it('ignores a description that is not text', () => {
+    expect(
+      parseBoneoDetail(detail({ field_property_balcony: true, body: 5 })),
+    ).toMatchObject({ glazed: null });
   });
 });

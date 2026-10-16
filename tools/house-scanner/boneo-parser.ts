@@ -375,3 +375,67 @@ export function readBoneoSearchPage(
   if (data === undefined) return { kind: 'failed', reason: 'no-embedded-data' };
   return parseBoneoNextData(data, context);
 }
+
+export type BoneoDetailRead =
+  | { kind: 'detail'; outdoor: Facts['outdoor']; glazed: boolean | null }
+  | { kind: 'failed'; reason: PageFailure };
+
+// shortcut: only "inglasad balkong" word order is read, so "balkongen är inglasad" stays unknown. Widen if misses show up.
+const GLAZED =
+  /\b(?:in)?glasa(?:de?|t)\s+(?:balkong|uteplats|terrass|altan|uterum)\w*/gi;
+const NEGATION = /\b(?:ej|inte|icke)\s+(?:[^\s.,;!?]+\s+)?$/i;
+
+const isFlag = (value: unknown) =>
+  typeof value === 'boolean' || value === null || value === undefined;
+
+/**
+ * Reads only balcony, terrace and glazing from a listing page. A false or
+ * missing flag is unknown, never "none", because the broker may leave it
+ * unticked. The description is matched and dropped, never returned.
+ */
+export function parseBoneoDetail(data: unknown): BoneoDetailRead {
+  if (!isRecord(data))
+    return { kind: 'failed', reason: 'invalid-embedded-data' };
+  const props = isRecord(data.props) ? data.props : null;
+  const pageProps = props && isRecord(props.pageProps) ? props.pageProps : null;
+  const detail =
+    pageProps && isRecord(pageProps.property_detail)
+      ? pageProps.property_detail
+      : null;
+  // The balcony key anchors the shape, so an empty or foreign object is a failure.
+  if (
+    detail === null ||
+    !('field_property_balcony' in detail) ||
+    !isFlag(detail.field_property_balcony) ||
+    !isFlag(detail.field_property_terrace)
+  )
+    return { kind: 'failed', reason: 'unexpected-shape' };
+  const balcony = detail.field_property_balcony === true;
+  const terrace = detail.field_property_terrace === true;
+  const body = typeof detail.body === 'string' ? detail.body : '';
+  const glazed = [...body.matchAll(GLAZED)].some(
+    (match) =>
+      !NEGATION.test(body.slice(Math.max(0, match.index - 30), match.index)),
+  );
+  return {
+    kind: 'detail',
+    outdoor:
+      balcony && terrace
+        ? 'both'
+        : balcony
+          ? 'balcony'
+          : terrace
+            ? 'terrace'
+            : null,
+    glazed: glazed ? true : null,
+  };
+}
+
+/** Page-level reader for one listing page: HTML in, outdoor and glazed out. */
+export function readBoneoDetailPage(html: string): BoneoDetailRead {
+  if (html.length > MAX_HTML_CHARS)
+    return { kind: 'failed', reason: 'too-large' };
+  const data = extractNextData(html);
+  if (data === undefined) return { kind: 'failed', reason: 'no-embedded-data' };
+  return parseBoneoDetail(data);
+}

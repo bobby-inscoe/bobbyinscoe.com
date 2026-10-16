@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  assertAdapterOutput,
   defaultLiveDeps,
   type LiveDeps,
   type LiveEvent,
+  MAX_DETAIL_PAGES_PER_RUN,
+  MAX_REQUESTS_PER_RUN,
   parseRobots,
   partitionUrl,
   prepareLiveRun,
@@ -12,10 +15,12 @@ import {
   USER_AGENT,
 } from '@house-scanner-tools/boneo-live';
 
+import { readBoneoSearchPage } from '@house-scanner-tools/boneo-parser';
 import { planQueries } from '@house-scanner-tools/query-plan';
 import { sourceRegistry } from '@house-scanner-tools/source-registry';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SYNTHETIC_SNAPSHOT } from '@/features/house-scanner/mock/synthetic-household';
+import type { Observation } from '@/features/house-scanner/types/contracts';
 import { assertSourceAllowed } from '@/features/house-scanner/utils/source-policy';
 
 const fixture = (name: string) =>
@@ -214,7 +219,7 @@ describe('guarded run', () => {
     });
   });
 
-  it('stops at sixty requests per run including robots.txt', async () => {
+  it('stops at 250 requests per run including robots.txt', async () => {
     let id = 0;
     const { impl, calls } = fakeFetch(
       robotsOr(() => ({ body: nextPage([++id], 500) })),
@@ -224,8 +229,8 @@ describe('guarded run', () => {
       id: `municipality-${index + 1}`,
     }));
     const result = await runBoneoCollection(many, deps(impl));
-    expect(calls).toHaveLength(60);
-    expect(result.requestCount).toBe(60);
+    expect(calls).toHaveLength(250);
+    expect(result.requestCount).toBe(250);
     expect(result.stopped).toBe('request-cap');
   });
 
@@ -359,6 +364,7 @@ describe('prepared run', () => {
       imageHotlink: true,
       imageOrigins: ['https://files.boneo.se'],
       retentionDays: 14,
+      revision: 3,
       capabilities: {
         upcoming: false,
         unknownPrice: false,
@@ -368,6 +374,12 @@ describe('prepared run', () => {
     expect(capability.policy.capabilities.coverageGaps.length).toBeGreaterThan(
       3,
     );
+    expect(capability.policy.allowedFactFields).toEqual(
+      expect.arrayContaining(['outdoor', 'glazed']),
+    );
+    const gaps = capability.policy.capabilities.coverageGaps.join(' ');
+    expect(gaps).not.toContain('not structured fields');
+    expect(gaps).toContain('Floor, lift and build year are not collected');
     expect(() =>
       assertSourceAllowed(capability.policy, new Date('2026-10-13T00:00:00Z')),
     ).toThrow();
@@ -401,6 +413,86 @@ describe('prepared run', () => {
       cursor: null,
     });
     expect(prepared.result.observations).toHaveLength(8);
+  });
+
+  it('reads the page of each kept listing and stages outdoor and glazed', async () => {
+    const { impl, calls } = fakeFetch(
+      robotsOr((url) => ({
+        body: url.includes('/bostad/')
+          ? fixture('detail-glazed.html')
+          : fixture('search-page.html'),
+      })),
+    );
+    const prepared = await prepareLiveRun({ capability, planning }, deps(impl));
+    const pages = calls.filter((call) => call.url.includes('/bostad/'));
+    expect(pages.length).toBeGreaterThan(0);
+    expect(prepared.result.detailRead).toBe(pages.length);
+    expect(prepared.prefilter.kept).toBe(pages.length);
+    const stage = prepared.requests[1];
+    expect(
+      stage.action === 'stage' && stage.observations[0].facts,
+    ).toMatchObject({ outdoor: 'balcony', glazed: true });
+    const publish = prepared.requests.at(-1);
+    expect(
+      publish?.action === 'publish' && publish.results[0].coverageNote,
+    ).toContain(`Listing pages: ${pages.length} read, 0 failed, 0 skipped`);
+  });
+
+  it('never reads the page of a listing the pre-filter drops', async () => {
+    const { impl, calls } = fakeFetch(
+      robotsOr((url) => ({
+        body: url.includes('/bostad/')
+          ? fixture('detail-both.html')
+          : fixture('search-page.html'),
+      })),
+    );
+    const strict = {
+      ...planning,
+      profiles: [
+        {
+          ...planning.profiles[0],
+          criteria: {
+            ...planning.profiles[0].criteria,
+            minAreaM2: 5000,
+            maxAreaM2: null,
+          },
+        },
+      ],
+    };
+    const prepared = await prepareLiveRun(
+      { capability, planning: strict },
+      deps(impl),
+    );
+    expect(prepared.prefilter.kept).toBe(0);
+    expect(calls.filter((call) => call.url.includes('/bostad/'))).toEqual([]);
+    expect(prepared.result).toMatchObject({
+      detailRead: 0,
+      detailFailed: 0,
+      detailSkipped: 0,
+    });
+  });
+
+  it('rejects outdoor and glazed unless the policy allows them', () => {
+    const read = readBoneoSearchPage(fixture('search-page.html'), {
+      origin: 'https://www.boneo.se',
+      observedAt: new Date('2026-10-13T09:00:00.000Z'),
+      receivedBefore: 0,
+    });
+    if (read.kind !== 'page') throw new Error('fixture failed');
+    const observation = read.observations[0];
+    observation.facts.outdoor = 'balcony';
+    expect(() =>
+      assertAdapterOutput(capability.policy, observation),
+    ).not.toThrow();
+    const narrowed = {
+      ...capability.policy,
+      allowedFactFields: capability.policy.allowedFactFields.filter(
+        (field) => field !== 'outdoor',
+      ),
+    };
+    expect(() => assertAdapterOutput(narrowed, observation)).toThrow(
+      'unapproved fact field',
+    );
   });
 
   it('drops confirmed misfits, counts them by reason and still publishes partial', async () => {
@@ -502,4 +594,234 @@ describe('prepared run', () => {
     ).rejects.toThrow('No permitted executor');
     expect(calls).toHaveLength(0);
   });
+});
+
+describe('listing pages', () => {
+  const isDetail = (url: string) => url.includes('/bostad/');
+  const listingId = (url: string) => Number(url.split('-').at(-1));
+  // 25 listings per page, ids 1..total, like a real multi-page result.
+  const searchReply = (url: string, total: number) => {
+    const page = Number(new URL(url).searchParams.get('page') ?? '1');
+    const first = (page - 1) * 25 + 1;
+    const last = Math.min(total, page * 25);
+    const ids = Array.from({ length: last - first + 1 }, (_v, i) => first + i);
+    return { body: nextPage(ids, total) };
+  };
+  const serve =
+    (total: number, detail: (id: number) => Reply) =>
+    (url: string): Reply =>
+      isDetail(url) ? detail(listingId(url)) : searchReply(url, total);
+  const detailCalls = (calls: { url: string }[]) =>
+    calls.filter((call) => isDetail(call.url));
+  const BALCONY = fixture('detail-balcony.html');
+  const keepAll = (all: Observation[]) => all;
+
+  it('reads each kept listing page once and merges only outdoor and glazed', async () => {
+    const files = [
+      'detail-balcony.html',
+      'detail-both.html',
+      'detail-glazed.html',
+    ];
+    const { impl, calls } = fakeFetch(
+      robotsOr(serve(3, (id) => ({ body: fixture(files[id - 1]) }))),
+    );
+    const result = await runBoneoCollection(goteborg, deps(impl), keepAll);
+    expect(
+      result.observations.map((o) => [o.facts.outdoor, o.facts.glazed]),
+    ).toEqual([
+      ['balcony', null],
+      ['both', null],
+      ['balcony', true],
+    ]);
+    expect(result).toMatchObject({
+      detailRead: 3,
+      detailFailed: 0,
+      detailSkipped: 0,
+      requestCount: 5,
+      stopped: null,
+    });
+    expect(calls.filter((c) => c.url.endsWith('/robots.txt'))).toHaveLength(1);
+    expect(detailCalls(calls).map((c) => new URL(c.url).pathname)).toEqual([
+      '/bostad/fixture-1',
+      '/bostad/fixture-2',
+      '/bostad/fixture-3',
+    ]);
+    for (const { init } of calls) {
+      expect(init.headers).toEqual({
+        'user-agent': USER_AGENT,
+        accept: 'text/html,text/plain',
+      });
+      expect(init.credentials).toBe('omit');
+      expect(init.redirect).toBe('manual');
+    }
+  });
+
+  it('reads no listing page unless the caller keeps the observation', async () => {
+    const { impl, calls } = fakeFetch(
+      robotsOr(serve(3, () => ({ body: BALCONY }))),
+    );
+    const result = await runBoneoCollection(goteborg, deps(impl), (all) =>
+      all.filter((o) => o.sourceListingId === '2'),
+    );
+    expect(detailCalls(calls).map((c) => c.url)).toEqual([
+      'https://www.boneo.se/bostad/fixture-2',
+    ]);
+    expect(result.observations.map((o) => o.facts.outdoor)).toEqual([
+      null,
+      'balcony',
+      null,
+    ]);
+    const plain = fakeFetch(robotsOr(serve(3, () => ({ body: BALCONY }))));
+    await runBoneoCollection(goteborg, deps(plain.impl));
+    expect(detailCalls(plain.calls)).toHaveLength(0);
+  });
+
+  it('waits at least two seconds before every listing page', async () => {
+    vi.useFakeTimers();
+    const { impl, spy } = fakeFetch(
+      robotsOr(serve(2, () => ({ body: BALCONY }))),
+    );
+    const run = runBoneoCollection(
+      goteborg,
+      { ...defaultLiveDeps(() => undefined), fetch: impl },
+      keepAll,
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(spy).toHaveBeenCalledTimes(1);
+    // search page, then two listing pages
+    for (const expected of [2, 3, 4]) {
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(spy).toHaveBeenCalledTimes(expected - 1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(spy).toHaveBeenCalledTimes(expected);
+    }
+    await run;
+  });
+
+  it('skips listing pages that robots.txt disallows, without failing the run', async () => {
+    const { impl, calls } = fakeFetch((url) =>
+      url.endsWith('/robots.txt')
+        ? {
+            body: 'User-agent: *\nAllow: /\nDisallow: /bostad/\n',
+            type: 'text/plain',
+          }
+        : serve(3, () => ({ body: BALCONY }))(url),
+    );
+    const result = await runBoneoCollection(goteborg, deps(impl), keepAll);
+    expect(detailCalls(calls)).toHaveLength(0);
+    expect(result).toMatchObject({
+      detailRead: 0,
+      detailSkipped: 3,
+      stopped: null,
+    });
+    expect(result.observations).toHaveLength(3);
+  });
+
+  it('reads at most 150 listing pages per run and counts the rest as skipped', async () => {
+    expect(MAX_DETAIL_PAGES_PER_RUN).toBe(150);
+    const { impl, calls } = fakeFetch(
+      robotsOr(serve(160, () => ({ body: BALCONY }))),
+    );
+    const result = await runBoneoCollection(goteborg, deps(impl), keepAll);
+    expect(detailCalls(calls)).toHaveLength(150);
+    expect(result).toMatchObject({
+      detailRead: 150,
+      detailFailed: 0,
+      detailSkipped: 10,
+      requestCount: 158,
+      stopped: null,
+    });
+    expect(
+      result.observations.filter((o) => o.facts.outdoor === null),
+    ).toHaveLength(10);
+  });
+
+  it('shares the 250 request cap with search pages and skips what it cannot request', async () => {
+    expect(MAX_REQUESTS_PER_RUN).toBe(250);
+    let id = 0;
+    const { impl, calls } = fakeFetch(
+      robotsOr((url) =>
+        isDetail(url) ? { body: BALCONY } : { body: nextPage([++id], 500) },
+      ),
+    );
+    const four = Array.from({ length: 4 }, (_v, index) => ({
+      ...goteborg[0],
+      id: `municipality-${index + 1}`,
+    }));
+    const result = await runBoneoCollection(four, deps(impl), keepAll);
+    // robots.txt and 160 search pages leave room for 89 listing pages.
+    expect(calls).toHaveLength(250);
+    expect(result).toMatchObject({
+      requestCount: 250,
+      detailRead: 89,
+      detailSkipped: 71,
+      stopped: null,
+    });
+  });
+
+  it('counts a failed listing page and carries on', async () => {
+    const replies: Reply[] = [
+      { status: 500 },
+      { status: 404 },
+      { body: fixture('blocked-page.html') },
+      { body: fixture('detail-wrong-shape.html') },
+      { body: BALCONY },
+    ];
+    const events: LiveEvent[] = [];
+    const { impl, calls } = fakeFetch(
+      robotsOr(serve(5, (id) => replies[id - 1])),
+    );
+    const result = await runBoneoCollection(
+      goteborg,
+      deps(impl, events),
+      keepAll,
+    );
+    expect(detailCalls(calls)).toHaveLength(5);
+    expect(result).toMatchObject({
+      detailRead: 1,
+      detailFailed: 4,
+      detailSkipped: 0,
+      stopped: null,
+    });
+    expect(result.observations.map((o) => o.facts.outdoor)).toEqual([
+      null,
+      null,
+      null,
+      null,
+      'balcony',
+    ]);
+    expect(
+      events.filter((e) => e.event === 'detail-failed').map((e) => e.reason),
+    ).toEqual([
+      'http-non-200',
+      'http-non-200',
+      'no-embedded-data',
+      'unexpected-shape',
+    ]);
+    expect(JSON.stringify(events)).not.toMatch(/https:|boneo|fixture/);
+  });
+
+  it.each([
+    [{ status: 403 }, 'http-403'],
+    [{ status: 429 }, 'http-429'],
+    [new TypeError('socket'), 'network-error'],
+    [new DOMException('late', 'TimeoutError'), 'timeout'],
+  ] as [Reply, string][])(
+    'stops the whole run on listing page failure %#',
+    async (stop, reason) => {
+      const { impl, calls } = fakeFetch(
+        robotsOr(serve(4, (id) => (id === 2 ? stop : { body: BALCONY }))),
+      );
+      const result = await runBoneoCollection(goteborg, deps(impl), keepAll);
+      expect(result.stopped).toBe(reason);
+      expect(detailCalls(calls)).toHaveLength(2);
+      expect(result).toMatchObject({ detailRead: 1, detailFailed: 0 });
+      expect(result.observations.map((o) => o.facts.outdoor)).toEqual([
+        'balcony',
+        null,
+        null,
+        null,
+      ]);
+    },
+  );
 });

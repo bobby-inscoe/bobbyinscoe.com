@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { readBoneoSearchPage } from '@house-scanner-tools/boneo-parser';
+import {
+  readBoneoDetailPage,
+  readBoneoSearchPage,
+} from '@house-scanner-tools/boneo-parser';
 import {
   MAX_BATCH_OBSERVATIONS,
   MAX_RUN_OBSERVATIONS,
@@ -29,7 +32,8 @@ export const USER_AGENT =
 const ROBOTS_TOKEN = 'housescannerpersonalreader';
 export const MIN_INTERVAL_MS = 2000;
 export const MAX_PAGES_PER_PARTITION = 40;
-export const MAX_REQUESTS_PER_RUN = 60;
+export const MAX_REQUESTS_PER_RUN = 250;
+export const MAX_DETAIL_PAGES_PER_RUN = 150;
 export const REQUEST_TIMEOUT_MS = 15_000;
 export const MAX_BODY_CHARS = 3_000_000;
 
@@ -40,6 +44,14 @@ const APARTMENT_SEGMENT = 'lägenhet';
 const MUNICIPALITY_PATHS: Record<string, readonly [string, string]> = {
   göteborg: ['västra götalands', 'göteborg'],
 };
+
+// A listing page that fails for any other reason only costs that listing's extra facts.
+const STOPS_RUN: StopReason[] = [
+  'http-403',
+  'http-429',
+  'network-error',
+  'timeout',
+];
 
 export interface RobotsRules {
   rules: { allow: boolean; pattern: RegExp; length: number }[];
@@ -184,14 +196,22 @@ export interface LiveRunResult {
   observations: Observation[];
   partitions: PartitionOutcome[];
   requestCount: number;
+  detailRead: number;
+  detailFailed: number;
+  detailSkipped: number;
   stopped: StopReason | null;
 }
 
 export async function runBoneoCollection(
   partitions: readonly LivePartitionInput[],
   deps: LiveDeps,
+  // Picks the observations whose own listing page is read for outdoor and glazed.
+  selectKept: (observations: Observation[]) => Observation[] = () => [],
 ): Promise<LiveRunResult> {
   let requestCount = 0;
+  let detailRead = 0;
+  let detailFailed = 0;
+  let detailSkipped = 0;
   let lastFinishedAt: number | null = null;
   const observations: Observation[] = [];
   const seen = new Set<string>();
@@ -258,7 +278,15 @@ export async function runBoneoCollection(
       count: observations.length,
       reason: stopped ?? 'none',
     });
-    return { observations, partitions: outcomes, requestCount, stopped };
+    return {
+      observations,
+      partitions: outcomes,
+      requestCount,
+      detailRead,
+      detailFailed,
+      detailSkipped,
+      stopped,
+    };
   }
 
   const robotsUrl = `${BONEO_ORIGIN}/robots.txt`;
@@ -363,6 +391,48 @@ export async function runBoneoCollection(
       }
     }
   }
+
+  // One request per kept listing, under the same guards. A failed page leaves
+  // that listing's outdoor and glazed unknown; 403, 429 and network errors
+  // still stop the whole run.
+  const targets = selectKept(observations);
+  for (const [index, observation] of targets.entries()) {
+    if (detailRead + detailFailed >= MAX_DETAIL_PAGES_PER_RUN) {
+      detailSkipped += targets.length - index;
+      break;
+    }
+    const url = new URL(observation.sourceUrl);
+    if (!robotsAllows(robots, `${url.pathname}${url.search}`)) {
+      detailSkipped += 1;
+      continue;
+    }
+    const fetched = await request(observation.sourceUrl);
+    if (!fetched.ok) {
+      if (fetched.stop === 'request-cap') {
+        detailSkipped += targets.length - index;
+        break;
+      }
+      deps.log({
+        event: 'detail-failed',
+        status: fetched.status,
+        reason: fetched.stop,
+      });
+      if (STOPS_RUN.includes(fetched.stop)) return finish(fetched.stop);
+      detailFailed += 1;
+      continue;
+    }
+    const detail = readBoneoDetailPage(fetched.body);
+    if (detail.kind === 'failed') {
+      deps.log({ event: 'detail-failed', status: 200, reason: detail.reason });
+      detailFailed += 1;
+      continue;
+    }
+    Object.assign(observation.facts, {
+      outdoor: detail.outdoor,
+      glazed: detail.glazed,
+    });
+    detailRead += 1;
+  }
   return finish(null);
 }
 
@@ -423,6 +493,13 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
     ...options.planning,
     capability: options.capability,
   });
+  const prefilter = (observations: Observation[]) =>
+    prefilterObservations(
+      observations,
+      options.planning.profiles
+        .filter((profile) => profile.enabled)
+        .map((profile) => profile.criteria),
+    );
   const result = await runBoneoCollection(
     queryPlan.partitions.map(({ id, municipality, propertyTypes }) => ({
       id,
@@ -430,18 +507,14 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
       propertyTypes,
     })),
     deps,
+    (all) => prefilter(all).kept,
   );
   for (const observation of result.observations)
     assertAdapterOutput(options.capability.policy, observation);
   // ponytail: the run ceiling counts collected observations, so a run that hits
   // it can lose matching listings to non-matching ones. Move this filter into
   // the page loop if runs ever approach the ceiling.
-  const { kept, dropped } = prefilterObservations(
-    result.observations,
-    options.planning.profiles
-      .filter((profile) => profile.enabled)
-      .map((profile) => profile.criteria),
-  );
+  const { kept, dropped } = prefilter(result.observations);
   const droppedCount = Object.values(dropped).reduce((a, b) => a + b, 0);
 
   const read = result.partitions.filter((p) => p.status === 'read').length;
@@ -455,6 +528,7 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
     `Boneo personal read, query plan v${queryPlan.version}.`,
     `${read} of ${result.partitions.length} partitions read from ${pages} pages and ${result.requestCount} requests.`,
     `${kept.length} observations kept, ${droppedCount} dropped by confirmed profile bounds.`,
+    `Listing pages: ${result.detailRead} read, ${result.detailFailed} failed, ${result.detailSkipped} skipped; outdoor and glazing stay unknown for the rest.`,
     result.stopped ? `Stopped: ${result.stopped}.` : 'Run completed.',
     'Not covered: upcoming and unknown-price views, houses, other municipalities, pages beyond the cap.',
   ].join(' ');
