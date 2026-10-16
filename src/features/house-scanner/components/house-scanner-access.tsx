@@ -37,6 +37,7 @@ export function HouseScannerAccess({
   children: (household: AuthenticatedHousehold) => ReactNode;
 }) {
   const session = useHouseholdSession();
+  const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [remember, setRemember] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -94,13 +95,22 @@ export function HouseScannerAccess({
           onSubmit={(event) => {
             event.preventDefault();
             void perform(async () => {
-              await session.signInWithCode(code, remember);
+              await session.signInWithCode(email, code, remember);
               setCode('');
             });
           }}
         >
           <Stack align="flex-start" gap="md">
             <Title order={2}>Sign in with your access code</Title>
+            <TextInput
+              label="Email or username"
+              autoComplete="username"
+              autoCapitalize="none"
+              required
+              value={email}
+              disabled={busy}
+              onChange={(event) => setEmail(event.currentTarget.value)}
+            />
             <TextInput
               label="Access code"
               type="password"

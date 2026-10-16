@@ -21,10 +21,7 @@ import type {
   Snapshot,
 } from '@/features/house-scanner/types/contracts';
 
-// The owner creates each member in the Supabase dashboard as <name>@<this domain>
-// with the access code as the password. No mailboxes exist on this subdomain.
-const ACCESS_EMAIL_DOMAIN = 'house-scanner.bobbyinscoe.com';
-const ACCESS_CODE = /^([a-z0-9]{2,30})-(\S{6,72})$/i;
+const USERNAME_EMAIL_DOMAIN = 'house-scanner.bobbyinscoe.com';
 
 export type HouseholdSessionState =
   | { status: 'unconfigured' }
@@ -206,19 +203,32 @@ export function useHouseholdSession() {
       window.clearInterval(timer);
     };
   }, [client, refresh, fail]);
-  // An access code is "name-secret". The name picks the member's login and the whole
-  // code is the password the owner set for that user, so no email is ever sent.
-  async function signInWithCode(code: string, remember: boolean) {
+  // The access code is the password the owner set for this member's user, so no email is sent.
+  // A bare username signs in as <username>@USERNAME_EMAIL_DOMAIN, the address the owner gave that user.
+  async function signInWithCode(
+    login: string,
+    code: string,
+    remember: boolean,
+  ) {
     if (!client) throw new Error('Private access is not configured.');
-    const trimmed = code.trim();
-    const match = ACCESS_CODE.exec(trimmed);
-    if (!match) throw new Error('Enter your access code, like name-secret.');
+    const name = login.trim();
+    const address = z
+      .email()
+      .max(254)
+      .safeParse(
+        name.includes('@')
+          ? name
+          : `${name.toLowerCase()}@${USERNAME_EMAIL_DOMAIN}`,
+      );
+    if (!address.success || code.length < 6 || code.length > 72)
+      throw new Error('Enter your email or username and access code.');
     setRememberDevice(remember);
     const { error } = await client.auth.signInWithPassword({
-      email: `${match[1].toLowerCase()}@${ACCESS_EMAIL_DOMAIN}`,
-      password: trimmed,
+      email: address.data,
+      password: code,
     });
-    if (error) throw new Error('The access code was not accepted.');
+    if (error)
+      throw new Error('The email, username or access code was not accepted.');
     await refresh();
   }
   async function signOut() {

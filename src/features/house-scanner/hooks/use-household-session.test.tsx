@@ -452,34 +452,48 @@ describe('House Scanner session privacy', () => {
     expect(sdk.auth.getUser).toHaveBeenCalledTimes(1);
     expect(hook.result.current.state.status).toBe('authenticated');
   });
-  it('signs in with an access code and the selected storage preference', async () => {
+  it('signs in with an email and the selected storage preference', async () => {
     const hook = renderHook(useHouseholdSession);
     await act(() =>
-      hook.result.current.signInWithCode(' Casey-k7Qm29xP ', false),
+      hook.result.current.signInWithCode(
+        ' Casey@Example.com ',
+        '48291736',
+        false,
+      ),
     );
     expect(sdk.auth.signInWithPassword).toHaveBeenCalledWith({
-      email: 'casey@house-scanner.bobbyinscoe.com',
-      password: 'Casey-k7Qm29xP',
+      email: 'Casey@Example.com',
+      password: '48291736',
     });
     expect(window.sessionStorage.getItem('house-scanner.remember')).toBe(
       'false',
     );
     expect(window.localStorage.getItem('house-scanner.remember')).toBeNull();
   });
+  it('signs in a bare username as its address on the house-scanner domain', async () => {
+    const hook = renderHook(useHouseholdSession);
+    await act(() =>
+      hook.result.current.signInWithCode(' Bobby ', '48291736', true),
+    );
+    expect(sdk.auth.signInWithPassword).toHaveBeenCalledWith({
+      email: 'bobby@house-scanner.bobbyinscoe.com',
+      password: '48291736',
+    });
+  });
   it.each([
-    '',
-    'nodash',
-    'casey-',
-    'casey-short',
-    '-k7Qm29xP',
-    'ca sey-k7Qm29xP',
-    'casey-has space',
+    ['', '48291736'],
+    ['   ', '48291736'],
+    ['two words', '48291736'],
+    ['not an@email', '48291736'],
+    ['bobby', '12345'],
+    ['bobby', ''],
+    ['bobby', 'x'.repeat(73)],
   ])(
-    'rejects the malformed access code %j before reaching the SDK',
-    async (code) => {
+    'rejects login %j with code %j before reaching the SDK',
+    async (login, code) => {
       const hook = renderHook(useHouseholdSession);
       await expect(
-        hook.result.current.signInWithCode(code, true),
+        hook.result.current.signInWithCode(login, code, true),
       ).rejects.toThrow('access code');
       expect(sdk.auth.signInWithPassword).not.toHaveBeenCalled();
     },
@@ -490,8 +504,8 @@ describe('House Scanner session privacy', () => {
     });
     const hook = renderHook(useHouseholdSession);
     await expect(
-      hook.result.current.signInWithCode('casey-wrongcode1', true),
-    ).rejects.toThrow('The access code was not accepted.');
+      hook.result.current.signInWithCode('bobby', 'wrongcode1', true),
+    ).rejects.toThrow('The email, username or access code was not accepted.');
   });
   it('ignores a completed mutation from an earlier login of the same user', async () => {
     const hook = await authenticated();
