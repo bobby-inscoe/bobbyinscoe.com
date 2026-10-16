@@ -1,3 +1,4 @@
+import { BONEO_IMAGE_ORIGIN } from '@house-scanner-tools/source-registry';
 import {
   type Observation,
   observationSchema,
@@ -126,6 +127,28 @@ function listingUrl(slug: unknown, origin: string): string | null {
   }
 }
 
+const PHOTO_BASE = `${BONEO_IMAGE_ORIGIN}/target_styles/properties/sizex2/550x366/`;
+const PHOTO_NAME = /^[A-Za-z0-9_-]{1,120}\.(?:webp|jpe?g|png)$/;
+// The daily run refreshes the photo, so a week is ample before the app stops showing it.
+const PHOTO_VALID_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Only the first image's address is kept, and only when its file name is a plain name.
+// The browser loads it from the source; nothing is fetched or stored here.
+function photo(item: Rec, observedAt: string) {
+  const names = item.property_image_name;
+  const name = Array.isArray(names) ? names[0] : null;
+  if (typeof name !== 'string' || !PHOTO_NAME.test(name)) return null;
+  return {
+    url: `${PHOTO_BASE}${name}`,
+    attribution: 'Boneo',
+    rightsBasis:
+      'Shown to the household owner for personal use, loaded from the broker image host and never copied or stored.',
+    expiresAt: new Date(Date.parse(observedAt) + PHOTO_VALID_MS).toISOString(),
+    observedAt,
+    displayAllowed: true,
+    hotlinkAllowed: true,
+  };
+}
 function coordinates(item: Rec, observedAt: string) {
   const value = item.field_coordinates;
   if (!isRecord(value)) return null;
@@ -274,7 +297,7 @@ function observationFromItem(
     conflicts,
     coordinates: coordinates(item, observedAt),
     evidence: [],
-    photo: null,
+    photo: photo(item, observedAt),
   });
   return parsed.success ? parsed.data : null;
 }

@@ -355,8 +355,9 @@ describe('prepared run', () => {
     expect(capability.policy).toMatchObject({
       status: 'pending',
       automatedCollection: false,
-      imageDisplay: false,
-      imageHotlink: false,
+      imageDisplay: true,
+      imageHotlink: true,
+      imageOrigins: ['https://files.boneo.se'],
       retentionDays: 14,
       capabilities: {
         upcoming: false,

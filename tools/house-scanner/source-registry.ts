@@ -9,6 +9,7 @@ import { assertSourceAllowed } from '@/features/house-scanner/utils/source-polic
 export const DEMO_SOURCE_ID = 'synthetic-demo';
 export const BONEO_SOURCE_ID = 'boneo';
 export const BONEO_ORIGIN = 'https://www.boneo.se';
+export const BONEO_IMAGE_ORIGIN = 'https://files.boneo.se';
 export const capabilitySchema = z.strictObject({
   policy: sourcePolicySchema,
   executor: z.enum(['demo-only', 'boneo-personal-read', 'none']),
@@ -97,8 +98,13 @@ export function sourceRegistry(): SourceCapability[] {
         sourceId: BONEO_SOURCE_ID,
         // Pending is not approved: the operator sets approval in the database.
         status: 'pending',
+        // Revision 2 turns on hotlinked photos from the image host; the stored policy is revision 1.
+        revision: 2,
         retentionDays: 14,
         listingOrigins: [BONEO_ORIGIN],
+        imageOrigins: [BONEO_IMAGE_ORIGIN],
+        imageDisplay: true,
+        imageHotlink: true,
         automatedCollection: false,
         privateDisplay: false,
         rightsBasis:
@@ -129,7 +135,7 @@ export function sourceRegistry(): SourceCapability[] {
             'The page query is accepted but page size and multi-page ordering are unproven. Coverage is never reported complete.',
             'Only apartment paths for Goteborg are supported. Houses and other municipalities are not covered.',
             'Floor, lift, outdoor and glazing are not structured fields and stay unknown.',
-            'Photos are not read. Image display and hotlinking are off.',
+            'Only the first photo is shown, hotlinked from the broker image host. Nothing is copied or stored.',
             'Listing identity and episode rules come from property_id and created_date and are unproven across relistings.',
             'Known listings cannot be refreshed outside discovery.',
           ],

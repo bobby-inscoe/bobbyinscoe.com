@@ -48,6 +48,12 @@ trigger down is what makes that happen.
 
 <!-- Add new entries directly below this line, newest first. -->
 
+## 2026-10-16 House Scanner shows one hotlinked photo per Boneo listing
+**Decision.** The Boneo reader keeps the address of the first photo of each listing and the app shows it, loaded by the viewer's browser straight from Boneo's image host (`files.boneo.se`) with no referrer. The policy allows images from that one origin. Nothing is fetched, copied or stored by the collector.
+**Why.** The owner wants a photo for a first impression and accepts personal-use risk. A probe of one page showed the page builds each thumbnail from the first image file name, the host's `robots.txt` allows everything, the file is a webp of about 40 KB with a two day public cache lifetime, and it loads the same with or without a referrer. A lazy-loaded, cached image per listing is lighter than browsing the broker's own site.
+**Instead of.** Copying photos into the project's storage, which adds storage cost, makes extra requests and is a stronger form of reuse. No photos, which the first adapter shipped with.
+**Costs.** Boneo could change the address pattern or add hotlink protection, in which case the card shows the placeholder again. The address is built from a documented file name pattern, validated to plain names, and photos expire seven days after each daily observation.
+**Revisit if.** Boneo blocks or changes the images, or the owner wants other sources' photos, which need their own host checked.
 ## 2026-10-16 House Scanner signs in with a personal access code
 **Decision.** Each member signs in with an email or username plus one access code, which is that member's Supabase password. A username without an `@` signs in as `<username>@house-scanner.bobbyinscoe.com`. The owner creates users in the dashboard with auto confirm. Email one-time codes and their SMTP and template setup are removed, and the code may be any characters of length 6 to 72, digits included.
 **Why.** The household is two or three people, nothing sensitive beyond public listings and opinions, and the owner wants no email dependency. Supabase password sign-in already hashes the secret, rate-limits attempts and gives one stable user id across devices, so membership, favorites and notes need no change. An ordinary email-or-username form has no hidden derivation to remember, and real emails work as logins.

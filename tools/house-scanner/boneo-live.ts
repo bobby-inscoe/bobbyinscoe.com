@@ -12,6 +12,7 @@ import {
 } from '@house-scanner-tools/query-plan';
 import type { SourceCapability } from '@house-scanner-tools/source-registry';
 import {
+  BONEO_IMAGE_ORIGIN,
   BONEO_ORIGIN,
   BONEO_SOURCE_ID,
 } from '@house-scanner-tools/source-registry';
@@ -379,9 +380,9 @@ export function assertBoneoExecutor(capability: SourceCapability): void {
     policy.sourceId !== BONEO_SOURCE_ID ||
     policy.listingOrigins.length !== 1 ||
     policy.listingOrigins[0] !== BONEO_ORIGIN ||
-    policy.imageOrigins.length !== 0 ||
-    policy.imageDisplay ||
-    policy.imageHotlink
+    // Photos are allowed from the one image host only, shown by the browser and never fetched here.
+    policy.imageOrigins.length !== 1 ||
+    policy.imageOrigins[0] !== BONEO_IMAGE_ORIGIN
   )
     throw new Error('No permitted executor for this source.');
 }
@@ -395,8 +396,13 @@ export function assertAdapterOutput(
   observation: Observation,
 ): void {
   observationSchema.parse(observation);
+  const photoAllowed =
+    observation.photo === null ||
+    (policy.imageDisplay &&
+      policy.imageHotlink &&
+      policy.imageOrigins.includes(new URL(observation.photo.url).origin));
   if (
-    observation.photo !== null ||
+    !photoAllowed ||
     observation.evidence.length > 0 ||
     !policy.listingOrigins.includes(new URL(observation.sourceUrl).origin)
   )

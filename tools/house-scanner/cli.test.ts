@@ -194,8 +194,9 @@ it('prints the SQL that approves the Boneo policy without any network or file ac
     status: 'approved',
     automatedCollection: true,
     privateDisplay: true,
-    imageDisplay: false,
-    imageHotlink: false,
+    imageDisplay: true,
+    imageHotlink: true,
+    imageOrigins: ['https://files.boneo.se'],
   });
   expect(Date.parse(policy.reviewedAt)).toBeLessThan(Date.now());
   expect(Date.parse(policy.reviewDueAt)).toBeGreaterThan(Date.now());

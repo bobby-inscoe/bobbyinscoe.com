@@ -30,7 +30,7 @@ function byListing(id: number) {
 }
 
 describe('Boneo parser', () => {
-  it('maps a complete item without keeping the body, photo or evidence', () => {
+  it('maps a complete item without keeping the body or evidence', () => {
     const observation = byListing(1);
     expect(observation).toMatchObject({
       sourceListingId: '9000001',
@@ -41,7 +41,14 @@ describe('Boneo parser', () => {
       publishedAt: '2026-10-01T08:00:00.000Z',
       conflicts: [],
       evidence: [],
-      photo: null,
+      photo: {
+        url: 'https://files.boneo.se/target_styles/properties/sizex2/550x366/fixture-photo-1.webp',
+        attribution: 'Boneo',
+        observedAt: '2026-10-13T09:00:00.000Z',
+        expiresAt: '2026-10-20T09:00:00.000Z',
+        displayAllowed: true,
+        hotlinkAllowed: true,
+      },
       facts: {
         propertyType: 'apartment',
         tenure: 'cooperative',
@@ -61,6 +68,13 @@ describe('Boneo parser', () => {
     expect(JSON.stringify(observation)).not.toContain('Syntetisk');
   });
 
+  it('keeps only the first photo and rejects unsafe or missing file names', () => {
+    expect(byListing(1).photo?.url).toBe(
+      'https://files.boneo.se/target_styles/properties/sizex2/550x366/fixture-photo-1.webp',
+    );
+    expect(byListing(2).photo).toBeNull();
+    expect(byListing(3).photo).toBeNull();
+  });
   it('marks coordinates approximate and reads numeric strings', () => {
     expect(byListing(1).coordinates).toMatchObject({
       precision: 'approximate_area',
@@ -128,6 +142,28 @@ describe('Boneo parser', () => {
       expect(() => assertAdapterOutput(policy, observation)).not.toThrow();
   });
 
+  it('rejects a photo from another host or when the policy has images off', () => {
+    const policy = sourceRegistry().find(
+      (entry) => entry.policy.sourceId === 'boneo',
+    )?.policy;
+    if (!policy) throw new Error('boneo missing');
+    const withPhoto = byListing(1);
+    if (!withPhoto.photo) throw new Error('fixture photo missing');
+    const elsewhere = {
+      ...withPhoto,
+      photo: {
+        ...withPhoto.photo,
+        url: 'https://images.example.invalid/a.webp',
+      },
+    };
+    expect(() => assertAdapterOutput(policy, elsewhere)).toThrow();
+    expect(() =>
+      assertAdapterOutput({ ...policy, imageDisplay: false }, withPhoto),
+    ).toThrow();
+    expect(() =>
+      assertAdapterOutput({ ...policy, imageHotlink: false }, withPhoto),
+    ).toThrow();
+  });
   it('reports total and a more-pages signal from the embedded data', () => {
     const first = page('search-page-more.html');
     expect(first.total).toBe(7);
