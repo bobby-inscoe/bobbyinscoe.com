@@ -48,6 +48,12 @@ trigger down is what makes that happen.
 
 <!-- Add new entries directly below this line, newest first. -->
 
+## 2026-10-16 House Scanner reads each kept Boneo listing page for balcony and glazing
+**Decision.** After the profile pre-filter, the reader fetches the page of each kept listing, up to 150 per run, and takes balcony and terrace from the page's structured fields and glazed only from clear wording in the description. A ticked box becomes `balcony`, `terrace` or `both`. An unticked or missing box stays unknown, never "none". Floor, lift and build year are not collected.
+**Why.** Without these facts every home sits under Needs details and the owner's balcony and glazed-balcony rules cannot act. Fetching only the roughly 70 kept pages costs about 5 minutes and 30 MB a day, similar to browsing them by hand, under the same guards as the search pages: robots check, honest user agent, two seconds between requests, stop at once on 403, 429 or a network error, and a total cap of 250 requests.
+**Instead of.** Fetching every listing, which is ten times the traffic for homes already ruled out. Guessing glazed from the word balcony. Treating an unticked box as no balcony, which would hide good homes. Adding floor and build year, which needs a contract and database change and is a separate slice.
+**Costs.** The word order "balkongen är inglasad" is not recognized, so some glazed balconies stay unknown. The daily run is slower and, with no stored state, re-reads the same pages each day. A failed page leaves that home unknown rather than failing the run.
+**Revisit if.** Boneo objects, the pages change shape, or storing a build year and floor becomes worth a contract change.
 ## 2026-10-16 House Scanner shows one hotlinked photo per Boneo listing
 **Decision.** The Boneo reader keeps the address of the first photo of each listing and the app shows it, loaded by the viewer's browser straight from Boneo's image host (`files.boneo.se`) with no referrer. The policy allows images from that one origin. Nothing is fetched, copied or stored by the collector.
 **Why.** The owner wants a photo for a first impression and accepts personal-use risk. A probe of one page showed the page builds each thumbnail from the first image file name, the host's `robots.txt` allows everything, the file is a webp of about 40 KB with a two day public cache lifetime, and it loads the same with or without a referrer. A lazy-loaded, cached image per listing is lighter than browsing the broker's own site.
