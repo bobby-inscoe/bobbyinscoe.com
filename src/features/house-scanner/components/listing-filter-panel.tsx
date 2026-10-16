@@ -124,6 +124,16 @@ export function ListingFilterPanel({
               }
             />
             <Checkbox
+              label="Not on the map only"
+              checked={filters.notOnMapOnly}
+              onChange={(event) =>
+                onChange({
+                  ...filters,
+                  notOnMapOnly: event.currentTarget.checked,
+                })
+              }
+            />
+            <Checkbox
               label="Keep homes with unknown or disputed values"
               checked={filters.includeUnknown}
               onChange={(event) =>

@@ -22,6 +22,30 @@ function passes(listing: Listing, filters: Partial<ListingFilters>) {
   );
 }
 
+describe('not on the map filter', () => {
+  const at = (precision: 'address' | 'approximate_area') => ({
+    longitude: 11.9,
+    latitude: 57.7,
+    precision,
+    source: 'test',
+    observedAt: original.observedAt,
+  });
+  it('keeps only homes without a pin and counts as active', () => {
+    expect(
+      passes(home({}, { coordinates: at('address') }), { notOnMapOnly: true }),
+    ).toBe(false);
+    expect(
+      passes(home({}, { coordinates: null }), { notOnMapOnly: true }),
+    ).toBe(true);
+    expect(
+      passes(home({}, { coordinates: at('approximate_area') }), {
+        notOnMapOnly: true,
+      }),
+    ).toBe(true);
+    expect(activeFilterCount({ ...emptyFilters, notOnMapOnly: true })).toBe(1);
+  });
+});
+
 describe('applyListingFilters', () => {
   it('keeps everything when no filter is set', () => {
     const all = SYNTHETIC_SNAPSHOT.listings;

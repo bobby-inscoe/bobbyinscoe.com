@@ -57,6 +57,16 @@
   display: block;
   width: 100%;
 }
+/* The star sits over the photo's top-right corner. */
+.photoWrap {
+  position: relative;
+}
+.star {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+}
 .selected .photoLink {
   max-width: 440px;
 }

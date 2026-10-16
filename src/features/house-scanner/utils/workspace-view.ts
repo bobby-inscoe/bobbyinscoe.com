@@ -5,10 +5,10 @@ import type {
 import { matchListing } from '@/features/house-scanner/utils/match-listing';
 
 export const SECTION_LABELS = {
-  preferred: 'Preferred budget',
+  preferred: 'Within budget',
   stretch: 'Stretch budget',
-  exceptions: 'Possible exceptions',
-  'needs-details': 'Needs details',
+  exceptions: 'Close to your criteria',
+  'needs-details': 'Missing info',
   outside: 'Outside current criteria',
 };
 

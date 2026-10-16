@@ -108,3 +108,7 @@ Same guards and the same CLI as Boneo, with `--source=bjurfors`: `--live --sourc
 - Operator steps: `node .house-scanner-build/collector.mjs --print-policy-sql --source=bjurfors --household=<uuid>` prints the approval SQL for the operator to run in the SQL editor. The ingest credential is issued per source, so Bjurfors needs its own key id and secret in `HS_INGEST_KEY_ID` and `HS_INGEST_SECRET` for its run. Boneo's policy must be printed and run again because its revision is now 4.
 
 Fixtures under `fixtures/bjurfors/` are synthetic: fake addresses, values and ids in the same markup shape, with search pages 1 and 2, an empty page, a page missing its total, a blocked page, and listing pages with every field, with missing fields and with the wrong shape. No real listing data, captured page or image is committed.
+
+### Estimated positions
+
+Kept homes with a house number in the title and no source position are looked up on OpenStreetMap's Nominatim (`geocoder.ts`): honest user agent, 1.5 seconds apart, at most 60 per run, stop on the first error. Answers are cached in `house-scanner.cache-geocode.json` (gitignored by the `house-scanner.cache*.json` pattern): hits for 90 days, misses for 7. The position is stored as `address` with a source that says it is estimated from the address or the street name.

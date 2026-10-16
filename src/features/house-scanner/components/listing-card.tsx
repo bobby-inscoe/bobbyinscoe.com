@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Anchor,
   Badge,
   Button,
@@ -17,6 +18,7 @@ import type {
   Listing,
   Snapshot,
 } from '@/features/house-scanner/types/contracts';
+import { isOnMap } from '@/features/house-scanner/utils/listing-filters';
 import {
   formatDate,
   formatPrice,
@@ -84,6 +86,8 @@ interface ListingCardProps {
   notes?: ListingNotesController;
   onSelect: () => void;
   onFavorite: () => void;
+  // Shown only for homes that have a pin.
+  onSeeOnMap?: () => void;
 }
 
 export function ListingCard({
@@ -98,6 +102,7 @@ export function ListingCard({
   notes,
   onSelect,
   onFavorite,
+  onSeeOnMap,
 }: ListingCardProps) {
   const saved = snapshot.favorites.filter(
     (favorite) => favorite.listingId === listing.id,
@@ -119,7 +124,22 @@ export function ListingCard({
       className={`${styles.card} ${selected ? styles.selected : ''}`}
       aria-label={listing.title}
     >
-      <ListingPhoto listing={listing} />
+      <div className={styles.photoWrap}>
+        <ListingPhoto listing={listing} />
+        <ActionIcon
+          className={styles.star}
+          variant={mine ? 'filled' : 'default'}
+          color="moss"
+          size="lg"
+          radius="xl"
+          aria-label={mine ? 'Remove my favorite' : 'Save favorite'}
+          disabled={!canSave}
+          loading={busy}
+          onClick={onFavorite}
+        >
+          {mine ? '★' : '☆'}
+        </ActionIcon>
+      </div>
       <Group gap="xs">
         <Badge variant="light">
           {listing.conflicts.includes('status')
@@ -206,14 +226,11 @@ export function ListingCard({
         >
           Details
         </Button>
-        <Button
-          size="xs"
-          disabled={!canSave}
-          loading={busy}
-          onClick={onFavorite}
-        >
-          {mine ? 'Remove my favorite' : 'Save favorite'}
-        </Button>
+        {onSeeOnMap && isOnMap(listing) && (
+          <Button size="xs" variant="default" onClick={onSeeOnMap}>
+            See on map
+          </Button>
+        )}
       </Group>
       {!canSave && (
         <Text size="xs">Favorite changes are unavailable in this view.</Text>

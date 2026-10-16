@@ -5,6 +5,10 @@ import {
   MAX_RUN_OBSERVATIONS,
   sourceIdentity,
 } from '@house-scanner-tools/collector';
+import {
+  type GeocodeCache,
+  geocodeMissing,
+} from '@house-scanner-tools/geocoder';
 import { prefilterObservations } from '@house-scanner-tools/prefilter';
 import {
   planQueries,
@@ -494,6 +498,8 @@ export interface LiveRunOptions {
   planning: Omit<z.input<typeof queryPlanInputSchema>, 'capability'>;
   // Updated in place with the listing pages this run reads.
   memory?: LoadedMemory;
+  // Estimated positions for kept homes the source gave none for; updated in place.
+  geocodeCache?: GeocodeCache;
 }
 
 /**
@@ -556,6 +562,9 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
   // it can lose matching listings to non-matching ones. Move this filter into
   // the page loop if runs ever approach the ceiling.
   const { kept, dropped } = prefilter(result.observations);
+  const geocoded = options.geocodeCache
+    ? await geocodeMissing(kept, options.geocodeCache, deps)
+    : null;
   const droppedCount = Object.values(dropped).reduce((a, b) => a + b, 0);
 
   const pages = result.partitions.reduce((sum, p) => sum + p.pages, 0);
@@ -569,6 +578,9 @@ export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
   const coverageNote = [
     `Read ${result.observations.length} homes across ${pages} pages; kept ${kept.length} that fit your profile and dropped ${droppedCount}.`,
     `${adapter.detailLabel}: ${result.detailRead} read, ${result.detailCached} reused, ${result.detailFailed} failed, ${result.detailSkipped} skipped.`,
+    geocoded
+      ? `Positions estimated from addresses: ${geocoded.found} found (${geocoded.cached} reused).`
+      : '',
     options.memory?.reset ? 'Run memory was unreadable and was reset.' : '',
     result.stopped ? `Stopped early: ${result.stopped}.` : '',
     adapter.notCovered,

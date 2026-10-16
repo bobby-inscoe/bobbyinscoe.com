@@ -45,6 +45,7 @@ export function ProfileEditor({
       <NumberInput
         key={key}
         label={label}
+        thousandSeparator=" "
         value={criteria[key] ?? ''}
         min={0}
         disabled={!canEdit || !onSave}

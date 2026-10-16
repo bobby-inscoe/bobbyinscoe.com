@@ -18,7 +18,7 @@ async function openDemo(page: import('@playwright/test').Page) {
     .getByRole('button', { name: 'Explore the synthetic demo' })
     .click();
   await expect(
-    page.getByText('5 homes · 3 not on the map', { exact: false }),
+    page.getByText('5 homes · 3 not located', { exact: false }),
   ).toBeVisible();
 }
 
@@ -173,7 +173,7 @@ test('criteria revisions re-evaluate suggestions and keep favorites', async ({
     .fill('1500000');
   await page.getByRole('button', { name: 'Save criteria' }).click();
   await expect(page.getByText('Revision 2', { exact: false })).toBeVisible();
-  await page.getByRole('button', { name: 'Suggestions', exact: true }).click();
+  await page.getByRole('button', { name: 'Listings', exact: true }).click();
   await expect(page.getByRole('article')).toHaveCount(1);
   await expect(
     page.getByRole('article', {
@@ -201,7 +201,9 @@ test('map is opt-in and a failed tile request leaves details and list controls u
   await expect(page.getByRole('alert')).toContainText(/map|Map/);
   expect(
     external.every(
-      (url) => url === 'https://tiles.openfreemap.org/styles/liberty',
+      (url) =>
+        url === 'https://tiles.openfreemap.org/styles/liberty' ||
+        url.startsWith('https://server.arcgisonline.com/'),
     ),
   ).toBe(true);
   await page.getByRole('button', { name: 'List', exact: true }).click();
@@ -240,6 +242,7 @@ test('a locally served map style groups overlapping homes and keeps map selectio
         },
       }),
   );
+  await routeImagery(page);
   await openDemo(page);
   await page.getByRole('button', { name: 'Map', exact: true }).click();
   await page
@@ -286,12 +289,22 @@ const PIXEL_PNG = Buffer.from(
   'base64',
 );
 
+async function routeImagery(page: import('@playwright/test').Page) {
+  const imagery: string[] = [];
+  await page.route('https://server.arcgisonline.com/**', (route) => {
+    imagery.push(route.request().url());
+    return route.fulfill({ body: PIXEL_PNG, contentType: 'image/png' });
+  });
+  return imagery;
+}
+
 test('personal filters change the list and the map together, and Clear restores them', async ({
   page,
 }) => {
   await page.route('https://tiles.openfreemap.org/styles/liberty', (route) =>
     route.fulfill({ json: LOCAL_STREET_STYLE }),
   );
+  await routeImagery(page);
   await openDemo(page);
   await expect(page.getByLabel('Min living area (m²)')).toBeHidden();
   await page.getByRole('button', { name: 'Filters', exact: true }).click();
@@ -309,7 +322,7 @@ test('personal filters change the list and the map together, and Clear restores 
   await page.getByRole('button', { name: 'List', exact: true }).click();
   await expect(page.getByRole('article')).toHaveCount(5);
   await expect(
-    page.getByText('5 homes · 3 not on the map', { exact: false }),
+    page.getByText('5 homes · 3 not located', { exact: false }),
   ).toBeVisible();
 });
 
@@ -339,11 +352,7 @@ test('the satellite toggle swaps the basemap, names the provider and keeps the m
   await page.route('https://tiles.openfreemap.org/styles/liberty', (route) =>
     route.fulfill({ json: LOCAL_STREET_STYLE }),
   );
-  const imagery: string[] = [];
-  await page.route('https://server.arcgisonline.com/**', (route) => {
-    imagery.push(route.request().url());
-    return route.fulfill({ body: PIXEL_PNG, contentType: 'image/png' });
-  });
+  const imagery = await routeImagery(page);
   await openDemo(page);
   await page.getByRole('button', { name: 'Map', exact: true }).click();
   const marker = page.getByRole('button', {
@@ -351,13 +360,18 @@ test('the satellite toggle swaps the basemap, names the provider and keeps the m
     exact: true,
   });
   await expect(marker).toBeVisible();
+  const satellite = page.getByRole('button', {
+    name: 'Satellite',
+    exact: true,
+  });
+  await expect(satellite).toHaveAttribute('aria-pressed', 'true');
   await expect(
-    page.getByText('Map tiles come from OpenFreeMap', { exact: false }),
+    page.getByText('Imagery © Esri, Maxar, Earthstar Geographics'),
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Street map' }),
-  ).toHaveAttribute('aria-pressed', 'true');
-  expect(imagery).toEqual([]);
+    page.getByText('Map tiles come from Esri', { exact: false }),
+  ).toBeVisible();
+  await expect.poll(() => imagery.length).toBeGreaterThan(0);
   // Relative to the map, so a scroll change from the toggle click does not count.
   const offset = () =>
     marker.evaluate((element) => {
@@ -368,24 +382,15 @@ test('the satellite toggle swaps the basemap, names the provider and keeps the m
       return [a.x - (b?.x ?? 0), a.y - (b?.y ?? 0)];
     });
   const before = await offset();
-  await page.getByRole('button', { name: 'Satellite', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: 'Satellite', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'true');
-  await expect(
-    page.getByText('Imagery © Esri, Maxar, Earthstar Geographics'),
-  ).toBeVisible();
-  await expect(
-    page.getByText('Map tiles come from Esri', { exact: false }),
-  ).toBeVisible();
-  await expect(marker).toBeVisible();
-  await expect.poll(() => imagery.length).toBeGreaterThan(0);
-  expect(await offset()).toEqual(before);
   await page.getByRole('button', { name: 'Street map' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Street map' }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await expect(
     page.getByText('Map tiles come from OpenFreeMap', { exact: false }),
   ).toBeVisible();
   await expect(marker).toBeVisible();
+  expect(await offset()).toEqual(before);
 });
 
 test('shared notes show every member and the signed-in member edits only their own, by keyboard', async ({
@@ -497,5 +502,32 @@ test('a saved listing missing from the latest scan shows a notice and can be unf
   await expect(home.getByText(/^Saved by/)).toHaveCount(0);
   await expect(
     home.getByRole('button', { name: 'Save favorite', exact: true }),
+  ).toBeVisible();
+});
+
+test('See on map opens that home on the map, and unlocated homes share one marker', async ({
+  page,
+}) => {
+  await page.route('https://tiles.openfreemap.org/styles/liberty', (route) =>
+    route.fulfill({ json: LOCAL_STREET_STYLE }),
+  );
+  await routeImagery(page);
+  await openDemo(page);
+  const home = page.getByRole('article', {
+    name: 'Example detached home',
+    exact: true,
+  });
+  await home.getByRole('button', { name: 'See on map', exact: true }).click();
+  await expect(
+    page.getByRole('article', {
+      name: 'Selected home: Example detached home',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', {
+      name: '3 homes with no known position',
+      exact: true,
+    }),
   ).toBeVisible();
 });

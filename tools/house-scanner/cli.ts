@@ -3,6 +3,11 @@ import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { prepareFixtureRun } from '@house-scanner-tools/collector';
 import {
+  GEOCODE_CACHE_PATH,
+  loadGeocodeCache,
+  saveGeocodeCache,
+} from '@house-scanner-tools/geocoder';
+import {
   defaultLiveDeps,
   type LiveEvent,
   prepareLiveRun,
@@ -91,6 +96,8 @@ async function live(values: Values) {
   // Refuses a too-soon run here and records this one, before any request.
   const cachePath = resolve(values.cache ?? DEFAULT_CACHE_PATH);
   const memory = startLiveRun(cachePath, Date.now(), values.force);
+  const geocodePath = resolve(GEOCODE_CACHE_PATH);
+  const geocodeCache = loadGeocodeCache(geocodePath);
   const events: LiveEvent[] = [];
   const prepared = await prepareLiveRun(
     {
@@ -99,12 +106,18 @@ async function live(values: Values) {
       capability,
       planning: { profiles, collectionPriceCapSek: null, maxPartitions: 5 },
       memory,
+      geocodeCache,
     },
     defaultLiveDeps((event) => events.push(event)),
   );
   let cacheSaved = true;
   try {
     saveMemory(cachePath, memory.memory, Date.now());
+  } catch {
+    cacheSaved = false;
+  }
+  try {
+    saveGeocodeCache(geocodePath, geocodeCache);
   } catch {
     cacheSaved = false;
   }

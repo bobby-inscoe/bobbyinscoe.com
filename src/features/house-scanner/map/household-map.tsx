@@ -16,6 +16,8 @@ import type { Listing } from '@/features/house-scanner/types/contracts';
 // MapLibre resolves its default worker beside import.meta.url, which Vite rewrites.
 setWorkerUrl(workerUrl);
 
+const MAX_STACK_BUTTONS = 6;
+
 const SATELLITE_STYLE: StyleSpecification = {
   version: 8,
   sources: {
@@ -36,7 +38,12 @@ export interface MapPoint {
   id: string;
   label: string;
   markerText: string;
-  coordinates: NonNullable<Listing['coordinates']>;
+  coordinates: Pick<
+    NonNullable<Listing['coordinates']>,
+    'longitude' | 'latitude'
+  >;
+  // Homes with no usable position share one marker, drawn differently.
+  unlocated?: boolean;
 }
 interface HouseholdMapProps {
   points: MapPoint[];
@@ -67,6 +74,21 @@ export function HouseholdMap({
   satelliteRef.current = satellite;
   const appliedSatellite = useRef(satellite);
   const first = useRef(points[0]?.coordinates).current;
+  // The first view frames every home, including the not-located marker.
+  const bounds = useRef(
+    points.length > 1
+      ? ([
+          [
+            Math.min(...points.map((p) => p.coordinates.longitude)),
+            Math.min(...points.map((p) => p.coordinates.latitude)),
+          ],
+          [
+            Math.max(...points.map((p) => p.coordinates.longitude)),
+            Math.max(...points.map((p) => p.coordinates.latitude)),
+          ],
+        ] as [[number, number], [number, number]])
+      : undefined,
+  ).current;
   const centerLongitude = first?.longitude ?? 0;
   const centerLatitude = first?.latitude ?? 0;
   useEffect(() => {
@@ -78,6 +100,8 @@ export function HouseholdMap({
         style: satelliteRef.current ? SATELLITE_STYLE : styleUrl,
         center: [centerLongitude, centerLatitude],
         zoom: 11,
+        bounds,
+        fitBoundsOptions: { padding: 40, maxZoom: 14 },
         attributionControl: { compact: false },
       });
       map.current = instance;
@@ -98,7 +122,7 @@ export function HouseholdMap({
       instance?.remove();
       map.current = null;
     };
-  }, [styleUrl, centerLongitude, centerLatitude, error]);
+  }, [styleUrl, centerLongitude, centerLatitude, bounds, error]);
   useEffect(() => {
     if (!map.current || appliedSatellite.current === satellite) return;
     appliedSatellite.current = satellite;
@@ -115,14 +139,20 @@ export function HouseholdMap({
     const markers = [...groups.values()].map((group) => {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = styles.marker;
-      button.textContent =
-        group.length === 1 ? group[0].markerText : String(group.length);
+      const unlocated = group[0].unlocated === true;
+      button.className = `${styles.marker} ${unlocated ? styles.unlocated : ''}`;
+      button.textContent = unlocated
+        ? `${group.length} not located`
+        : group.length === 1
+          ? group[0].markerText
+          : String(group.length);
       button.setAttribute(
         'aria-label',
-        group.length === 1
-          ? group[0].label
-          : `${group.length} homes at this point`,
+        unlocated
+          ? `${group.length} homes with no known position`
+          : group.length === 1
+            ? group[0].label
+            : `${group.length} homes at this point`,
       );
       button.setAttribute(
         'aria-pressed',
@@ -154,6 +184,8 @@ export function HouseholdMap({
   const availableStack = stack.filter((id) =>
     points.some((point) => point.id === id),
   );
+  const count = availableStack.length;
+  const at = Math.max(0, availableStack.indexOf(selectedId ?? ''));
   return (
     <Stack gap="sm">
       {error ? (
@@ -173,15 +205,37 @@ export function HouseholdMap({
       )}
       {availableStack.length > 1 && (
         <Group aria-label="Homes at selected point">
-          {availableStack.map((id, index) => (
-            <Button
-              key={id}
-              variant={id === selectedId ? 'filled' : 'default'}
-              onClick={() => onSelect(id)}
-            >
-              Home {index + 1}
-            </Button>
-          ))}
+          {availableStack.length > MAX_STACK_BUTTONS ? (
+            <>
+              <Button
+                variant="default"
+                onClick={() =>
+                  onSelect(availableStack[(at - 1 + count) % count])
+                }
+              >
+                Previous
+              </Button>
+              <Text size="sm">
+                Home {at + 1} of {count}
+              </Text>
+              <Button
+                variant="default"
+                onClick={() => onSelect(availableStack[(at + 1) % count])}
+              >
+                Next
+              </Button>
+            </>
+          ) : (
+            availableStack.map((id, index) => (
+              <Button
+                key={id}
+                variant={id === selectedId ? 'filled' : 'default'}
+                onClick={() => onSelect(id)}
+              >
+                Home {index + 1}
+              </Button>
+            ))
+          )}
         </Group>
       )}
       <Text size="xs" c="dimmed">
