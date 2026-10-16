@@ -32,8 +32,15 @@
 }
 .list {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: var(--mantine-spacing-md);
+  min-width: 0;
+}
+/* Sizing applies only inside the list; the card is reused in column layouts elsewhere. */
+.list > .card {
+  flex: 1 1 320px;
+  max-width: 480px;
   min-width: 0;
 }
 .card {
@@ -52,7 +59,6 @@
 .photoLink {
   display: block;
   width: 100%;
-  max-width: 440px;
 }
 .photo {
   display: block;
