@@ -244,6 +244,51 @@ describe('signed ingestion trust boundary', () => {
     });
     expect(database.rpc).not.toHaveBeenCalled();
   });
+  it.each([
+    ['key-not-in-secret', () => env.set('HS_INGEST_KEYS_JSON', '{}'), 401],
+    [
+      'bad-signature',
+      () =>
+        env.set(
+          'HS_INGEST_KEYS_JSON',
+          JSON.stringify({ 'test-key': `${secret}-different` }),
+        ),
+      401,
+    ],
+    [
+      'secret-or-service-key-missing-or-invalid',
+      () => env.delete('SUPABASE_SERVICE_ROLE_KEY'),
+      503,
+    ],
+  ])(
+    'logs only the reason %s and never a secret',
+    async (reason, arrange, status) => {
+      arrange();
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const response = await handler(signedRequest());
+      expect(response.status).toBe(status);
+      const text = logged.mock.calls.flat().join(' ');
+      expect(text).toContain(reason);
+      expect(text).not.toContain(secret);
+      expect(text).not.toMatch(/[a-f0-9]{64}/);
+      logged.mockRestore();
+    },
+  );
+  it('logs a database error when the credential lookup fails', async () => {
+    const original = database.rpc.getMockImplementation();
+    database.rpc.mockImplementation(async (name, args) =>
+      name === 'hs_ingest_credential'
+        ? { data: null, error: { message: 'Invalid API key' } }
+        : original?.(name, args),
+    );
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const response = await handler(signedRequest());
+    expect(response.status).toBe(401);
+    expect(logged.mock.calls.flat().join(' ')).toContain(
+      'credential-lookup-failed: Invalid API key',
+    );
+    logged.mockRestore();
+  });
   it('rejects methods and paths before reading credentials', async () => {
     expect(
       (await handler(new Request(`https://local.example.invalid${path}`)))

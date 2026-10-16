@@ -66,6 +66,15 @@ async function boundedBody(request: Request) {
   }
   return body;
 }
+// The caller always gets the same generic body; the reason code goes to the function logs only
+// and never includes a secret, key, signature or body.
+function refuse(status: 401 | 503, reason: string) {
+  console.error(`house-scanner-ingest refused: ${reason}`);
+  return response(status, {
+    error:
+      status === 401 ? 'Request not authorized' : 'Ingestion is not configured',
+  });
+}
 Deno.serve(async (request: Request) => {
   if (request.method !== 'POST')
     return response(405, { error: 'Method not allowed' });
@@ -114,8 +123,7 @@ Deno.serve(async (request: Request) => {
     const keys = z
       .record(z.string(), z.string().min(32).max(1024))
       .parse(JSON.parse(Deno.env.get('HS_INGEST_KEYS_JSON') ?? '{}'));
-    if (!Object.hasOwn(keys, keyId))
-      return response(401, { error: 'Request not authorized' });
+    if (!Object.hasOwn(keys, keyId)) return refuse(401, 'key-not-in-secret');
     secret = keys[keyId];
     databaseUrl = z.url().parse(Deno.env.get('SUPABASE_URL'));
     databaseKey = z
@@ -123,7 +131,7 @@ Deno.serve(async (request: Request) => {
       .min(20)
       .parse(Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'));
   } catch {
-    return response(503, { error: 'Ingestion is not configured' });
+    return refuse(503, 'secret-or-service-key-missing-or-invalid');
   }
   const signed = encoder.encode(
     `${request.method}\n/functions/v1/house-scanner-ingest\n${timestamp}\n${nonce}\n${digest}`,
@@ -140,7 +148,7 @@ Deno.serve(async (request: Request) => {
   );
   // WebCrypto performs the fixed-length MAC comparison; never compare signature strings.
   if (!(await crypto.subtle.verify('HMAC', hmac, signatureBytes, signed)))
-    return response(401, { error: 'Request not authorized' });
+    return refuse(401, 'bad-signature');
   const database = createClient(databaseUrl, databaseKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -150,7 +158,12 @@ Deno.serve(async (request: Request) => {
   );
   const scope = credentialSchema.safeParse(credential);
   if (credentialError || !scope.success)
-    return response(401, { error: 'Request not authorized' });
+    return refuse(
+      401,
+      credentialError
+        ? `credential-lookup-failed: ${credentialError.message}`
+        : 'credential-not-active',
+    );
   const { error: replayError } = await database.rpc('hs_consume_nonce', {
     p_key_id: keyId,
     p_nonce: nonce,
