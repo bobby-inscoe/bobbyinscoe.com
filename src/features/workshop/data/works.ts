@@ -48,5 +48,19 @@ export const WORKS = [
       ['Focus', 'Options risk + reward'],
     ],
   },
+  {
+    id: 'house-scanner',
+    title: 'House Scanner',
+    label: 'Private shortlist',
+    description:
+      'A shared home shortlist with source details, attributed favorites and a map.',
+    paragraphs: [
+      'Explore fictional homes in the synthetic demo. Live sources are not connected.',
+    ],
+    facts: [
+      ['Format', 'Private household workspace'],
+      ['Public demo', 'Fictional homes and people'],
+    ],
+  },
 ] as const;
 export type Work = (typeof WORKS)[number];

@@ -2,6 +2,33 @@ import { Wheat } from 'lucide-react';
 import duck from '@/assets/duck.svg';
 
 export function WorkArt({ kind }: { kind: string }) {
+  if (kind === 'house-scanner') {
+    return (
+      <div className="scanner-art" aria-hidden="true">
+        <span className="art-corner">HOUSE SCANNER</span>
+        <svg viewBox="0 0 600 320" fill="none" aria-hidden="true">
+          <path
+            d="M60 260H540M80 100H520M150 50V280M450 50V280"
+            stroke="currentColor"
+            opacity=".15"
+          />
+          <path
+            d="m210 165 90-75 90 75v95H210Z"
+            stroke="currentColor"
+            strokeWidth="3"
+          />
+          <path
+            d="M280 260v-65h40v65M235 175h25v30h-25Z"
+            stroke="currentColor"
+            strokeWidth="3"
+          />
+          <circle cx="455" cy="185" r="24" fill="currentColor" opacity=".13" />
+          <path d="m444 185 8 8 15-17" stroke="currentColor" strokeWidth="3" />
+        </svg>
+        <span className="scanner-art-caption">A shared home shortlist</span>
+      </div>
+    );
+  }
   if (kind === 'common-basket') {
     return (
       <div className="basket-art" aria-hidden="true">

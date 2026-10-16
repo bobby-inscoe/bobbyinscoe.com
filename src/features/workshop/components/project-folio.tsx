@@ -138,6 +138,15 @@ export function ProjectFolio({
                 >
                   Play Duck Feed <span aria-hidden="true">↗</span>
                 </Anchor>
+              ) : work.id === 'house-scanner' ? (
+                <Anchor
+                  component={Link}
+                  to="/projects/house-scanner"
+                  className="text-link"
+                  onClick={onClose}
+                >
+                  Open House Scanner <span aria-hidden="true">↗</span>
+                </Anchor>
               ) : (
                 <Text size="xs" c="dimmed">
                   No public demo yet.

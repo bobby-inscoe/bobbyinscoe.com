@@ -1,0 +1,38 @@
+.stage {
+  position: relative;
+}
+.map {
+  /* Tall enough that the selected-home card does not cover most of it. */
+  height: clamp(430px, 70vh, 680px);
+  width: 100%;
+  border: 1px solid var(--scanner-line);
+}
+.marker {
+  background: var(--mantine-color-flax-0);
+  color: var(--mantine-color-text);
+  border: 2px solid var(--mantine-color-moss-7);
+  border-radius: var(--mantine-radius-xl);
+  min-width: 36px;
+  min-height: 36px;
+  font: 500 var(--mantine-font-size-xs) / 1.4 var(--mantine-font-family);
+  cursor: pointer;
+}
+.marker[aria-pressed="true"] {
+  background: var(--mantine-color-moss-0);
+}
+.marker:focus-visible {
+  outline: 3px solid var(--mantine-color-text);
+  outline-offset: 3px;
+}
+.map :global(.maplibregl-ctrl-attrib) {
+  background: var(--mantine-color-flax-0);
+  color: var(--mantine-color-text);
+}
+.map :global(.maplibregl-ctrl-attrib a) {
+  color: var(--mantine-color-moss-7);
+}
+@media (prefers-reduced-motion: reduce) {
+  .map :global(*) {
+    scroll-behavior: auto;
+  }
+}
