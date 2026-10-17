@@ -47,6 +47,16 @@ export function useDemoHousehold() {
       ),
     }));
   }
+  async function setHidden(listingIds: string[], hidden: boolean) {
+    setSnapshot((current) => {
+      const ids = new Set(current.hiddenListingIds);
+      for (const id of listingIds) {
+        if (hidden) ids.add(id);
+        else ids.delete(id);
+      }
+      return { ...current, hiddenListingIds: ids.size ? [...ids] : undefined };
+    });
+  }
   async function addManual(submission: ManualSubmission) {
     const url = normalizeManualUrl(submission.url);
     const now = new Date().toISOString();
@@ -131,6 +141,7 @@ export function useDemoHousehold() {
     snapshot,
     saveFavorite,
     removeFavorite,
+    setHidden,
     addManual,
     saveProfile,
     loadNotes,

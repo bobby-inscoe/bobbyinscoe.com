@@ -12,6 +12,7 @@ import {
   saveNote,
   saveProfile,
   setFavorite,
+  setHidden,
   setRememberDevice,
 } from '@/features/house-scanner/api/household-client';
 import {
@@ -212,6 +213,12 @@ describe('House Scanner RPC boundaries', () => {
       },
     ],
     [
+      'hidden listing that is not in the snapshot',
+      (s) => {
+        s.hiddenListingIds = ['00000000-0000-4000-8000-0000000000ff'];
+      },
+    ],
+    [
       'demo listing',
       (s) => {
         s.listings[0].origin = 'synthetic';
@@ -310,6 +317,42 @@ describe('House Scanner RPC boundaries', () => {
       p_listing_id: fixtureSnapshot().listings[0].id,
       p_saved: false,
     });
+  });
+  it('keeps a snapshot whose hidden ids are all listed', async () => {
+    const snapshot = fixtureSnapshot();
+    snapshot.hiddenListingIds = [snapshot.listings[0].id];
+    sdk.rpc
+      .mockResolvedValueOnce(reply([snapshot.members[0]]))
+      .mockResolvedValueOnce(reply(snapshot));
+    await expect(
+      householdSnapshot(client(), HOUSEHOLD_ID, USER_ID),
+    ).resolves.toMatchObject({ hiddenListingIds: [snapshot.listings[0].id] });
+  });
+  it('sends hides as a list and leaves the member to the server', async () => {
+    const ids = fixtureSnapshot().listings.map((listing) => listing.id);
+    await setHidden(client(), HOUSEHOLD_ID, ids, true);
+    expect(sdk.rpc).toHaveBeenCalledWith('hs_set_hidden', {
+      p_household_id: HOUSEHOLD_ID,
+      p_listing_ids: ids,
+      p_hidden: true,
+    });
+  });
+  it('refuses an empty, oversized or malformed id list before calling the server', () => {
+    expect(() => setHidden(client(), HOUSEHOLD_ID, [], true)).toThrow();
+    expect(() => setHidden(client(), HOUSEHOLD_ID, ['nope'], true)).toThrow();
+    expect(() =>
+      setHidden(
+        client(),
+        HOUSEHOLD_ID,
+        Array.from(
+          { length: 501 },
+          (_, index) =>
+            `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        ),
+        true,
+      ),
+    ).toThrow();
+    expect(sdk.rpc).not.toHaveBeenCalled();
   });
   it('removes tracking query parameters from manual links without fetching them', async () => {
     const fetch = vi.fn();

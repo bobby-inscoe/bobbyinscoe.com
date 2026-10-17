@@ -7,6 +7,7 @@ import {
   deferred,
   emitAuth,
   fixtureSnapshot,
+  HOUSEHOLD_ID,
   OTHER_HOUSEHOLD_ID,
   OTHER_USER_ID,
   reply,
@@ -213,6 +214,27 @@ describe('House Scanner session privacy', () => {
       expect(hook.result.current.state.status).not.toBe('loading'),
     );
     expect(hook.result.current.state.status).toBe('error');
+  });
+  it('hides a home on the server and shows the refreshed snapshot', async () => {
+    const hook = await authenticated();
+    const [listing] = fixtureSnapshot().listings;
+    sdk.rpc.mockImplementation(async (name) => {
+      if (name === 'hs_memberships')
+        return reply([fixtureSnapshot().members[0]]);
+      if (name === 'hs_snapshot')
+        return reply({ ...fixtureSnapshot(), hiddenListingIds: [listing.id] });
+      return reply({ ok: true });
+    });
+    await act(() => hook.result.current.onSetHidden([listing.id], true));
+    expect(sdk.rpc).toHaveBeenCalledWith('hs_set_hidden', {
+      p_household_id: HOUSEHOLD_ID,
+      p_listing_ids: [listing.id],
+      p_hidden: true,
+    });
+    const { state } = hook.result.current;
+    expect(
+      state.status === 'authenticated' && state.snapshot.hiddenListingIds,
+    ).toEqual([listing.id]);
   });
   it('does not restore a snapshot when a mutation completes after sign-out', async () => {
     const hook = await authenticated();

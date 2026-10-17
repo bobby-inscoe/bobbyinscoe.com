@@ -38,6 +38,7 @@ export function HouseholdWorkspace({
   onRemoveFavorite,
   onAddManual,
   onSaveProfile,
+  onSetHidden,
   onLoadNotes,
   onSaveNote,
 }: HouseholdWorkspaceProps) {
@@ -66,11 +67,12 @@ export function HouseholdWorkspace({
     () => scopeListings(snapshot, { tab, person, section, userId }),
     [snapshot, tab, person, userId, section],
   );
-  // Per device and member; the demo keeps nothing in the browser.
+  // Personal to the member: the database keeps them, and the demo keeps them in memory.
   const { hidden, hide, unhide } = useHiddenListings({
-    householdId: snapshot.householdId,
+    snapshot,
     userId,
     persist: !synthetic,
+    onSetHidden,
   });
   const visible = useMemo(
     () => applyListingFilters(scoped, deferredFilters, hidden),

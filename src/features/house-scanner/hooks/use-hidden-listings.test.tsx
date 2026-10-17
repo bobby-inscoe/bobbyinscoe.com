@@ -1,14 +1,32 @@
 // @vitest-environment jsdom
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  MAX_HIDDEN,
-  useHiddenListings,
-} from '@/features/house-scanner/hooks/use-hidden-listings';
+  fixtureSnapshot,
+  USER_ID,
+} from '@/features/house-scanner/api/session-test-helpers';
+import { useHiddenListings } from '@/features/house-scanner/hooks/use-hidden-listings';
+import type { Snapshot } from '@/features/house-scanner/types/contracts';
 
-const KEY = 'house-scanner:hidden:household-1:user-1';
-const member = { householdId: 'household-1', userId: 'user-1', persist: true };
+const [first, second] = fixtureSnapshot().listings.map((listing) => listing.id);
+const KEY = `house-scanner:hidden:${fixtureSnapshot().householdId}:${USER_ID}`;
+
+function snapshotWith(hiddenListingIds?: string[]): Snapshot {
+  return { ...fixtureSnapshot(), hiddenListingIds };
+}
+
+function options(
+  overrides: Partial<Parameters<typeof useHiddenListings>[0]> = {},
+) {
+  return {
+    snapshot: snapshotWith(),
+    userId: USER_ID,
+    persist: true,
+    onSetHidden: vi.fn(async () => {}),
+    ...overrides,
+  };
+}
 
 afterEach(() => {
   cleanup();
@@ -17,79 +35,130 @@ afterEach(() => {
 });
 
 describe('personal hidden homes', () => {
-  it('stores only listing ids under a household and member key, and removes them again', () => {
-    const { result } = renderHook(() => useHiddenListings(member));
-    act(() => result.current.hide('a'));
-    act(() => result.current.hide('b'));
-    expect([...result.current.hidden]).toEqual(['a', 'b']);
-    expect(JSON.parse(localStorage.getItem(KEY) ?? '')).toEqual(['a', 'b']);
-    act(() => result.current.unhide('a'));
-    expect(JSON.parse(localStorage.getItem(KEY) ?? '')).toEqual(['b']);
-    expect(Object.keys(localStorage)).toEqual([KEY]);
+  it('reads the set from the snapshot, and an absent field means none', () => {
+    const none = renderHook(() => useHiddenListings(options()));
+    expect(none.result.current.hidden.size).toBe(0);
+    const some = renderHook(() =>
+      useHiddenListings(options({ snapshot: snapshotWith([first]) })),
+    );
+    expect([...some.result.current.hidden]).toEqual([first]);
   });
 
-  it('reads what an earlier visit stored, and keeps each member and household apart', () => {
-    localStorage.setItem(KEY, JSON.stringify(['a']));
-    const { result, rerender } = renderHook(
-      (props: typeof member) => useHiddenListings(props),
-      { initialProps: member },
-    );
-    expect(result.current.hidden.has('a')).toBe(true);
-    rerender({ ...member, userId: 'user-2' });
+  it('writes a hide and an unhide through the action as one id', () => {
+    const props = options();
+    const { result } = renderHook(() => useHiddenListings(props));
+    act(() => result.current.hide(first));
+    expect(props.onSetHidden).toHaveBeenLastCalledWith([first], true);
+    act(() => result.current.unhide(first));
+    expect(props.onSetHidden).toHaveBeenLastCalledWith([first], false);
+    // Nothing changes until the snapshot comes back with the new set.
     expect(result.current.hidden.size).toBe(0);
-    rerender(member);
-    expect(result.current.hidden.has('a')).toBe(true);
+  });
+
+  it('stays quiet when the write fails, because the session has already reported it', async () => {
+    const onSetHidden = vi.fn(async () => {
+      throw new Error('synthetic failure');
+    });
+    const { result } = renderHook(() =>
+      useHiddenListings(options({ onSetHidden })),
+    );
+    await act(async () => result.current.hide(first));
+    // An unhandled rejection would fail the run, so reaching here is the check.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onSetHidden).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands out the same functions when the action or snapshot changes', () => {
+    const { result, rerender } = renderHook(
+      (props: ReturnType<typeof options>) => useHiddenListings(props),
+      { initialProps: options() },
+    );
+    const { hide, unhide } = result.current;
+    rerender(options({ snapshot: snapshotWith([first]) }));
+    expect(result.current.hide).toBe(hide);
+    expect(result.current.unhide).toBe(unhide);
+  });
+});
+
+describe('moving the old browser list to the server', () => {
+  it('sends the stored ids that still exist once, then removes the key', async () => {
+    localStorage.setItem(KEY, JSON.stringify([first, 'gone', 7]));
+    const props = options();
+    const { rerender } = renderHook(
+      (next: ReturnType<typeof options>) => useHiddenListings(next),
+      { initialProps: props },
+    );
+    // A refresh while the call is pending must not send it again.
+    rerender({ ...props, snapshot: snapshotWith() });
+    await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+    expect(props.onSetHidden).toHaveBeenCalledTimes(1);
+    expect(props.onSetHidden).toHaveBeenCalledWith([first], true);
+  });
+
+  it('keeps the key when the call fails and tries again on the next load', async () => {
+    localStorage.setItem(KEY, JSON.stringify([first, second]));
+    const onSetHidden = vi
+      .fn<(ids: string[], hidden: boolean) => Promise<void>>()
+      .mockRejectedValueOnce(new Error('synthetic failure'))
+      .mockResolvedValue(undefined);
+    const props = options({ onSetHidden });
+    const { rerender } = renderHook(
+      (next: ReturnType<typeof options>) => useHiddenListings(next),
+      { initialProps: props },
+    );
+    await waitFor(() => expect(onSetHidden).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(localStorage.getItem(KEY) ?? '')).toEqual([
+      first,
+      second,
+    ]);
+    rerender({ ...props, snapshot: snapshotWith() });
+    await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+    expect(onSetHidden).toHaveBeenCalledTimes(2);
+  });
+
+  it('only removes the key when none of its homes exist any more', async () => {
+    localStorage.setItem(KEY, JSON.stringify(['gone']));
+    const props = options();
+    renderHook(() => useHiddenListings(props));
+    await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+    expect(props.onSetHidden).not.toHaveBeenCalled();
+  });
+
+  it('does nothing without a key, for the demo, or for another member', () => {
+    const props = options();
+    renderHook(() => useHiddenListings(props));
+    localStorage.setItem(KEY, JSON.stringify([first]));
+    const demo = options({ persist: false });
+    renderHook(() => useHiddenListings(demo));
+    const other = options({ userId: 'someone-else' });
+    renderHook(() => useHiddenListings(other));
+    expect(props.onSetHidden).not.toHaveBeenCalled();
+    expect(demo.onSetHidden).not.toHaveBeenCalled();
+    expect(other.onSetHidden).not.toHaveBeenCalled();
+    expect(localStorage.getItem(KEY)).not.toBeNull();
   });
 
   it.each([
     ['not JSON', '{oops'],
     ['not an array', JSON.stringify({ a: true })],
-  ])('ignores stored data that is %s', (_name, stored) => {
-    localStorage.setItem(KEY, stored);
-    const { result } = renderHook(() => useHiddenListings(member));
-    expect(result.current.hidden.size).toBe(0);
-  });
+  ])(
+    'drops stored data that is %s without calling the server',
+    async (_name, stored) => {
+      localStorage.setItem(KEY, stored);
+      const props = options();
+      renderHook(() => useHiddenListings(props));
+      await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+      expect(props.onSetHidden).not.toHaveBeenCalled();
+    },
+  );
 
-  it('keeps only string ids and caps how many it reads', () => {
-    localStorage.setItem(
-      KEY,
-      JSON.stringify(['a', 1, null, ...Array(MAX_HIDDEN + 5).fill('x')]),
-    );
-    const { result } = renderHook(() => useHiddenListings(member));
-    expect(result.current.hidden.has('a')).toBe(true);
-    expect(result.current.hidden.has('x')).toBe(true);
-    expect(result.current.hidden.size).toBeLessThanOrEqual(MAX_HIDDEN);
-  });
-
-  it('leaves browser storage alone when it should not persist (the demo)', () => {
-    const { result } = renderHook(() =>
-      useHiddenListings({ ...member, persist: false }),
-    );
-    act(() => result.current.hide('a'));
-    expect(result.current.hidden.has('a')).toBe(true);
-    expect(localStorage.length).toBe(0);
-  });
-
-  it('keeps working in memory when storage is denied', () => {
+  it('keeps working when storage is denied', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new DOMException('denied', 'SecurityError');
     });
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new DOMException('full', 'QuotaExceededError');
-    });
-    const { result } = renderHook(() => useHiddenListings(member));
-    act(() => result.current.hide('a'));
-    expect(result.current.hidden.has('a')).toBe(true);
-    act(() => result.current.unhide('a'));
-    expect(result.current.hidden.size).toBe(0);
-  });
-
-  it('hands out the same functions across renders', () => {
-    const { result, rerender } = renderHook(() => useHiddenListings(member));
-    const { hide, unhide } = result.current;
-    act(() => result.current.hide('a'));
-    rerender();
-    expect(result.current.hide).toBe(hide);
-    expect(result.current.unhide).toBe(unhide);
+    const props = options({ snapshot: snapshotWith([first]) });
+    const { result } = renderHook(() => useHiddenListings(props));
+    expect(result.current.hidden.has(first)).toBe(true);
+    expect(props.onSetHidden).not.toHaveBeenCalled();
   });
 });

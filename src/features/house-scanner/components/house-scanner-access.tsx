@@ -66,6 +66,7 @@ export function HouseScannerAccess({
             onRemoveFavorite: session.onRemoveFavorite,
             onAddManual: session.onAddManual,
             onSaveProfile: session.onSaveProfile,
+            onSetHidden: session.onSetHidden,
             onLoadNotes: session.onLoadNotes,
             onSaveNote: session.onSaveNote,
           })}
