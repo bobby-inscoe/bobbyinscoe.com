@@ -629,3 +629,22 @@ test('on a phone the selected home card does not cover the selected pin', async 
     })
     .toBe(true);
 });
+
+test('the synthetic demo status line is not drawn in the stale warning color', async ({
+  page,
+}) => {
+  await openDemo(page);
+  const status = page.getByText('Synthetic demo. Fictional homes and people', {
+    exact: false,
+  });
+  const colors = await status.evaluate((element) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--mantine-color-red-8)';
+    element.append(probe);
+    const red = getComputedStyle(probe).color;
+    probe.remove();
+    return { status: getComputedStyle(element).color, red };
+  });
+  expect(colors.red).not.toBe('');
+  expect(colors.status).not.toBe(colors.red);
+});

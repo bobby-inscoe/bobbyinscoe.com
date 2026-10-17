@@ -88,7 +88,12 @@ export function HouseholdWorkspace({
   const stale = editionAge !== null && editionAge > 36 * 60 * 60 * 1000;
   return (
     <section className={styles.scope} aria-label="Household shortlist">
-      <Text size="sm" c={stale ? 'red.8' : 'dimmed'} role="status">
+      {/* The demo's fixed edition date is always old, so only real editions warn. */}
+      <Text
+        size="sm"
+        c={stale && !synthetic ? 'red.8' : 'dimmed'}
+        role="status"
+      >
         {synthetic
           ? 'Synthetic demo. Fictional homes and people; changes stay in memory.'
           : snapshot.edition
