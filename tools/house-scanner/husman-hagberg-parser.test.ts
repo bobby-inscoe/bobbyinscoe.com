@@ -318,3 +318,62 @@ describe('Husman Hagberg list', () => {
     expect(JSON.stringify(observation)).not.toContain('aldrig sparas');
   });
 });
+
+describe('Husman Hagberg viewing times', () => {
+  const viewing = (
+    startTime: string,
+    endTime: string | null,
+    showOnInternet = true,
+  ) => ({
+    date: startTime,
+    startTime,
+    endTime,
+    commentary: 'Bokad visning',
+    bookableFromInternet: true,
+    bookingUrl: 'https://bokavisning.example.invalid/x',
+    showOnInternet,
+  });
+
+  it('reads the list as Stockholm wall-clock time labelled Z, keeps the order, and drops the booking text', () => {
+    const observation = one({
+      viewings: [
+        viewing('2026-10-25T13:30:00Z', '2026-10-25T14:00:00Z'),
+        viewing('2026-10-22T17:00:00Z', '2026-10-22T17:30:00Z'),
+      ],
+    });
+    expect(observation.viewings).toEqual([
+      // Summer time, two hours ahead of UTC.
+      {
+        startsAt: '2026-10-22T15:00:00.000Z',
+        endsAt: '2026-10-22T15:30:00.000Z',
+      },
+      // Winter time from 25 October, one hour ahead.
+      {
+        startsAt: '2026-10-25T12:30:00.000Z',
+        endsAt: '2026-10-25T13:00:00.000Z',
+      },
+    ]);
+    expect(JSON.stringify(observation)).not.toContain('example.invalid');
+    expect(JSON.stringify(observation)).not.toContain('Bokad');
+  });
+
+  it('keeps only viewings shown on the internet, and leaves the key out when none are left or readable', () => {
+    expect(
+      one({
+        viewings: [
+          viewing('2026-10-22T17:00:00Z', null, false),
+          viewing('2026-10-23T17:00:00Z', null),
+        ],
+      }).viewings,
+    ).toEqual([{ startsAt: '2026-10-23T15:00:00.000Z', endsAt: null }]);
+    for (const viewings of [
+      undefined,
+      [],
+      'soon',
+      [viewing('2026-10-22T17:00:00Z', null, false)],
+      [viewing('2026-10-01T17:00:00Z', null)],
+      [viewing('nonsense', null), null, 'x'],
+    ])
+      expect(one({ viewings })).not.toHaveProperty('viewings');
+  });
+});

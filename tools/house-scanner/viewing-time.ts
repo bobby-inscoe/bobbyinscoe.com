@@ -99,22 +99,19 @@ export function viewingFromLocal(
   };
 }
 
-const ZONED = /(?:Z|[+-]\d{2}:?\d{2})$/;
-function zonedMs(value: unknown): number | null {
-  if (typeof value !== 'string' || !ZONED.test(value)) return null;
-  const ms = Date.parse(value);
-  return Number.isNaN(ms) ? null : ms;
-}
-
-/** A viewing from times that already carry a zone. Times without one are refused, never assumed. */
-export function viewingFromUtc(start: unknown, end?: unknown): Viewing | null {
-  const startMs = zonedMs(start);
-  if (startMs === null) return null;
-  const endMs = zonedMs(end);
-  return {
-    startsAt: iso(startMs),
-    endsAt: endMs !== null && endMs > startMs ? iso(endMs) : null,
-  };
+/**
+ * Some feeds write Stockholm wall-clock time with a trailing Z: Boneo and Husman Hagberg give
+ * "2026-10-25T13:15:00.000Z" for a viewing Bjurfors' own page lists at 13:15. The zone letter is dropped and the
+ * time read as Stockholm time. Times with an offset are refused, so a feed that starts to send real UTC fails
+ * loudly instead of shifting every viewing.
+ */
+export function viewingFromLabelledWallClock(
+  start: unknown,
+  end?: unknown,
+): Viewing | null {
+  const bare = (value: unknown) =>
+    typeof value === 'string' ? value.replace(/(?:\.\d+)?Z$/, '') : null;
+  return viewingFromLocal(bare(start), bare(end));
 }
 
 const MONTHS = [

@@ -1,8 +1,8 @@
 import {
   finishViewings,
+  viewingFromLabelledWallClock,
   viewingFromLocal,
   viewingFromSwedishText,
-  viewingFromUtc,
 } from '@house-scanner-tools/viewing-time';
 import { describe, expect, it } from 'vitest';
 
@@ -51,18 +51,29 @@ describe('viewing times', () => {
     expect(viewingFromLocal(value)).toBeNull();
   });
 
-  it('normalises a time that already has a zone, and refuses one that has none', () => {
+  it('reads a time labelled Z as Stockholm wall-clock time, as Boneo and Husman Hagberg send it', () => {
+    // Bjurfors lists this viewing at 13:15 on its own page; Boneo labels the same 13:15 with a Z.
     expect(
-      viewingFromUtc('2026-10-31T13:00:00.000Z', '2026-10-31T13:30:00.000Z'),
+      viewingFromLabelledWallClock(
+        '2026-10-25T13:15:00.000Z',
+        '2026-10-25T14:15:00.000Z',
+      ),
     ).toEqual({
-      startsAt: '2026-10-31T13:00:00.000Z',
-      endsAt: '2026-10-31T13:30:00.000Z',
+      startsAt: '2026-10-25T12:15:00.000Z',
+      endsAt: '2026-10-25T13:15:00.000Z',
     });
-    expect(viewingFromUtc('2026-10-31T14:00:00+01:00')?.startsAt).toBe(
-      '2026-10-31T13:00:00.000Z',
-    );
-    expect(viewingFromUtc('2026-10-31T13:00:00')).toBeNull();
-    expect(viewingFromUtc(undefined)).toBeNull();
+    expect(viewingFromLabelledWallClock('2026-10-24T15:00:00Z')).toEqual({
+      startsAt: '2026-10-24T13:00:00.000Z',
+      endsAt: null,
+    });
+  });
+
+  it('refuses a time with an offset or none, so a feed that starts sending real UTC fails loudly', () => {
+    expect(
+      viewingFromLabelledWallClock('2026-10-31T14:00:00+01:00'),
+    ).toBeNull();
+    expect(viewingFromLabelledWallClock(undefined)).toBeNull();
+    expect(viewingFromLabelledWallClock('Saturday')).toBeNull();
   });
 
   it.each([

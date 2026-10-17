@@ -395,28 +395,29 @@ describe('Boneo viewing times', () => {
     _id: 'abc',
   });
 
-  it('reads the listed viewings as UTC times, sorted, and drops the free text', () => {
+  it('reads the listed viewings as Stockholm wall-clock times the feed labels with a Z, sorted, and drops the free text', () => {
     const observation = readWith([
       viewing('2026-10-31T13:00:00.000Z', '2026-10-31T13:30:00.000Z'),
       viewing('2026-10-25T10:00:00.000Z'),
     ]);
     expect(observation?.viewings).toEqual([
-      { startsAt: '2026-10-25T10:00:00.000Z', endsAt: null },
+      // 10:00 on 25 October is winter time, one hour ahead of UTC.
+      { startsAt: '2026-10-25T09:00:00.000Z', endsAt: null },
       {
-        startsAt: '2026-10-31T13:00:00.000Z',
-        endsAt: '2026-10-31T13:30:00.000Z',
+        startsAt: '2026-10-31T12:00:00.000Z',
+        endsAt: '2026-10-31T12:30:00.000Z',
       },
     ]);
     expect(JSON.stringify(observation)).not.toContain('Anmäl');
   });
 
-  it('leaves the key out when there are none, or only past, unreadable or zoneless times', () => {
+  it('leaves the key out when there are none, or only past, unreadable or offset times', () => {
     for (const groupViewings of [
       undefined,
       [],
       'soon',
       [viewing('2026-10-01T13:00:00.000Z')],
-      [viewing('2026-10-31T13:00:00')],
+      [viewing('2026-10-31T13:00:00+02:00')],
       [viewing('not a time'), 'x', null],
     ])
       expect(readWith(groupViewings)).not.toHaveProperty('viewings');

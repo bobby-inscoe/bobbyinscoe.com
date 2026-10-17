@@ -165,7 +165,7 @@ export function sourceRegistry(): SourceCapability[] {
             'Outdoor, glazing and floor come from each kept listing page; glazing only from description wording. Only floor 2 or higher (or an explicit ground floor) is a fact; floor 1 stays unknown. Lift and build year are not collected.',
             'Only the first photo is shown, hotlinked from the broker image host. Nothing is copied or stored.',
             'Listing identity and episode rules come from property_id and created_date and are unproven across relistings.',
-            'Viewing times are the full list in the search data (group_viewings, UTC). A viewing can be cancelled between scans.',
+            'Viewing times are the full list in the search data (group_viewings). The feed labels Stockholm wall-clock time with a Z, so the letter is dropped and the time read as Stockholm time; the same viewing on the Bjurfors page matched. A viewing can be cancelled between scans.',
             'Known listings cannot be refreshed outside discovery.',
           ],
         },
@@ -403,6 +403,7 @@ export function sourceRegistry(): SourceCapability[] {
       policy: {
         ...common,
         sourceId: HUSMAN_HAGBERG_SOURCE_ID,
+        viewings: true,
         // Pending is not approved: the operator sets approval in the database.
         status: 'pending',
         retentionDays: 14,
@@ -444,6 +445,7 @@ export function sourceRegistry(): SourceCapability[] {
             'Coordinates come from the broker and are labelled address-level when the title has a house number. They were not compared with an independent geocoder. A hidden address gets no position.',
             'Only the primary photo is shown, hotlinked from the broker media host. Nothing is copied or stored.',
             'Listing identity is the object reference and the episode never changes, so a relisting of the same home is not told apart.',
+            'Viewing times are the full list in the search data, with a year. The feed labels Stockholm wall-clock time with a Z (the same home shows identical values on Boneo), so the letter is dropped. Only viewings marked for the internet are kept.',
             'Known listings cannot be refreshed outside discovery.',
           ],
         },

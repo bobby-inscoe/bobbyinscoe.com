@@ -10,6 +10,10 @@ import {
   type ReadContext,
 } from '@house-scanner-tools/page-read';
 import {
+  finishViewings,
+  viewingFromLabelledWallClock,
+} from '@house-scanner-tools/viewing-time';
+import {
   type Observation,
   observationSchema,
 } from '@/features/house-scanner/types/contracts';
@@ -145,6 +149,20 @@ function observationFrom(
     mandatoryMonthlySek: null,
     status,
   };
+  // The list holds every viewing, with a year. Times are Stockholm wall-clock time labelled Z, as Boneo's are
+  // (the same home carries identical values in both). Only viewings the broker shows on the internet are kept.
+  const viewings = finishViewings(
+    (Array.isArray(data.viewings) ? data.viewings : [])
+      .slice(0, 30)
+      .flatMap((entry) => {
+        const viewing =
+          isRecord(entry) && entry.showOnInternet === true
+            ? viewingFromLabelledWallClock(entry.startTime, entry.endTime)
+            : null;
+        return viewing === null ? [] : [viewing];
+      }),
+    new Date(observedAt),
+  );
   const parsed = observationSchema.safeParse({
     sourceListingId: ref,
     // The list gives no relisting marker, so a home keeps one episode.
@@ -167,6 +185,7 @@ function observationFrom(
       : null,
     evidence: [],
     photo: photoFrom(data, observedAt),
+    ...(viewings ? { viewings } : {}),
   });
   return parsed.success ? parsed.data : null;
 }
