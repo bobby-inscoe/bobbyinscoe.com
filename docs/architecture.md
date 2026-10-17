@@ -66,13 +66,19 @@ Inside the feature:
   `household-map.tsx` is loaded lazily so MapLibre stays in its own chunk.
 - `utils/` holds the rules, each in one place: `match-listing.ts` (matching and
   the section wording), `listing-position.ts` (which homes get a pin),
-  `listing-filters.ts` (personal filters), `listing-view.ts` (what a tab shows
-  and the map points), `format.ts`, `manual-url.ts`, `listing-staleness.ts`,
-  `scan-summary.ts` and `source-policy.ts`. List and map read the same filtered
-  array, so a new view filter reaches both.
-- `hooks/` owns session, demo and notes state; `api/household-client.ts` is the
-  only module that talks to Supabase; `types/contracts.ts` is the contract shared
-  with the database and the collector.
+  `listing-filters.ts` (personal filters, including the Hidden homes view),
+  `listing-view.ts` (what a tab shows and the map points), `format.ts`,
+  `manual-url.ts`, `listing-staleness.ts`, `scan-summary.ts` and
+  `source-policy.ts`. `match-listing.ts` also builds the fact and caveat chips
+  (`reasonChips`), which `listing-summary.tsx` renders on the card and the
+  details sheet. List and map read the same filtered array, so a new view filter
+  reaches both.
+- `hooks/` owns session, demo and notes state, plus `use-hidden-listings.ts`, the
+  member's hidden homes: listing ids in localStorage per device, in memory in the
+  demo, until a later phase moves them to the database (see
+  `docs/decisions.md`). `api/household-client.ts` is the only module that talks
+  to Supabase; `types/contracts.ts` is the contract shared with the database and
+  the collector.
 
 The demo uses fictional in-memory data. Snapshots are never persisted in browser
 storage or public assets. The schema, retention purge, operator functions and

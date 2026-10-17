@@ -158,3 +158,46 @@ describe('applyListingFilters', () => {
     ).toBe(2);
   });
 });
+
+describe('lift and glazed filters', () => {
+  it.each([
+    ['liftOnly', 'lift'],
+    ['glazedOnly', 'glazed'],
+  ] as const)(
+    '%s keeps only homes where %s is known true and not disputed',
+    (key, fact) => {
+      expect(passes(home({ [fact]: true }), { [key]: true })).toBe(true);
+      expect(passes(home({ [fact]: false }), { [key]: true })).toBe(false);
+      expect(passes(home({ [fact]: null }), { [key]: true })).toBe(false);
+      expect(
+        passes(home({ [fact]: true }, { conflicts: [fact] }), { [key]: true }),
+      ).toBe(false);
+      expect(passes(home({ [fact]: false }), { [key]: false })).toBe(true);
+      expect(activeFilterCount({ ...emptyFilters, [key]: true })).toBe(1);
+    },
+  );
+});
+
+describe('hidden homes view', () => {
+  const [first, second] = SYNTHETIC_SNAPSHOT.listings;
+  const hidden = new Set([second.id]);
+  const ids = (view: ListingFilters['hidden']) =>
+    applyListingFilters(
+      [first, second],
+      { ...emptyFilters, hidden: view },
+      hidden,
+    ).map((listing) => listing.id);
+  it('hides hidden homes by default and can show only them or both', () => {
+    expect(emptyFilters.hidden).toBe('not-hidden');
+    expect(ids('not-hidden')).toEqual([first.id]);
+    expect(ids('hidden-only')).toEqual([second.id]);
+    expect(ids('both')).toEqual([first.id, second.id]);
+  });
+  it('counts as an active filter only when it is not the default', () => {
+    expect(activeFilterCount(emptyFilters)).toBe(0);
+    expect(activeFilterCount({ ...emptyFilters, hidden: 'both' })).toBe(1);
+    expect(activeFilterCount({ ...emptyFilters, hidden: 'hidden-only' })).toBe(
+      1,
+    );
+  });
+});

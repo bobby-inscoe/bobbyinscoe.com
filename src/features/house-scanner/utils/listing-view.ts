@@ -23,6 +23,8 @@ export interface MapPoint {
   >;
   // Homes with no usable position share one marker, drawn differently.
   unlocated?: boolean;
+  // Hidden by this member, shown only because the view includes hidden homes.
+  dimmed?: boolean;
 }
 
 interface ListingScope {
@@ -55,8 +57,13 @@ export function scopeListings(
   });
 }
 
-export function mapPoints(listings: Listing[]): MapPoint[] {
+export function mapPoints(
+  listings: Listing[],
+  hiddenIds: ReadonlySet<string> = new Set(),
+): MapPoint[] {
   return listings.map((listing) => {
+    const dimmed = hiddenIds.has(listing.id) || undefined;
+    const hiddenNote = dimmed ? ' · hidden' : '';
     const price = listing.conflicts.includes('askingPriceSek')
       ? 'Price disputed'
       : formatPrice(listing.facts.askingPriceSek);
@@ -73,14 +80,16 @@ export function mapPoints(listings: Listing[]): MapPoint[] {
             listing.conflicts.includes('askingPriceSek')
               ? '?'
               : compactPrice(listing.facts.askingPriceSek),
-          label: `${listing.title}: ${price} · ${status}`,
+          label: `${listing.title}: ${price} · ${status}${hiddenNote}`,
+          dimmed,
         }
       : {
           id: listing.id,
           coordinates: UNLOCATED_POSITION,
           markerText: '?',
-          label: `${listing.title}: ${price} · ${status} · no known position`,
+          label: `${listing.title}: ${price} · ${status} · no known position${hiddenNote}`,
           unlocated: true,
+          dimmed,
         };
   });
 }

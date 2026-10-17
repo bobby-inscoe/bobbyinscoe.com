@@ -63,6 +63,8 @@ interface HouseholdMapProps {
   points: MapPoint[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  // A click on the bare map, or Escape in the map area, clears the selection.
+  onDeselect: () => void;
   styleUrl?: string;
   satellite?: boolean;
   // Drawn over the map, for the selected home's card.
@@ -75,6 +77,7 @@ export function HouseholdMap({
   points,
   selectedId,
   onSelect,
+  onDeselect,
   styleUrl = 'https://tiles.openfreemap.org/styles/liberty',
   satellite = false,
   overlay,
@@ -87,6 +90,8 @@ export function HouseholdMap({
   const [stack, setStack] = useState<string[]>([]);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const onDeselectRef = useRef(onDeselect);
+  onDeselectRef.current = onDeselect;
   const stageRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
@@ -142,6 +147,13 @@ export function HouseholdMap({
       appliedSatellite.current = satelliteRef.current;
       instance.addControl(new NavigationControl());
       instance.on('load', () => setLoaded(true));
+      // MapLibre also reports a click on a marker, and none after a drag.
+      instance.on('click', ({ originalEvent }) => {
+        const { target } = originalEvent;
+        if (target instanceof Element && target.closest(`.${styles.marker}`))
+          return;
+        onDeselectRef.current();
+      });
       instance.on('error', () =>
         setError(
           'Map tiles are unavailable. The listing controls and details remain usable.',
@@ -174,7 +186,9 @@ export function HouseholdMap({
       const button = document.createElement('button');
       button.type = 'button';
       const unlocated = group[0].unlocated === true;
-      button.className = `${styles.marker} ${unlocated ? styles.unlocated : ''}`;
+      // A shared marker dims only when every home on it is hidden.
+      const dimmed = group.every((point) => point.dimmed);
+      button.className = `${styles.marker} ${unlocated ? styles.unlocated : ''} ${dimmed ? styles.dimmed : ''}`;
       button.textContent = unlocated
         ? `${group.length} not located`
         : group.length === 1
@@ -244,6 +258,16 @@ export function HouseholdMap({
     if (!inFreeArea)
       instance.jumpTo({ center, padding: { top, bottom: inset } });
   }, [points, selectedId, loaded, error]);
+  // Escape with focus anywhere in the map area (markers, controls, the card) clears the selection.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || selectedId === null) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onDeselectRef.current();
+    };
+    stage.addEventListener('keydown', close);
+    return () => stage.removeEventListener('keydown', close);
+  }, [selectedId]);
   const hasOverlay = overlay != null;
   // The phone sheet covers the bottom edge, so the tile attribution rides above it.
   useEffect(() => {

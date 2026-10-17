@@ -1,6 +1,6 @@
 import { ActionIcon, Badge, Button, Group, Text, Title } from '@mantine/core';
 import { memo } from 'react';
-
+import { HideButton } from '@/features/house-scanner/components/hide-button';
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import { ListingDetails } from '@/features/house-scanner/components/listing-details';
 import { ListingPhoto } from '@/features/house-scanner/components/listing-photo';
@@ -9,6 +9,7 @@ import {
   MatchLines,
   OriginalListingButton,
   PriceLine,
+  ReasonChips,
 } from '@/features/house-scanner/components/listing-summary';
 import type { ListingNotesController } from '@/features/house-scanner/hooks/use-listing-notes';
 import type {
@@ -27,10 +28,14 @@ interface ListingCardProps {
   stale?: boolean;
   busy: boolean;
   canSave: boolean;
+  // Hidden by this member; shown only while the view includes hidden homes.
+  hidden?: boolean;
   notes?: ListingNotesController;
   // The handlers take the card's id so a list can share one of each, which lets memo skip unchanged cards.
   onSelect: (listingId: string) => void;
   onFavorite: (listingId: string) => void;
+  // Without it the card has no hide control.
+  onToggleHidden?: (listingId: string) => void;
   // Shown only for homes that have a pin.
   onSeeOnMap?: (listingId: string) => void;
 }
@@ -44,9 +49,11 @@ export const ListingCard = memo(function ListingCard({
   stale,
   busy,
   canSave,
+  hidden,
   notes,
   onSelect,
   onFavorite,
+  onToggleHidden,
   onSeeOnMap,
 }: ListingCardProps) {
   const saved = snapshot.favorites.filter(
@@ -84,7 +91,8 @@ export const ListingCard = memo(function ListingCard({
         {listing.title}
       </Title>
       <FactsLine listing={listing} />
-      {(showStatus || listing.origin === 'manual' || stale) && (
+      <ReasonChips listing={listing} snapshot={snapshot} />
+      {(showStatus || listing.origin === 'manual' || stale || hidden) && (
         <Group gap="xs">
           {showStatus && (
             <Badge variant="light">
@@ -97,6 +105,7 @@ export const ListingCard = memo(function ListingCard({
             </Badge>
           )}
           {stale && <Badge variant="outline">Not in latest scan</Badge>}
+          {hidden && <Badge variant="outline">Hidden</Badge>}
         </Group>
       )}
       <MatchLines listing={listing} snapshot={snapshot} details={details} />
@@ -119,6 +128,13 @@ export const ListingCard = memo(function ListingCard({
         >
           Details
         </Button>
+        {onToggleHidden && (
+          <HideButton
+            listingId={listing.id}
+            hidden={hidden === true}
+            onToggle={onToggleHidden}
+          />
+        )}
         {onSeeOnMap && hasPin(listing.coordinates) && (
           <Button
             size="xs"

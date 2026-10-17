@@ -232,6 +232,20 @@ describe('mapPoints', () => {
   });
 });
 
+describe('mapPoints and hidden homes', () => {
+  it('dims only the hidden homes, located or not', () => {
+    const points = mapPoints(
+      [balcony, detached, needsDetails],
+      new Set([balcony.id, needsDetails.id]),
+    );
+    expect(points.map((point) => point.dimmed === true)).toEqual([
+      true,
+      false,
+      true,
+    ]);
+  });
+});
+
 describe('sourceSummaries', () => {
   it('counts only source homes, by the host of their first link', () => {
     const at = (url: string, id: string, changes: Partial<Listing> = {}) =>

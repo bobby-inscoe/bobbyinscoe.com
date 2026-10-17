@@ -340,6 +340,116 @@ test('personal filters change the list and the map together, and Clear restores 
   ).toBeVisible();
 });
 
+test('Lift only and Glazed only narrow the list and count as active filters', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Lift only' }).check();
+  await expect(page.getByText('2 active')).toHaveCount(0);
+  await expect(page.getByText('1 active')).toBeVisible();
+  const lifted = await page.getByRole('article').count();
+  expect(lifted).toBeLessThan(5);
+  await page.getByRole('checkbox', { name: 'Glazed only' }).check();
+  await expect(page.getByText('2 active')).toBeVisible();
+  expect(await page.getByRole('article').count()).toBeLessThanOrEqual(lifted);
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(page.getByRole('article')).toHaveCount(5);
+  await expect(
+    page
+      .getByRole('article', { name: 'Example balcony home', exact: true })
+      .getByText('Balcony', { exact: true }),
+  ).toBeVisible();
+});
+
+test('hiding a home removes it from the list, keeps it findable and leaves browser storage empty in the demo', async ({
+  page,
+}) => {
+  await openDemo(page);
+  const home = page.getByRole('article', {
+    name: 'Example balcony home',
+    exact: true,
+  });
+  await home.getByRole('button', { name: 'Hide this home' }).click();
+  await expect(home).toHaveCount(0);
+  await expect(page.getByRole('article')).toHaveCount(4);
+  await expect(
+    page.getByText('4 homes · 3 not located · 1 hidden'),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await expect(page.getByText('1 active')).toHaveCount(0);
+  await page.getByRole('radio', { name: 'Hidden only' }).check();
+  await expect(page.getByText('1 active')).toBeVisible();
+  await expect(page.getByRole('article')).toHaveCount(1);
+  await expect(home.getByText('Hidden', { exact: true })).toBeVisible();
+  await page.getByRole('radio', { name: 'Both' }).check();
+  await expect(page.getByRole('article')).toHaveCount(5);
+  await home.getByRole('button', { name: 'Unhide this home' }).click();
+  await expect(
+    home.getByRole('button', { name: 'Hide this home' }),
+  ).toBeVisible();
+  await expect(home.getByText('Hidden', { exact: true })).toHaveCount(0);
+  await page.getByRole('radio', { name: 'Not hidden' }).check();
+  await expect(page.getByRole('article')).toHaveCount(5);
+  expect(
+    await page.evaluate(() => ({
+      local: Object.keys(localStorage),
+      session: Object.keys(sessionStorage),
+    })),
+  ).toEqual({ local: [], session: [] });
+});
+
+test('hiding from the details sheet applies to Favorites too and never changes favorites', async ({
+  page,
+}) => {
+  await openDemo(page);
+  const home = page.getByRole('article', {
+    name: 'Example older listing',
+    exact: true,
+  });
+  await home.getByRole('button', { name: 'Details', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Example older listing', exact: true })
+    .getByRole('button', { name: 'Hide this home' })
+    .click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Favorites', exact: true }).click();
+  await expect(home).toHaveCount(0);
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await page.getByRole('radio', { name: 'Both' }).check();
+  await expect(home.getByText('Saved by Demo Alex')).toBeVisible();
+  await expect(home.getByText('Hidden', { exact: true })).toBeVisible();
+});
+
+test('a hidden home keeps a dimmed, selectable pin when hidden homes are shown', async ({
+  page,
+}) => {
+  await page.route('https://tiles.openfreemap.org/styles/liberty', (route) =>
+    route.fulfill({ json: LOCAL_STREET_STYLE }),
+  );
+  await routeImagery(page);
+  await openDemo(page);
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Min living area (m²)' }).fill('90');
+  await page
+    .getByRole('article', { name: 'Example detached home', exact: true })
+    .getByRole('button', { name: 'Hide this home' })
+    .click();
+  await expect(page.getByRole('article')).toHaveCount(0);
+  await page.getByRole('radio', { name: 'Both' }).check();
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  const pin = page.getByRole('button', {
+    name: /^Example detached home:.*hidden$/,
+  });
+  await expect(pin).toHaveCSS('filter', 'grayscale(1) opacity(0.5)');
+  await pin.click();
+  await expect(
+    page.getByRole('article', { name: 'Selected home: Example detached home' }),
+  ).toBeVisible();
+  await expect(pin).toHaveAttribute('aria-pressed', 'true');
+  await expect(pin).toHaveCSS('filter', 'none');
+});
+
 test('unknown prices are kept or hidden by the checkbox, and an empty result says filters are active', async ({
   page,
 }) => {
@@ -779,6 +889,60 @@ async function seeDetachedHomeOnMap(page: import('@playwright/test').Page) {
     }),
   ).toBeVisible();
 }
+
+// A point on the bare map: the canvas, not a marker, control or the card.
+async function bareMapPoint(page: import('@playwright/test').Page) {
+  return page.evaluate(() => {
+    const box = document.querySelector('canvas')?.getBoundingClientRect();
+    if (!box) throw new Error('No map canvas');
+    for (let y = box.top + 20; y < box.bottom; y += 20)
+      for (let x = box.left + 20; x < box.right; x += 20)
+        if (document.elementFromPoint(x, y)?.tagName === 'CANVAS')
+          return { x, y };
+    throw new Error('No bare map point');
+  });
+}
+
+test('a click or tap on the bare map closes the selected home; markers, drags, the card and other keys do not', async ({
+  page,
+}) => {
+  await seeDetachedHomeOnMap(page);
+  const card = page.getByRole('article', { name: /^Selected home:/ });
+  const point = await bareMapPoint(page);
+  // A marker click stays a selection, so the map click it also raises must be ignored.
+  await page
+    .getByLabel('Listing map')
+    .locator('button[aria-pressed="true"]')
+    .click();
+  await expect(card).toBeVisible();
+  await card.getByRole('heading').click();
+  await expect(card).toBeVisible();
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.down();
+  await page.mouse.move(point.x + 30, point.y + 10, { steps: 5 });
+  await page.mouse.up();
+  await expect(card).toBeVisible();
+  await page.getByRole('button', { name: 'Map', exact: true }).focus();
+  await page.keyboard.press('Escape');
+  await expect(card).toBeVisible();
+  const bare = await bareMapPoint(page);
+  if (test.info().project.name === 'narrow')
+    await page.touchscreen.tap(bare.x, bare.y);
+  else await page.mouse.click(bare.x, bare.y);
+  await expect(card).toHaveCount(0);
+});
+
+test('Escape in the map area closes the selected home', async ({ page }) => {
+  await seeDetachedHomeOnMap(page);
+  await page
+    .getByLabel('Listing map')
+    .locator('button[aria-pressed="true"]')
+    .focus();
+  await page.keyboard.press('Escape');
+  await expect(
+    page.getByRole('article', { name: /^Selected home:/ }),
+  ).toHaveCount(0);
+});
 
 test('opening the map on a located home keeps the not-located marker inside the map', async ({
   page,

@@ -222,3 +222,17 @@ it('styles the original-listing link as a default button with the same label and
   expect(link.getAttribute('rel')).toBe('noopener noreferrer');
   expect(link.getAttribute('referrerpolicy')).toBe('no-referrer');
 });
+
+it('shows up to three fact chips and one caveat chip, with no chip for the caveats every home has', async () => {
+  const base = SYNTHETIC_SNAPSHOT.listings[0];
+  await renderOverridden({});
+  for (const label of ['Balcony', 'Lift', 'Above ground floor'])
+    expect(screen.getByText(label)).toBeTruthy();
+  expect(screen.queryByText('Glazed')).toBeNull();
+  expect(screen.queryByText('Transit not checked')).toBeNull();
+  cleanup();
+  await renderOverridden({
+    listing: { facts: { ...base.facts, stepFree: false } },
+  });
+  expect(screen.getByText('Not step-free')).toBeTruthy();
+});
