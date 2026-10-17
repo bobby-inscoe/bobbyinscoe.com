@@ -10,6 +10,7 @@ import {
   readErikOlssonDetailPage,
   readErikOlssonSearchPage,
 } from '@house-scanner-tools/erik-olsson-parser';
+import { readHusmanHagbergSearchPage } from '@house-scanner-tools/husman-hagberg-parser';
 import {
   type LivePartitionInput,
   type SourceAdapter,
@@ -25,6 +26,9 @@ import {
   ERIK_OLSSON_IMAGE_ORIGIN,
   ERIK_OLSSON_ORIGIN,
   ERIK_OLSSON_SOURCE_ID,
+  HUSMAN_HAGBERG_IMAGE_ORIGIN,
+  HUSMAN_HAGBERG_ORIGIN,
+  HUSMAN_HAGBERG_SOURCE_ID,
   LUNDIN_ORIGIN,
   LUNDIN_SOURCE_ID,
   type SourceCapability,
@@ -227,6 +231,44 @@ export const lundinAdapter: SourceAdapter = {
   readDetailPage: () => ({ kind: 'failed', reason: 'unexpected-shape' }),
 };
 
+// One text search for the municipality name, asked for 200 homes a page so the whole answer is one request.
+// The list is served from the API host the site's own pages call. It has no robots.txt (404), so the run
+// asks the robots.txt of the site, whose rules cover the path.
+const HUSMAN_HAGBERG_SEARCHES: Record<string, string> = {
+  göteborg: 'G%C3%B6teborg',
+};
+const HUSMAN_HAGBERG_LIST =
+  'https://api.husmanhagberg.se/object/api/objects?ps=200&regX=';
+
+export const husmanHagbergAdapter: SourceAdapter = {
+  sourceId: HUSMAN_HAGBERG_SOURCE_ID,
+  executor: 'husman-hagberg-personal-read',
+  origin: HUSMAN_HAGBERG_ORIGIN,
+  // Photos are the broker's media host, shown by the viewer's browser and never fetched here.
+  imageOrigin: HUSMAN_HAGBERG_IMAGE_ORIGIN,
+  headers: {
+    'user-agent': USER_AGENT,
+    // robots.txt is asked with the same headers, so plain text stays acceptable.
+    accept: 'application/json, text/plain;q=0.9',
+    'accept-language': 'sv-SE,sv;q=0.9,en;q=0.8',
+  },
+  coordinateSource: 'husman-hagberg-list',
+  detailLabel: 'Home pages',
+  notCovered: 'Not covered: other cities, lift, balcony and glazing.',
+  // The list already holds everything, so the run is one request.
+  listOnly: true,
+  partitionUrl(partition: LivePartitionInput) {
+    const search =
+      HUSMAN_HAGBERG_SEARCHES[partition.municipality.trim().toLowerCase()];
+    return search === undefined
+      ? { unsupported: 'municipality-path-unproven' }
+      : `${HUSMAN_HAGBERG_LIST}${search}`;
+  },
+  readSearchPage: readHusmanHagbergSearchPage,
+  // Never called: the run reads no home pages.
+  readDetailPage: () => ({ kind: 'failed', reason: 'unexpected-shape' }),
+};
+
 /** The adapter for a capability, only when its policy names exactly this adapter's source and hosts. */
 export function adapterFor(capability: SourceCapability): SourceAdapter {
   const { policy } = capability;
@@ -236,6 +278,7 @@ export function adapterFor(capability: SourceCapability): SourceAdapter {
     erikOlssonAdapter,
     stadshemAdapter,
     lundinAdapter,
+    husmanHagbergAdapter,
   ].find((candidate) => candidate.executor === capability.executor);
   if (
     adapter === undefined ||

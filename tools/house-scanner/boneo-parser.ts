@@ -14,7 +14,7 @@ import {
 import { BONEO_IMAGE_ORIGIN } from '@house-scanner-tools/source-registry';
 import {
   finishViewings,
-  viewingFromUtc,
+  viewingFromLabelledWallClock,
 } from '@house-scanner-tools/viewing-time';
 import {
   type Observation,
@@ -250,7 +250,7 @@ function observationFromItem(
       .slice(0, 30)
       .flatMap((entry) => {
         const viewing = isRecord(entry)
-          ? viewingFromUtc(
+          ? viewingFromLabelledWallClock(
               entry.field_viewing_start_time,
               entry.field_viewing_end_time,
             )
