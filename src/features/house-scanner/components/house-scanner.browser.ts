@@ -213,7 +213,9 @@ test('map is opt-in and a failed tile request leaves details and list controls u
     .getByRole('button', { name: 'Details', exact: true })
     .click();
   await expect(
-    page.getByText('Approximate area; no exact pin is shown.', { exact: true }),
+    page
+      .getByRole('dialog', { name: 'Example terrace home', exact: true })
+      .getByText('Approximate area; no exact pin is shown.', { exact: true }),
   ).toBeVisible();
   expect(
     await page.evaluate(
@@ -261,10 +263,12 @@ test('a locally served map style groups overlapping homes and keeps map selectio
   await pinCard.getByRole('button', { name: 'Details', exact: true }).click();
   await expect(
     page
-      .getByRole('article', { name: 'Example detached home', exact: true })
+      .getByRole('dialog', { name: 'Example detached home', exact: true })
       .getByText('Facts and source evidence', { exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByLabel('Listing map')).toBeVisible();
   await page.getByRole('button', { name: 'Close selected home' }).click();
   await expect(pinCard).toHaveCount(0);
   await page.screenshot({
@@ -413,14 +417,19 @@ test('shared notes show every member and the signed-in member edits only their o
   });
   await home.getByRole('button', { name: 'Details', exact: true }).focus();
   await page.keyboard.press('Enter');
-  const notes = home.getByRole('list', { name: 'Household notes' });
+  const dialog = page.getByRole('dialog', {
+    name: 'Example balcony home',
+    exact: true,
+  });
+  await expect(dialog).toBeVisible();
+  const notes = dialog.getByRole('list', { name: 'Household notes' });
   await expect(notes.getByRole('listitem')).toHaveCount(1);
   await expect(notes).toContainText('Demo Morgan · edited');
   await expect(notes).toContainText('the balcony faces a courtyard');
   await expect(notes).not.toContainText('You (Demo Alex)');
 
-  const editor = home.getByRole('textbox', { name: 'Your shared note' });
-  const save = home.getByRole('button', { name: 'Save note', exact: true });
+  const editor = dialog.getByRole('textbox', { name: 'Your shared note' });
+  const save = dialog.getByRole('button', { name: 'Save note', exact: true });
   await expect(save).toBeDisabled();
   await editor.focus();
   await page.keyboard.type('Our first visit is Saturday.');
@@ -428,7 +437,7 @@ test('shared notes show every member and the signed-in member edits only their o
   await page.keyboard.press('Tab');
   await expect(save).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(home.getByText('Note saved.', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Note saved.', { exact: true })).toBeVisible();
   await expect(notes.getByRole('listitem')).toHaveCount(2);
   await expect(notes).toContainText('You (Demo Alex) · edited');
   await expect(notes).toContainText('Our first visit is Saturday.');
@@ -444,6 +453,9 @@ test('shared notes show every member and the signed-in member edits only their o
   await expect(notes.getByRole('listitem')).toHaveCount(2);
   await expect(notes).toContainText('the balcony faces a courtyard');
 
+  // The open dialog covers the page, so close it before leaving the demo.
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
   await page.getByRole('button', { name: 'Leave demo' }).click();
   await openDemo(page);
   await home.getByRole('button', { name: 'Details', exact: true }).click();
@@ -451,7 +463,7 @@ test('shared notes show every member and the signed-in member edits only their o
   await expect(notes).not.toContainText('Moved the visit to Sunday.');
 });
 
-test('an expanded card spans the whole list row and a second press returns it to the grid', async ({
+test('Details opens a dialog named for the home without reflowing the grid, and Escape returns focus to Details', async ({
   page,
 }) => {
   await openDemo(page);
@@ -459,27 +471,184 @@ test('an expanded card spans the whole list row and a second press returns it to
     name: 'Example balcony home',
     exact: true,
   });
-  const width = async (locator: typeof home) =>
-    (await locator.boundingBox())?.width ?? 0;
-  const list = page
-    .locator('section[aria-label="Household shortlist"] > div')
-    .last();
-  await home.getByRole('button', { name: 'Details', exact: true }).click();
-  const listWidth = await width(list);
-  await expect.poll(() => width(home)).toBeGreaterThanOrEqual(listWidth - 1);
+  const details = home.getByRole('button', { name: 'Details', exact: true });
+  // Page coordinates, so a scroll caused by the dialog does not count as movement.
+  const boxes = () =>
+    page.getByRole('article').evaluateAll((cards) =>
+      cards.map((card) => {
+        const { x, y, width, height } = card.getBoundingClientRect();
+        return [x + scrollX, y + scrollY, width, height];
+      }),
+    );
+  const before = await boxes();
+  await details.click();
+  const dialog = page.getByRole('dialog', {
+    name: 'Example balcony home',
+    exact: true,
+  });
+  await expect(dialog).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await expect(
+    dialog.getByText('Facts and source evidence', { exact: true }),
+  ).toBeVisible();
+  // The card keeps its place, so the grid does not jump.
+  expect(await boxes()).toEqual(before);
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('Missing viewport.');
+  // The sheet slides in, so poll until it has settled against its edge.
+  if (viewport.width > 768)
+    await expect
+      .poll(async () => {
+        const box = await dialog.boundingBox();
+        return box ? Math.round(box.x + box.width) : 0;
+      })
+      .toBe(viewport.width);
+  else
+    await expect
+      .poll(async () => {
+        const box = await dialog.boundingBox();
+        return box ? Math.round(box.y + box.height) : 0;
+      })
+      .toBe(viewport.height);
+  const box = await dialog.boundingBox();
+  if (!box) throw new Error('Missing box.');
+  if (viewport.width > 768) expect(box.width).toBeLessThan(viewport.width / 2);
+  else {
+    expect(Math.round(box.width)).toBe(viewport.width);
+    expect(box.y).toBeGreaterThan(0);
+  }
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  // Details is a toggle: a second press collapses the card back into the grid.
-  await home.getByRole('button', { name: 'Details', exact: true }).click();
-  // A phone grid is one column, so the card is already full width there.
-  if ((page.viewportSize()?.width ?? 0) > 800)
-    await expect.poll(() => width(home)).toBeLessThan(listWidth);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(details).toBeFocused();
+  expect(await boxes()).toEqual(before);
+  // Closing keeps the selection outline on the card.
+  expect(
+    await home.evaluate((card) => getComputedStyle(card).outlineStyle),
+  ).toBe('solid');
+});
+
+test('only one details dialog exists and the notes follow the selected home', async ({
+  page,
+}) => {
+  await openDemo(page);
+  const open = async (name: string) =>
+    page
+      .getByRole('article', { name, exact: true })
+      .getByRole('button', { name: 'Details', exact: true })
+      .click();
+  await open('Example balcony home');
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await expect(page.getByRole('dialog')).toContainText(
+    'the balcony faces a courtyard',
+  );
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await open('Example terrace home');
+  const dialog = page.getByRole('dialog', {
+    name: 'Example terrace home',
+    exact: true,
+  });
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await expect(dialog).toContainText('the terrace is large');
+  await expect(dialog).not.toContainText('the balcony faces a courtyard');
+});
+
+test('on a touch screen every button in the details dialog is at least 44 px tall', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name !== 'narrow');
+  await openDemo(page);
+  await page
+    .getByRole('article', { name: 'Example balcony home', exact: true })
+    .getByRole('button', { name: 'Details', exact: true })
+    .click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  const small = await dialog
+    .locator('button:visible, a[role="button"]:visible')
+    .evaluateAll((buttons) =>
+      buttons
+        .map((button) => ({
+          name: button.textContent || button.getAttribute('aria-label'),
+          height: Math.round(button.getBoundingClientRect().height),
+        }))
+        .filter(({ height }) => height < 44),
+    );
+  expect(small).toEqual([]);
+});
+
+test('See on map in the dialog closes it, keeps the selection and shows the map', async ({
+  page,
+}) => {
+  await page.route('https://tiles.openfreemap.org/styles/liberty', (route) =>
+    route.fulfill({ json: LOCAL_STREET_STYLE }),
+  );
+  await routeImagery(page);
+  await openDemo(page);
+  await page
+    .getByRole('article', { name: 'Example detached home', exact: true })
+    .getByRole('button', { name: 'Details', exact: true })
+    .click();
+  const dialog = page.getByRole('dialog', {
+    name: 'Example detached home',
+    exact: true,
+  });
+  await dialog.getByRole('button', { name: 'See on map', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(
-    home.getByRole('button', { name: 'Details', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'false');
+    page.getByRole('article', {
+      name: 'Selected home: Example detached home',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Listing map')).toBeVisible();
+});
+
+test('the pin card Details opens the dialog over the map without switching to the list', async ({
+  page,
+}) => {
+  await seeDetachedHomeOnMap(page);
+  const pinCard = page.getByRole('article', {
+    name: 'Selected home: Example detached home',
+    exact: true,
+  });
+  const pinDetails = pinCard.getByRole('button', {
+    name: 'Details',
+    exact: true,
+  });
+  await pinDetails.click();
+  const dialog = page.getByRole('dialog', {
+    name: 'Example detached home',
+    exact: true,
+  });
+  await expect(dialog).toBeVisible();
+  await expect(page.getByLabel('Listing map')).toBeVisible();
+  // The map's own overlays (pin card, basemap toggle) must sit under the dialog.
+  const covered = (locator: typeof dialog) =>
+    locator.evaluate((element) => {
+      const { x, y, width, height } = element.getBoundingClientRect();
+      const top = document.elementFromPoint(x + width / 2, y + height / 2);
+      return !element.contains(top);
+    });
+  expect(await covered(pinCard)).toBe(true);
+  expect(await covered(page.getByRole('group', { name: 'Basemap' }))).toBe(
+    true,
+  );
+  await expect(
+    page.getByRole('article', { name: 'Example balcony home' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Map', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(pinDetails).toBeFocused();
+  await expect(page.getByLabel('Listing map')).toBeVisible();
 });
 
 test('a saved listing missing from the latest scan shows a notice and can be unfavorited by keyboard', async ({
@@ -494,12 +663,18 @@ test('a saved listing missing from the latest scan shows a notice and can be unf
   await expect(home.getByRole('note')).toHaveCount(0);
   await home.getByRole('button', { name: 'Details', exact: true }).focus();
   await page.keyboard.press('Enter');
-  const notice = home.getByRole('note', {
+  const dialog = page.getByRole('dialog', {
+    name: 'Example older listing',
+    exact: true,
+  });
+  const notice = dialog.getByRole('note', {
     name: 'Not seen in the latest scan',
   });
   await expect(notice).toBeVisible();
   await expect(notice).toContainText('Not seen in the latest scan. Last seen');
   await expect(notice).toContainText('open it to check');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
   await expect(
     home.getByText('Saved by Demo Alex', { exact: true }),
   ).toBeVisible();

@@ -16,6 +16,8 @@ interface ListingDetailsProps {
   userId: string;
   stale?: boolean;
   notes?: ListingNotesController;
+  // The level of the section headings, one below the title above them.
+  headingOrder?: 3 | 4;
 }
 
 export function ListingDetails({
@@ -24,6 +26,7 @@ export function ListingDetails({
   userId,
   stale,
   notes,
+  headingOrder = 4,
 }: ListingDetailsProps) {
   return (
     <>
@@ -41,7 +44,9 @@ export function ListingDetails({
           </Text>
         </Paper>
       )}
-      <Title order={4}>Facts and source evidence</Title>
+      <Title order={headingOrder} size="h4">
+        Facts and source evidence
+      </Title>
       <div className={styles.facts}>
         {listing.facts.propertyType === 'house' ? (
           <Text size="sm">House operating costs are unavailable.</Text>
@@ -136,7 +141,9 @@ export function ListingDetails({
           No supporting nature, transit or other evidence recorded.
         </Text>
       )}
-      <Title order={4}>Notes</Title>
+      <Title order={headingOrder} size="h4">
+        Notes
+      </Title>
       <ListingNotes
         controller={notes}
         members={snapshot.members}

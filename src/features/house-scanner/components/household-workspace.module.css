@@ -51,11 +51,6 @@
   border-color: var(--scanner-accent);
   outline: 1px solid var(--scanner-accent);
 }
-/* The expanded card takes the whole row; the others reflow beneath it. */
-.list > .selected {
-  flex-basis: 100%;
-  max-width: none;
-}
 /* 3:2 matches the source thumbnails, so nothing is cropped and the card does not jump while loading. */
 .photoLink {
   display: block;
@@ -70,9 +65,6 @@
   top: 8px;
   right: 8px;
   z-index: 1;
-}
-.selected .photoLink {
-  max-width: 440px;
 }
 .photo {
   display: block;
@@ -197,4 +189,21 @@
   font-size: var(--title-fz);
   line-height: var(--title-lh);
   letter-spacing: normal;
+}
+/* A full-width photo in a wide sheet would fill most of its height. */
+.drawerBody .photo {
+  max-height: 320px;
+}
+/* Out of a portal the fixed sheet would start at its static position, so pin it to the viewport edge. */
+/* Takes the empty root out of the flex flow, where it would add a gap; the z-index keeps the sheet above the map. */
+.drawerRoot {
+  position: fixed;
+  z-index: var(--mb-z-index);
+}
+.drawerInner {
+  left: 0;
+}
+.drawerTitle {
+  font-family: var(--mantine-font-family-headings);
+  font-size: var(--mantine-h4-font-size);
 }

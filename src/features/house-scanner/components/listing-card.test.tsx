@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ListingCard } from '@/features/house-scanner/components/listing-card';
 import { ListingPhoto } from '@/features/house-scanner/components/listing-photo';
@@ -116,4 +122,103 @@ it('shows neither the badge nor the notice on a listing that is not stale', asyn
   await renderCard(false, true);
   expect(screen.queryByText('Not in latest scan')).toBeNull();
   expect(screen.queryByRole('note')).toBeNull();
+});
+
+function stubMatchMedia() {
+  vi.stubGlobal(
+    'matchMedia',
+    (media: string): MediaQueryList => ({
+      media,
+      matches: false,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => true,
+    }),
+  );
+}
+
+type CardOverrides = {
+  listing?: Partial<(typeof SYNTHETIC_SNAPSHOT.listings)[number]>;
+  profiles?: typeof SYNTHETIC_SNAPSHOT.profiles;
+  onSelect?: () => void;
+};
+
+async function renderOverridden({
+  listing,
+  profiles,
+  onSelect,
+}: CardOverrides) {
+  stubMatchMedia();
+  const { MantineProvider } = await import('@mantine/core');
+  const base = SYNTHETIC_SNAPSHOT.listings[0];
+  render(
+    <MantineProvider>
+      <ListingCard
+        listing={{ ...base, ...listing }}
+        snapshot={{
+          ...SYNTHETIC_SNAPSHOT,
+          profiles: profiles ?? SYNTHETIC_SNAPSHOT.profiles,
+        }}
+        userId={DEMO_USER_ID}
+        busy={false}
+        canSave
+        onSelect={onSelect ?? (() => {})}
+        onFavorite={() => {}}
+      />
+    </MantineProvider>,
+  );
+  return base;
+}
+
+it('shows no status badge on an available home', async () => {
+  const base = await renderOverridden({});
+  expect(base.facts.status).toBe('available');
+  expect(screen.queryByText('available')).toBeNull();
+  expect(screen.queryByText('Status disputed')).toBeNull();
+});
+
+it('shows the status badge when a home is not available or its status is disputed', async () => {
+  const base = SYNTHETIC_SNAPSHOT.listings[0];
+  await renderOverridden({
+    listing: { facts: { ...base.facts, status: 'sold' } },
+  });
+  expect(screen.getByText('sold')).toBeTruthy();
+  cleanup();
+  await renderOverridden({ listing: { conflicts: ['status'] } });
+  expect(screen.getByText('Status disputed')).toBeTruthy();
+});
+
+it('prefixes the match label with the profile name only when several profiles are enabled', async () => {
+  const [profile] = SYNTHETIC_SNAPSHOT.profiles;
+  await renderOverridden({});
+  expect(screen.queryByText(/Fictional demonstration profile:/)).toBeNull();
+  cleanup();
+  await renderOverridden({
+    profiles: [profile, { ...profile, id: 'second-profile', name: 'Second' }],
+  });
+  expect(screen.getByText(/Fictional demonstration profile:/)).toBeTruthy();
+  expect(screen.getByText(/Second:/)).toBeTruthy();
+});
+
+it('opens the details dialog from the Details button without expanding the card', async () => {
+  const onSelect = vi.fn();
+  await renderOverridden({ onSelect });
+  const details = screen.getByRole('button', { name: 'Details' });
+  expect(details.getAttribute('aria-haspopup')).toBe('dialog');
+  expect(details.getAttribute('aria-pressed')).toBeNull();
+  fireEvent.click(details);
+  expect(onSelect).toHaveBeenCalledOnce();
+  expect(screen.queryByText('Facts and source evidence')).toBeNull();
+});
+
+it('styles the original-listing link as a default button with the same label and safe link attributes', async () => {
+  await renderOverridden({});
+  const link = screen.getByRole('link', { name: 'Open original listing' });
+  expect(link.getAttribute('data-variant')).toBe('default');
+  expect(link.getAttribute('target')).toBe('_blank');
+  expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+  expect(link.getAttribute('referrerpolicy')).toBe('no-referrer');
 });

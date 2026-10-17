@@ -23,6 +23,7 @@ import {
 
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import { ListingCard } from '@/features/house-scanner/components/listing-card';
+import { ListingDrawer } from '@/features/house-scanner/components/listing-drawer';
 import { ListingFilterPanel } from '@/features/house-scanner/components/listing-filter-panel';
 import { PinCard } from '@/features/house-scanner/components/pin-card';
 import type { ListingNotesController } from '@/features/house-scanner/hooks/use-listing-notes';
@@ -84,6 +85,9 @@ interface ListingsPanelProps {
   selected: Listing | null;
   selectedId: string | null;
   onSelectedIdChange: Dispatch<SetStateAction<string | null>>;
+  // The details sheet is open for the selected home.
+  detailsOpen: boolean;
+  onDetailsOpenChange: (open: boolean) => void;
   view: 'list' | 'map';
   onViewChange: (view: 'list' | 'map') => void;
   satellite: boolean;
@@ -111,6 +115,8 @@ export function ListingsPanel({
   selected,
   selectedId,
   onSelectedIdChange,
+  detailsOpen,
+  onDetailsOpenChange,
   view,
   onViewChange,
   satellite,
@@ -256,15 +262,12 @@ export function ListingsPanel({
               userId={userId}
               selected={selectedId === listing.id}
               stale={isListingStale(listing, snapshot.edition)}
-              details={selectedId === listing.id}
               busy={pending.includes(listing.id)}
               canSave={canSave(listing.id)}
-              notes={selectedId === listing.id ? notes : undefined}
-              onSelect={() =>
-                onSelectedIdChange((current) =>
-                  current === listing.id ? null : listing.id,
-                )
-              }
+              onSelect={() => {
+                onSelectedIdChange(listing.id);
+                onDetailsOpenChange(true);
+              }}
               onSeeOnMap={() => {
                 onSelectedIdChange(listing.id);
                 onViewChange('map');
@@ -309,7 +312,7 @@ export function ListingsPanel({
                       <PinCard
                         listing={selected}
                         onClose={() => onSelectedIdChange(null)}
-                        onDetails={() => onViewChange('list')}
+                        onDetails={() => onDetailsOpenChange(true)}
                       />
                     ) : null
                   }
@@ -321,6 +324,19 @@ export function ListingsPanel({
           )}
         </div>
       )}
+      <ListingDrawer
+        listing={selected}
+        snapshot={snapshot}
+        userId={userId}
+        opened={detailsOpen && selected !== null}
+        stale={selected ? isListingStale(selected, snapshot.edition) : false}
+        notes={notes}
+        onClose={() => onDetailsOpenChange(false)}
+        onSeeOnMap={() => {
+          onDetailsOpenChange(false);
+          onViewChange('map');
+        }}
+      />
     </>
   );
 }

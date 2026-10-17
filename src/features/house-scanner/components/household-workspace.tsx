@@ -44,6 +44,7 @@ export function HouseholdWorkspace({
   const [person, setPerson] = useState('everyone');
   const [section, setSection] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [duplicateId, setDuplicateId] = useState<string | null>(null);
   const duplicate = snapshot.listings.find(
     (listing) => listing.id === duplicateId,
@@ -122,7 +123,10 @@ export function HouseholdWorkspace({
             key={value}
             variant={tab === value ? 'filled' : 'default'}
             aria-pressed={tab === value}
-            onClick={() => setTab(value)}
+            onClick={() => {
+              setTab(value);
+              setDetailsOpen(false);
+            }}
           >
             {value === 'manual'
               ? 'Add link'
@@ -179,6 +183,8 @@ export function HouseholdWorkspace({
           selected={selected}
           selectedId={selectedId}
           onSelectedIdChange={setSelectedId}
+          detailsOpen={detailsOpen}
+          onDetailsOpenChange={setDetailsOpen}
           view={view}
           onViewChange={setView}
           satellite={satellite}
