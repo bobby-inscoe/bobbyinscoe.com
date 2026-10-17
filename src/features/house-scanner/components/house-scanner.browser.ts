@@ -648,3 +648,37 @@ test('the synthetic demo status line is not drawn in the stale warning color', a
   expect(colors.red).not.toBe('');
   expect(colors.status).not.toBe(colors.red);
 });
+
+test('on a touch screen every button in the Listings view is at least 44 px tall', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name !== 'narrow');
+  expect(
+    await page.evaluate(() => matchMedia('(pointer: coarse)').matches),
+  ).toBe(true);
+  await openDemo(page);
+  const small = await page
+    .locator('button:visible, a[role="button"]:visible')
+    .evaluateAll((buttons) =>
+      buttons
+        .map((button) => ({
+          name: button.textContent || button.getAttribute('aria-label'),
+          height: Math.round(button.getBoundingClientRect().height),
+        }))
+        .filter(({ height }) => height < 44),
+    );
+  expect(small).toEqual([]);
+  const narrowIcons = await page
+    .locator(
+      '.mantine-ActionIcon-root:visible, .mantine-CloseButton-root:visible',
+    )
+    .evaluateAll((icons) =>
+      icons
+        .map((icon) => ({
+          name: icon.textContent || icon.getAttribute('aria-label'),
+          width: Math.round(icon.getBoundingClientRect().width),
+        }))
+        .filter(({ width }) => width < 44),
+    );
+  expect(narrowIcons).toEqual([]);
+});

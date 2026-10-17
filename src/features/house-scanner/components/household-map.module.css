@@ -17,6 +17,16 @@
   font: 500 var(--mantine-font-size-xs) / 1.4 var(--mantine-font-family);
   cursor: pointer;
 }
+@media (pointer: coarse) {
+  .marker {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .map :global(.maplibregl-ctrl-group button) {
+    width: 44px;
+    height: 44px;
+  }
+}
 /* A different shape and a dashed edge keep the catch-all from passing for a real home. */
 .unlocated {
   border-style: dashed;

@@ -1,9 +1,9 @@
 import { Anchor, Button, Flex, Group, Stack, Text, Title } from '@mantine/core';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
-
 import { HouseScannerAccess } from '@/features/house-scanner/components/house-scanner-access';
 import { HouseholdWorkspace } from '@/features/house-scanner/components/household-workspace';
+import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import { SyntheticWorkspace } from '@/features/house-scanner/components/synthetic-workspace';
 
 export function HouseScannerPage() {
@@ -15,7 +15,7 @@ export function HouseScannerPage() {
       p={{ base: 'md', md: 'xl' }}
       mih="100svh"
     >
-      <Stack w="100%" maw={1440} gap="lg">
+      <Stack className={styles.touch} w="100%" maw={1440} gap="lg">
         <Anchor component={Link} to="/" style={{ alignSelf: 'flex-start' }}>
           ← Back to the workshop
         </Anchor>

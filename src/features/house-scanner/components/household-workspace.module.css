@@ -116,3 +116,20 @@
 .pinCard .photo {
   aspect-ratio: 16 / 9;
 }
+/* Fingers need 44 px; the page root carries this class so the demo and sign-in controls count too. */
+@media (pointer: coarse) {
+  .touch :global(.mantine-Button-root),
+  .touch :global(.mantine-ActionIcon-root),
+  .touch :global(.mantine-CloseButton-root),
+  .touch :global(.mantine-Input-input) {
+    min-height: 44px;
+  }
+  .touch :global(.mantine-ActionIcon-root),
+  .touch :global(.mantine-CloseButton-root) {
+    min-width: 44px;
+  }
+  /* The stepper arrows cannot reach 44 px inside a 44 px field; touch users type the number. */
+  .touch :global(.mantine-NumberInput-controls) {
+    display: none;
+  }
+}
