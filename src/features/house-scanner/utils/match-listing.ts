@@ -1,12 +1,66 @@
 import type {
   Criteria,
   Listing,
+  Snapshot,
 } from '@/features/house-scanner/types/contracts';
+import { hasPin } from '@/features/house-scanner/utils/listing-position';
 
 export interface MatchResult {
   section: 'preferred' | 'stretch' | 'exceptions' | 'needs-details' | 'outside';
   reasons: string[];
   caveats: string[];
+}
+
+type Section = MatchResult['section'];
+
+export const SECTION_LABELS: Record<Section, string> = {
+  preferred: 'Within budget',
+  stretch: 'Stretch budget',
+  exceptions: 'Close to your criteria',
+  'needs-details': 'Missing info',
+  outside: 'Outside current criteria',
+};
+
+// The Match picker's choices, in order, and what each means; outside homes are never listed.
+export const MATCH_CHOICES: {
+  value: Exclude<Section, 'outside'> | 'manual';
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: 'preferred',
+    label: SECTION_LABELS.preferred,
+    description: 'at or under your preferred price.',
+  },
+  {
+    value: 'stretch',
+    label: SECTION_LABELS.stretch,
+    description: 'over it, within your stretch limit.',
+  },
+  {
+    value: 'exceptions',
+    label: SECTION_LABELS.exceptions,
+    description: 'misses one rule that can bend.',
+  },
+  {
+    value: 'needs-details',
+    label: SECTION_LABELS['needs-details'],
+    description: 'facts are unknown, so it can’t be judged.',
+  },
+  {
+    value: 'manual',
+    label: 'Links we added',
+    description: 'pasted in by the household.',
+  },
+];
+
+export function listingMatches(listing: Listing, snapshot: Snapshot) {
+  return snapshot.profiles
+    .filter((profile) => profile.enabled)
+    .map((profile) => ({
+      profile,
+      result: matchListing(listing, profile.criteria),
+    }));
 }
 
 function geographicScope(listing: Listing, criteria: Criteria): boolean | null {
@@ -21,7 +75,7 @@ function geographicScope(listing: Listing, criteria: Criteria): boolean | null {
   )
     return true;
   const point = listing.coordinates;
-  if (!point || point.precision === 'approximate_area') return null;
+  if (!hasPin(point)) return null;
   const radians = (degrees: number) => (degrees * Math.PI) / 180;
   const [longitude, latitude] = criteria.geography.center;
   const a =

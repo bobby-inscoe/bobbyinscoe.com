@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import type { ListingNotesController } from '@/features/house-scanner/hooks/use-listing-notes';
 import type { Member } from '@/features/house-scanner/types/contracts';
 import { NOTE_MAX_LENGTH } from '@/features/house-scanner/types/notes';
-import { formatDate } from '@/features/house-scanner/utils/workspace-view';
+import { formatDate } from '@/features/house-scanner/utils/format';
 
 interface ListingNotesProps {
   controller?: ListingNotesController;

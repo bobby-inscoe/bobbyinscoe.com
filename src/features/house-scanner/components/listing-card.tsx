@@ -18,13 +18,12 @@ import type {
   Listing,
   Snapshot,
 } from '@/features/house-scanner/types/contracts';
-import { isOnMap } from '@/features/house-scanner/utils/listing-filters';
+import { formatDate, formatPrice } from '@/features/house-scanner/utils/format';
+import { hasPin } from '@/features/house-scanner/utils/listing-position';
 import {
-  formatDate,
-  formatPrice,
   listingMatches,
   SECTION_LABELS,
-} from '@/features/house-scanner/utils/workspace-view';
+} from '@/features/house-scanner/utils/match-listing';
 
 export function ListingPhoto({ listing }: { listing: Listing }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
@@ -226,7 +225,7 @@ export function ListingCard({
         >
           Details
         </Button>
-        {onSeeOnMap && isOnMap(listing) && (
+        {onSeeOnMap && hasPin(listing.coordinates) && (
           <Button size="xs" variant="default" onClick={onSeeOnMap}>
             See on map
           </Button>
@@ -300,7 +299,7 @@ export function ListingCard({
               ? `${listing.coordinates.precision.replaceAll('_', ' ')}; ${listing.coordinates.source}; observed ${formatDate(listing.coordinates.observedAt)}`
               : 'Unknown; list only'}
           </Text>
-          {listing.coordinates?.precision === 'approximate_area' && (
+          {listing.coordinates && !hasPin(listing.coordinates) && (
             <Text size="sm">Approximate area; no exact pin is shown.</Text>
           )}
           <Text size="sm">Last observed: {formatDate(listing.observedAt)}</Text>

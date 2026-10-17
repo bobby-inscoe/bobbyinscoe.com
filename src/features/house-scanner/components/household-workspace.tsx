@@ -25,43 +25,34 @@ import { ListingFilterPanel } from '@/features/house-scanner/components/listing-
 import { ManualListingForm } from '@/features/house-scanner/components/manual-listing-form';
 import { PinCard } from '@/features/house-scanner/components/pin-card';
 import { ProfileEditor } from '@/features/house-scanner/components/profile-editor';
+import { useListingNotes } from '@/features/house-scanner/hooks/use-listing-notes';
+import type { Snapshot } from '@/features/house-scanner/types/contracts';
+import type { HouseholdActions } from '@/features/house-scanner/types/household';
 import {
-  type LoadNotes,
-  type SaveNote,
-  useListingNotes,
-} from '@/features/house-scanner/hooks/use-listing-notes';
-import type {
-  ManualSubmission,
-  SearchProfile,
-  Snapshot,
-} from '@/features/house-scanner/types/contracts';
+  compactPrice,
+  formatDate,
+  formatPrice,
+} from '@/features/house-scanner/utils/format';
 import {
   activeFilterCount,
   applyListingFilters,
   emptyFilters,
-  isOnMap,
   type ListingFilters,
   listingHost,
 } from '@/features/house-scanner/utils/listing-filters';
+import { hasPin } from '@/features/house-scanner/utils/listing-position';
 import { isListingStale } from '@/features/house-scanner/utils/listing-staleness';
+import {
+  listingMatches,
+  MATCH_CHOICES,
+} from '@/features/house-scanner/utils/match-listing';
 import {
   readScanSummary,
   SCAN_STATUS_LABEL,
 } from '@/features/house-scanner/utils/scan-summary';
-import {
-  formatDate,
-  formatPrice,
-  listingMatches,
-  SECTION_LABELS,
-} from '@/features/house-scanner/utils/workspace-view';
 
 // Homes without a usable position share one marker here, in the water off Gothenburg.
 const UNLOCATED_POSITION = { latitude: 57.69, longitude: 11.78 };
-
-function compactPrice(sek: number) {
-  if (sek < 1_000_000) return `${Math.round(sek / 1000)}k`;
-  return `${(sek / 1_000_000).toFixed(1).replace('.', ',').replace(',0', '')}M`;
-}
 
 const LazyMap = lazy(() =>
   import('@/features/house-scanner/map/household-map').then((module) => ({
@@ -88,16 +79,11 @@ class MapLoadBoundary extends Component<
   }
 }
 
-export interface HouseholdWorkspaceProps {
+// Any action may be missing, which turns its control off.
+export interface HouseholdWorkspaceProps extends Partial<HouseholdActions> {
   snapshot: Snapshot;
   userId: string;
   mapStyleUrl?: string;
-  onSaveFavorite?: (listingId: string) => Promise<void>;
-  onRemoveFavorite?: (listingId: string) => Promise<void>;
-  onAddManual?: (submission: ManualSubmission) => Promise<void>;
-  onSaveProfile?: (profile: SearchProfile) => Promise<void>;
-  onLoadNotes?: LoadNotes;
-  onSaveNote?: SaveNote;
 }
 
 export function HouseholdWorkspace({
@@ -168,7 +154,7 @@ export function HouseholdWorkspace({
         const status = listing.conflicts.includes('status')
           ? 'Status disputed'
           : listing.facts.status;
-        return isOnMap(listing) && listing.coordinates
+        return hasPin(listing.coordinates)
           ? {
               id: listing.id,
               coordinates: listing.coordinates,
@@ -190,7 +176,9 @@ export function HouseholdWorkspace({
       }),
     [visible],
   );
-  const notLocated = visible.filter((listing) => !isOnMap(listing)).length;
+  const notLocated = visible.filter(
+    (listing) => !hasPin(listing.coordinates),
+  ).length;
   const selected = visible.find((listing) => listing.id === selectedId) ?? null;
   // At most one card shows details at a time, so one controller serves them all.
   const notesListingId =
@@ -414,10 +402,10 @@ export function HouseholdWorkspace({
                   onChange={(value) => setSection(value ?? 'all')}
                   data={[
                     { value: 'all', label: 'All' },
-                    ...Object.entries(SECTION_LABELS)
-                      .filter(([value]) => value !== 'outside')
-                      .map(([value, label]) => ({ value, label })),
-                    { value: 'manual', label: 'Links we added' },
+                    ...MATCH_CHOICES.map(({ value, label }) => ({
+                      value,
+                      label,
+                    })),
                   ]}
                   comboboxProps={{ withinPortal: false }}
                 />
@@ -427,21 +415,11 @@ export function HouseholdWorkspace({
                   events={{ hover: true, focus: true, touch: true }}
                   label={
                     <Stack gap={4}>
-                      <Text size="xs">
-                        Within budget: at or under your preferred price.
-                      </Text>
-                      <Text size="xs">
-                        Stretch budget: over it, within your stretch limit.
-                      </Text>
-                      <Text size="xs">
-                        Close to your criteria: misses one rule that can bend.
-                      </Text>
-                      <Text size="xs">
-                        Missing info: facts are unknown, so it can’t be judged.
-                      </Text>
-                      <Text size="xs">
-                        Links we added: pasted in by the household.
-                      </Text>
+                      {MATCH_CHOICES.map(({ value, label, description }) => (
+                        <Text key={value} size="xs">
+                          {label}: {description}
+                        </Text>
+                      ))}
                     </Stack>
                   }
                 >
