@@ -130,15 +130,11 @@ describe('buyer matching under incomplete evidence', () => {
       ).section,
     ).toBe('outside');
   });
-  it('reports missing nature, transit and total costs without inventing measured conclusions', () => {
+  it('reports unknown total costs, and no longer carries a nature or transit caveat nothing computes', () => {
     const result = matchListing(home(), criteria);
-    expect(result.caveats).toEqual(
-      expect.arrayContaining([
-        'Transit not checked',
-        'Nature access not checked',
-        'Mandatory additions unknown; total incomplete',
-      ]),
-    );
+    expect(result.caveats).toEqual([
+      'Mandatory additions unknown; total incomplete',
+    ]);
     expect(result.section).toBe('preferred');
   });
 });

@@ -108,29 +108,6 @@ export function ProfileEditor({
       />
     );
   }
-  function nestedNumber(
-    section: 'nature' | 'transit' | 'geography',
-    key: string,
-    label: string,
-    value: number,
-  ) {
-    return (
-      <NumberInput
-        label={label}
-        value={value}
-        disabled={!canEdit || !onSave}
-        onChange={(next) =>
-          setCriteria((current) => ({
-            ...current,
-            [section]: {
-              ...current[section],
-              [key]: typeof next === 'number' ? next : 0,
-            },
-          }))
-        }
-      />
-    );
-  }
   async function save() {
     const result = criteriaSchema.safeParse(criteria);
     if (!result.success) {
@@ -309,47 +286,6 @@ export function ProfileEditor({
             format={formatKm}
             disabled={!canEdit || !onSave}
           />
-        </SimpleGrid>
-        <Checkbox
-          label="Prefer immediate greenery"
-          checked={criteria.nature.preferImmediateGreenery}
-          disabled={!canEdit || !onSave}
-          onChange={(event) => {
-            const checked = event.currentTarget.checked;
-            setCriteria((current) => ({
-              ...current,
-              nature: { ...current.nature, preferImmediateGreenery: checked },
-            }));
-          }}
-        />
-        {nestedNumber(
-          'nature',
-          'preferredWalkMinutes',
-          'Preferred walk to substantial nature (minutes)',
-          criteria.nature.preferredWalkMinutes,
-        )}
-        <Text size="sm" c="dimmed">
-          Walking times are preferences, not measured distances.
-        </Text>
-        <SimpleGrid cols={{ base: 1, sm: 3 }}>
-          {nestedNumber(
-            'transit',
-            'preferredWalkMinutes',
-            'Preferred walk to transit (minutes)',
-            criteria.transit.preferredWalkMinutes,
-          )}
-          {nestedNumber(
-            'transit',
-            'preferredJourneyMinutes',
-            'Preferred journey (minutes)',
-            criteria.transit.preferredJourneyMinutes,
-          )}
-          {nestedNumber(
-            'transit',
-            'tradeoffJourneyMinutes',
-            'Trade-off journey (minutes)',
-            criteria.transit.tradeoffJourneyMinutes,
-          )}
         </SimpleGrid>
         <Button disabled={!canEdit || !onSave} loading={busy} onClick={save}>
           Save criteria

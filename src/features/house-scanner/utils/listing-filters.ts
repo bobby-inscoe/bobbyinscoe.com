@@ -21,6 +21,8 @@ export interface ListingFilters {
   notOnMapOnly: boolean;
   includeUnknown: boolean;
   hidden: HiddenView;
+  // Cross-posted copies of a home stay out of view unless this is on.
+  showDuplicates: boolean;
 }
 
 export const emptyFilters: ListingFilters = {
@@ -37,6 +39,7 @@ export const emptyFilters: ListingFilters = {
   notOnMapOnly: false,
   includeUnknown: true,
   hidden: 'not-hidden',
+  showDuplicates: false,
 };
 
 // Values come from form inputs, so anything not a finite non-negative number is unset.
@@ -64,6 +67,7 @@ export function activeFilterCount(filters: ListingFilters): number {
     filters.glazedOnly,
     filters.notOnMapOnly,
     filters.hidden !== emptyFilters.hidden,
+    filters.showDuplicates,
   ].filter(Boolean).length;
 }
 
@@ -71,6 +75,7 @@ export function applyListingFilters(
   listings: Listing[],
   filters: ListingFilters,
   hiddenIds: ReadonlySet<string> = new Set(),
+  duplicateIds: ReadonlySet<string> = new Set(),
 ): Listing[] {
   const minPrice = clean(filters.minPriceSek);
   const maxPrice = clean(filters.maxPriceSek);
@@ -111,7 +116,8 @@ export function applyListingFilters(
         (facts.glazed === true && !conflicts.includes('glazed'))) &&
       (!filters.notOnMapOnly || !hasPin(listing.coordinates)) &&
       (filters.hidden === 'both' ||
-        hiddenIds.has(listing.id) === (filters.hidden === 'hidden-only'))
+        hiddenIds.has(listing.id) === (filters.hidden === 'hidden-only')) &&
+      (filters.showDuplicates || !duplicateIds.has(listing.id))
     );
   });
 }

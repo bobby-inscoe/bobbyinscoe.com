@@ -14,6 +14,7 @@ import type {
   HouseholdActions,
   WorkspaceTab,
 } from '@/features/house-scanner/types/household';
+import { findDuplicates } from '@/features/house-scanner/utils/duplicates';
 import { formatDate } from '@/features/house-scanner/utils/format';
 import {
   applyListingFilters,
@@ -74,9 +75,25 @@ export function HouseholdWorkspace({
     persist: !synthetic,
     onSetHidden,
   });
+  const { hidden: duplicateIds, alsoOn } = useMemo(
+    () => findDuplicates(snapshot),
+    [snapshot],
+  );
   const visible = useMemo(
-    () => applyListingFilters(scoped, deferredFilters, hidden),
-    [scoped, deferredFilters, hidden],
+    () => applyListingFilters(scoped, deferredFilters, hidden, duplicateIds),
+    [scoped, deferredFilters, hidden, duplicateIds],
+  );
+  // Cross-posted copies the filters leave out, so the count line can say they were folded.
+  const duplicateCount = useMemo(
+    () =>
+      deferredFilters.showDuplicates
+        ? 0
+        : applyListingFilters(
+            scoped,
+            { ...deferredFilters, showDuplicates: true },
+            hidden,
+          ).length - visible.length,
+    [scoped, deferredFilters, hidden, visible],
   );
   // Hidden homes the filters leave out, so the count line can say they exist.
   const hiddenCount = useMemo(
@@ -86,9 +103,10 @@ export function HouseholdWorkspace({
             scoped,
             { ...deferredFilters, hidden: 'hidden-only' },
             hidden,
+            duplicateIds,
           ).length
         : 0,
-    [scoped, deferredFilters, hidden],
+    [scoped, deferredFilters, hidden, duplicateIds],
   );
   const filterHosts = useMemo(
     () => [...new Set(snapshot.listings.map(listingHost))],
@@ -199,6 +217,8 @@ export function HouseholdWorkspace({
           filters={filters}
           hiddenIds={hidden}
           hiddenCount={hiddenCount}
+          duplicateCount={duplicateCount}
+          alsoOn={alsoOn}
           onHide={hide}
           onUnhide={unhide}
           onFiltersChange={setFilters}

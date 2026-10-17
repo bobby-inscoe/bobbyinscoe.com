@@ -4,7 +4,10 @@ import { FavoriteStar } from '@/features/house-scanner/components/favorite-star'
 import { HideButton } from '@/features/house-scanner/components/hide-button';
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import { ListingPhoto } from '@/features/house-scanner/components/listing-photo';
-import { KeyFacts } from '@/features/house-scanner/components/listing-summary';
+import {
+  AlsoOn,
+  KeyFacts,
+} from '@/features/house-scanner/components/listing-summary';
 import type { Listing } from '@/features/house-scanner/types/contracts';
 import { formatPrice } from '@/features/house-scanner/utils/format';
 
@@ -13,6 +16,7 @@ export function PinCard({
   listing,
   favorite,
   hidden,
+  alsoOn,
   onFavorite,
   onToggleHidden,
   onClose,
@@ -22,6 +26,7 @@ export function PinCard({
   // The member's own favorite of this home.
   favorite: { mine: boolean; canSave: boolean; busy: boolean };
   hidden: boolean;
+  alsoOn?: string[];
   onFavorite: (listingId: string) => void;
   onToggleHidden: (listingId: string) => void;
   onClose: () => void;
@@ -52,6 +57,7 @@ export function PinCard({
         {listing.conflicts.includes('askingPriceSek') && ' (disputed)'}
       </Text>
       <KeyFacts listing={listing} />
+      <AlsoOn sites={alsoOn} />
       <Group gap="xs">
         <Button
           component="a"

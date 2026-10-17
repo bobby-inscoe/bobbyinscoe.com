@@ -232,14 +232,6 @@ export function matchListing(
     (f.status === 'sold' || f.status === 'withdrawn')
   )
     excluded.push('No longer available');
-  if (!listing.evidence.some((e) => e.subject === 'transit'))
-    caveats.push('Transit not checked');
-  if (
-    !listing.evidence.some(
-      (e) => e.subject === 'nearby_nature' || e.subject === 'nature_access',
-    )
-  )
-    caveats.push('Nature access not checked');
   if (excluded.length)
     return { section: 'outside', reasons: excluded, caveats, missing: [] };
   if (missing.length) {

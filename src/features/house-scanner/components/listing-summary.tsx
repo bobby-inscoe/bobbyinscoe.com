@@ -64,6 +64,16 @@ export function KeyFacts({ listing }: { listing: Listing }) {
   );
 }
 
+/** Names the other sites that carry the same home, when the list has folded their copies into this one. */
+export function AlsoOn({ sites }: { sites?: string[] }) {
+  if (!sites?.length) return null;
+  return (
+    <Text size="sm" c="dimmed">
+      Also on {sites.join(', ')}
+    </Text>
+  );
+}
+
 export function FactsLine({ listing }: { listing: Listing }) {
   const estimated = estimatedPositionLabel(listing.coordinates);
   return (
