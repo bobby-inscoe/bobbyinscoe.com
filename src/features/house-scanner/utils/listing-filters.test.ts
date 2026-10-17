@@ -158,3 +158,22 @@ describe('applyListingFilters', () => {
     ).toBe(2);
   });
 });
+
+describe('lift and glazed filters', () => {
+  it.each([
+    ['liftOnly', 'lift'],
+    ['glazedOnly', 'glazed'],
+  ] as const)(
+    '%s keeps only homes where %s is known true and not disputed',
+    (key, fact) => {
+      expect(passes(home({ [fact]: true }), { [key]: true })).toBe(true);
+      expect(passes(home({ [fact]: false }), { [key]: true })).toBe(false);
+      expect(passes(home({ [fact]: null }), { [key]: true })).toBe(false);
+      expect(
+        passes(home({ [fact]: true }, { conflicts: [fact] }), { [key]: true }),
+      ).toBe(false);
+      expect(passes(home({ [fact]: false }), { [key]: false })).toBe(true);
+      expect(activeFilterCount({ ...emptyFilters, [key]: true })).toBe(1);
+    },
+  );
+});

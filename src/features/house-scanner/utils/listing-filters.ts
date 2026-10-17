@@ -13,6 +13,8 @@ export interface ListingFilters {
   host: string;
   outdoorOnly: boolean;
   aboveGroundOnly: boolean;
+  liftOnly: boolean;
+  glazedOnly: boolean;
   notOnMapOnly: boolean;
   includeUnknown: boolean;
 }
@@ -26,6 +28,8 @@ export const emptyFilters: ListingFilters = {
   host: ALL_HOSTS,
   outdoorOnly: false,
   aboveGroundOnly: false,
+  liftOnly: false,
+  glazedOnly: false,
   notOnMapOnly: false,
   includeUnknown: true,
 };
@@ -52,6 +56,8 @@ export function activeFilterCount(filters: ListingFilters): number {
     filters.host !== ALL_HOSTS,
     filters.outdoorOnly,
     filters.aboveGroundOnly,
+    filters.liftOnly,
+    filters.glazedOnly,
     filters.notOnMapOnly,
   ].filter(Boolean).length;
 }
@@ -95,6 +101,10 @@ export function applyListingFilters(
         facts.outdoor === 'terrace' ||
         facts.outdoor === 'both') &&
       (!filters.aboveGroundOnly || facts.groundFloor === false) &&
+      (!filters.liftOnly ||
+        (facts.lift === true && !conflicts.includes('lift'))) &&
+      (!filters.glazedOnly ||
+        (facts.glazed === true && !conflicts.includes('glazed'))) &&
       (!filters.notOnMapOnly || !hasPin(listing.coordinates))
     );
   });

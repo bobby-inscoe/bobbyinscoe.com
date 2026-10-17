@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { SYNTHETIC_SNAPSHOT } from '@/features/house-scanner/mock/synthetic-household';
 import type { Listing } from '@/features/house-scanner/types/contracts';
-import { matchListing } from '@/features/house-scanner/utils/match-listing';
+import {
+  matchListing,
+  reasonChips,
+} from '@/features/house-scanner/utils/match-listing';
 
 const criteria = SYNTHETIC_SNAPSHOT.profiles[0].criteria;
 const original = SYNTHETIC_SNAPSHOT.listings[0];
@@ -137,5 +140,47 @@ describe('buyer matching under incomplete evidence', () => {
       ]),
     );
     expect(result.section).toBe('preferred');
+  });
+});
+
+describe('reason chips', () => {
+  const chips = (
+    facts: Partial<Listing['facts']>,
+    changes?: Partial<Listing>,
+  ) => reasonChips(home(facts, changes), SYNTHETIC_SNAPSHOT);
+  it('lists known facts in a fixed order and stops at three', () => {
+    expect(chips({}).facts).toEqual(['Balcony', 'Lift', 'Above ground floor']);
+    expect(
+      chips({ outdoor: 'both', lift: false, groundFloor: true }).facts,
+    ).toEqual(['Balcony and terrace', 'Glazed']);
+    expect(chips({ outdoor: 'terrace' }).facts[0]).toBe('Terrace');
+  });
+  it('leaves out unknown, false and disputed facts', () => {
+    expect(
+      chips({ outdoor: null, lift: null, groundFloor: null, glazed: null })
+        .facts,
+    ).toEqual([]);
+    expect(
+      chips({ outdoor: 'none', lift: false, groundFloor: true, glazed: false })
+        .facts,
+    ).toEqual([]);
+    expect(
+      chips({}, { conflicts: ['outdoor', 'lift', 'glazed'] }).facts,
+    ).toEqual(['Above ground floor']);
+  });
+  it('names the first listing-specific caveat and skips the ones nearly every home has', () => {
+    expect(chips({}).caveat).toBeNull();
+    expect(chips({ baseFeeSek: 5001 }).caveat).toBe('Fee above reference');
+    expect(chips({ baseFeeSek: 4500, mandatoryMonthlySek: 600 }).caveat).toBe(
+      'Monthly total above reference',
+    );
+    expect(chips({ liftServesHome: false, stepFree: false }).caveat).toBe(
+      'Lift not to the home',
+    );
+    expect(chips({ stepFree: false }).caveat).toBe('Not step-free');
+    expect(chips({ glazed: false }).caveat).toBe('Unglazed outdoor space');
+    expect(chips({ glazed: false, largePrivateTerrace: true }).caveat).toBe(
+      'Large unglazed terrace',
+    );
   });
 });

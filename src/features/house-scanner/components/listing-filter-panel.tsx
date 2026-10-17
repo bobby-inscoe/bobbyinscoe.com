@@ -102,6 +102,20 @@ export function ListingFilterPanel({
             }
           />
           <Checkbox
+            label="Lift only"
+            checked={filters.liftOnly}
+            onChange={(event) =>
+              onChange({ ...filters, liftOnly: event.currentTarget.checked })
+            }
+          />
+          <Checkbox
+            label="Glazed only"
+            checked={filters.glazedOnly}
+            onChange={(event) =>
+              onChange({ ...filters, glazedOnly: event.currentTarget.checked })
+            }
+          />
+          <Checkbox
             label="Not on the map only"
             checked={filters.notOnMapOnly}
             onChange={(event) =>

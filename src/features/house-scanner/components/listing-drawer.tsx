@@ -9,6 +9,7 @@ import {
   MatchLines,
   OriginalListingButton,
   PriceLine,
+  ReasonChips,
 } from '@/features/house-scanner/components/listing-summary';
 import type { ListingNotesController } from '@/features/house-scanner/hooks/use-listing-notes';
 import type {
@@ -61,6 +62,7 @@ export function ListingDrawer({
           <ListingPhoto listing={listing} />
           <PriceLine listing={listing} />
           <FactsLine listing={listing} />
+          <ReasonChips listing={listing} snapshot={snapshot} />
           <MatchLines listing={listing} snapshot={snapshot} details />
           <Group>
             <OriginalListingButton listing={listing} />

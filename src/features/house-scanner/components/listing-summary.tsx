@@ -1,4 +1,4 @@
-import { Button, Stack, Text } from '@mantine/core';
+import { Badge, Button, Group, Stack, Text } from '@mantine/core';
 
 import type {
   Listing,
@@ -7,6 +7,7 @@ import type {
 import { formatPrice } from '@/features/house-scanner/utils/format';
 import {
   listingMatches,
+  reasonChips,
   SECTION_LABELS,
 } from '@/features/house-scanner/utils/match-listing';
 
@@ -50,6 +51,32 @@ export function FactsLine({ listing }: { listing: Listing }) {
       {listing.facts.propertyType ?? 'Type unknown'}
       {listing.conflicts.includes('propertyType') && ' (disputed)'}
     </Text>
+  );
+}
+
+// Plain facts about the home, and at most one caveat. No score; they only say what is known.
+export function ReasonChips({
+  listing,
+  snapshot,
+}: {
+  listing: Listing;
+  snapshot: Snapshot;
+}) {
+  const { facts, caveat } = reasonChips(listing, snapshot);
+  if (!facts.length && !caveat) return null;
+  return (
+    <Group gap={4}>
+      {facts.map((chip) => (
+        <Badge key={chip} variant="light" tt="none">
+          {chip}
+        </Badge>
+      ))}
+      {caveat && (
+        <Badge variant="light" color="gray" tt="none">
+          {caveat}
+        </Badge>
+      )}
+    </Group>
   );
 }
 

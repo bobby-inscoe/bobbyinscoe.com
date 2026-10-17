@@ -340,6 +340,28 @@ test('personal filters change the list and the map together, and Clear restores 
   ).toBeVisible();
 });
 
+test('Lift only and Glazed only narrow the list and count as active filters', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Lift only' }).check();
+  await expect(page.getByText('2 active')).toHaveCount(0);
+  await expect(page.getByText('1 active')).toBeVisible();
+  const lifted = await page.getByRole('article').count();
+  expect(lifted).toBeLessThan(5);
+  await page.getByRole('checkbox', { name: 'Glazed only' }).check();
+  await expect(page.getByText('2 active')).toBeVisible();
+  expect(await page.getByRole('article').count()).toBeLessThanOrEqual(lifted);
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(page.getByRole('article')).toHaveCount(5);
+  await expect(
+    page
+      .getByRole('article', { name: 'Example balcony home', exact: true })
+      .getByText('Balcony', { exact: true }),
+  ).toBeVisible();
+});
+
 test('unknown prices are kept or hidden by the checkbox, and an empty result says filters are active', async ({
   page,
 }) => {
