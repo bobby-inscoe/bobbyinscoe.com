@@ -1,4 +1,3 @@
-import type { MapPoint } from '@/features/house-scanner/components/household-map';
 import type {
   Listing,
   Snapshot,
@@ -13,6 +12,18 @@ import { listingMatches } from '@/features/house-scanner/utils/match-listing';
 
 // Homes without a usable position share one marker here, in the water off Gothenburg.
 export const UNLOCATED_POSITION = { latitude: 57.69, longitude: 11.78 };
+
+export interface MapPoint {
+  id: string;
+  label: string;
+  markerText: string;
+  coordinates: Pick<
+    NonNullable<Listing['coordinates']>,
+    'longitude' | 'latitude'
+  >;
+  // Homes with no usable position share one marker, drawn differently.
+  unlocated?: boolean;
+}
 
 interface ListingScope {
   tab: WorkspaceTab;

@@ -531,3 +531,28 @@ test('See on map opens that home on the map, and unlocated homes share one marke
     }),
   ).toBeVisible();
 });
+
+test('pressing a map marker keeps keyboard focus on it and marks it pressed', async ({
+  page,
+}) => {
+  await page.route('https://tiles.openfreemap.org/styles/liberty', (route) =>
+    route.fulfill({ json: LOCAL_STREET_STYLE }),
+  );
+  await routeImagery(page);
+  await openDemo(page);
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Min living area (m²)' }).fill('90');
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  const marker = page.getByRole('button', { name: /^Example detached home:/ });
+  await expect(marker).toHaveAttribute('aria-pressed', 'false');
+  await marker.focus();
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByRole('article', {
+      name: 'Selected home: Example detached home',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(marker).toBeFocused();
+  await expect(marker).toHaveAttribute('aria-pressed', 'true');
+});

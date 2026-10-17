@@ -11,7 +11,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import styles from '@/features/house-scanner/components/household-map.module.css';
-import type { Listing } from '@/features/house-scanner/types/contracts';
+import type { MapPoint } from '@/features/house-scanner/utils/listing-view';
 
 // MapLibre resolves its default worker beside import.meta.url, which Vite rewrites.
 setWorkerUrl(workerUrl);
@@ -34,17 +34,21 @@ const SATELLITE_STYLE: StyleSpecification = {
   layers: [{ id: 'imagery', type: 'raster', source: 'imagery' }],
 };
 
-export interface MapPoint {
-  id: string;
-  label: string;
-  markerText: string;
-  coordinates: Pick<
-    NonNullable<Listing['coordinates']>,
-    'longitude' | 'latitude'
-  >;
-  // Homes with no usable position share one marker, drawn differently.
-  unlocated?: boolean;
+interface MarkerEntry {
+  marker: Marker;
+  button: HTMLButtonElement;
+  // The homes sharing this marker.
+  ids: string[];
 }
+
+function markPressed(entries: MarkerEntry[], selectedId: string | null) {
+  for (const { button, ids } of entries)
+    button.setAttribute(
+      'aria-pressed',
+      String(selectedId !== null && ids.includes(selectedId)),
+    );
+}
+
 interface HouseholdMapProps {
   points: MapPoint[];
   selectedId: string | null;
@@ -70,6 +74,9 @@ export function HouseholdMap({
   const [stack, setStack] = useState<string[]>([]);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const markers = useRef<MarkerEntry[]>([]);
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
   const satelliteRef = useRef(satellite);
   satelliteRef.current = satellite;
   const appliedSatellite = useRef(satellite);
@@ -136,7 +143,7 @@ export function HouseholdMap({
       const key = `${point.coordinates.longitude},${point.coordinates.latitude}`;
       groups.set(key, [...(groups.get(key) ?? []), point]);
     }
-    const markers = [...groups.values()].map((group) => {
+    const created = [...groups.values()].map((group) => {
       const button = document.createElement('button');
       button.type = 'button';
       const unlocated = group[0].unlocated === true;
@@ -154,25 +161,29 @@ export function HouseholdMap({
             ? group[0].label
             : `${group.length} homes at this point`,
       );
-      button.setAttribute(
-        'aria-pressed',
-        String(group.some((point) => point.id === selectedId)),
-      );
       button.addEventListener('click', () => {
         setStack(group.map((point) => point.id));
         onSelectRef.current(group[0].id);
       });
-      return new Marker({ element: button })
+      const marker = new Marker({ element: button })
         .setLngLat([
           group[0].coordinates.longitude,
           group[0].coordinates.latitude,
         ])
         .addTo(instance);
+      return { marker, button, ids: group.map((point) => point.id) };
     });
+    markers.current = created;
+    markPressed(created, selectedIdRef.current);
     return () => {
-      for (const marker of markers) marker.remove();
+      for (const { marker } of created) marker.remove();
+      markers.current = [];
     };
-  }, [points, selectedId, loaded, error]);
+  }, [points, loaded, error]);
+  // Only the pressed state changes on selection, so a focused marker stays focused.
+  useEffect(() => {
+    markPressed(markers.current, selectedId);
+  }, [selectedId]);
   useEffect(() => {
     const point = points.find((candidate) => candidate.id === selectedId);
     if (point && loaded && !error)
