@@ -14,6 +14,7 @@ import {
   type RunMemory,
 } from '@house-scanner-tools/run-memory';
 import type { SourceCapability } from '@house-scanner-tools/source-registry';
+import { finishViewings } from '@house-scanner-tools/viewing-time';
 import type { Observation } from '@/features/house-scanner/types/contracts';
 
 export const USER_AGENT =
@@ -118,6 +119,8 @@ export interface SourceAdapter {
   notCovered: string;
   /** First page of a partition, or why the partition cannot be read. */
   partitionUrl(partition: LivePartitionInput): string | { unsupported: string };
+  /** Set when the search page already carries everything the source can give, so no home page is read. */
+  listOnly?: boolean;
   /** Where a listing's extra facts are read, when that is not the page people open. */
   detailUrl?(observation: Observation): string;
   /** The photo a listing page's facts point to, for a source whose photos sit on an image host. */
@@ -127,6 +130,7 @@ export interface SourceAdapter {
   readSearchPage(html: string, context: ReadContext): PageRead;
   readDetailPage(
     html: string,
+    now: Date,
   ):
     | { kind: 'detail'; facts: DetailFacts }
     | { kind: 'failed'; reason: StopReason };
@@ -137,8 +141,15 @@ function applyDetail(
   adapter: SourceAdapter,
   observation: Observation,
   detail: DetailFacts,
+  now: Date,
 ) {
-  const { latitude, longitude, photoPath: _photoPath, ...facts } = detail;
+  const {
+    latitude,
+    longitude,
+    photoPath: _photoPath,
+    viewings,
+    ...facts
+  } = detail;
   Object.assign(
     observation.facts,
     Object.fromEntries(
@@ -150,6 +161,9 @@ function applyDetail(
   );
   const photo = adapter.photoFor?.(detail, observation.observedAt);
   if (photo) observation.photo = photo;
+  // A page that lists viewings replaces what the search gave; one that lists none leaves it alone.
+  const upcoming = viewings ? finishViewings(viewings, now) : undefined;
+  if (upcoming) observation.viewings = upcoming;
   if (latitude === undefined || longitude === undefined) return;
   observation.coordinates = {
     latitude,
@@ -370,7 +384,7 @@ export async function runCollection(
   // holds a recent read. A failed page leaves that listing's outdoor and glazed
   // unknown and is never remembered; 403, 429 and network errors still stop the
   // whole run.
-  const targets = selectKept(observations);
+  const targets = adapter.listOnly ? [] : selectKept(observations);
   for (const observation of targets) {
     const detailUrl = adapter.detailUrl?.(observation) ?? observation.sourceUrl;
     const url = new URL(detailUrl);
@@ -383,7 +397,7 @@ export async function runCollection(
       : undefined;
     if (cached) {
       const { readAt: _readAt, ...stored } = cached;
-      applyDetail(adapter, observation, stored);
+      applyDetail(adapter, observation, stored, new Date(deps.now()));
       detailCached += 1;
       continue;
     }
@@ -406,13 +420,13 @@ export async function runCollection(
       detailFailed += 1;
       continue;
     }
-    const detail = adapter.readDetailPage(fetched.body);
+    const detail = adapter.readDetailPage(fetched.body, new Date(deps.now()));
     if (detail.kind === 'failed') {
       deps.log({ event: 'detail-failed', status: 200, reason: detail.reason });
       detailFailed += 1;
       continue;
     }
-    applyDetail(adapter, observation, detail.facts);
+    applyDetail(adapter, observation, detail.facts, new Date(deps.now()));
     if (memory)
       memory.details[observation.sourceListingId] = {
         ...detail.facts,

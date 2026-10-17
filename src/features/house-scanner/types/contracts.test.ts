@@ -7,6 +7,7 @@ import {
   type SourcePolicy,
   snapshotSchema,
   sourcePolicySchema,
+  viewingSchema,
 } from '@/features/house-scanner/types/contracts';
 
 const policy: SourcePolicy = {
@@ -130,6 +131,39 @@ describe('optional fields added without a version bump', () => {
     );
     expect(
       snapshotSchema.safeParse({ ...snapshot, hiddenListingIds: many }).success,
+    ).toBe(false);
+  });
+});
+
+describe('viewings', () => {
+  const viewing = {
+    startsAt: '2026-10-24T13:00:00Z',
+    endsAt: '2026-10-24T14:00:00Z',
+  };
+
+  it('accepts a start with or without an end, and nothing else', () => {
+    expect(viewingSchema.safeParse(viewing).success).toBe(true);
+    expect(viewingSchema.safeParse({ ...viewing, endsAt: null }).success).toBe(
+      true,
+    );
+    expect(
+      viewingSchema.safeParse({ startsAt: viewing.startsAt }).success,
+    ).toBe(false);
+    expect(
+      viewingSchema.safeParse({ ...viewing, note: 'Anmäl dig' }).success,
+    ).toBe(false);
+    expect(
+      viewingSchema.safeParse({ ...viewing, startsAt: 'Sat 24 Oct' }).success,
+    ).toBe(false);
+  });
+
+  it('is optional on a policy, defaulting to not allowed', () => {
+    expect(sourcePolicySchema.safeParse(policy).success).toBe(true);
+    expect(
+      sourcePolicySchema.safeParse({ ...policy, viewings: true }).success,
+    ).toBe(true);
+    expect(
+      sourcePolicySchema.safeParse({ ...policy, viewings: 'yes' }).success,
     ).toBe(false);
   });
 });

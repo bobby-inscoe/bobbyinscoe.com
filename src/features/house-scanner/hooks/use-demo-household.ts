@@ -12,9 +12,32 @@ import type {
 } from '@/features/house-scanner/types/contracts';
 import { normalizeManualUrl } from '@/features/house-scanner/utils/manual-url';
 
+const HOUR = 3_600_000;
+// Demo viewings are made relative to now, since a fixed date would be over the day after it was written.
+const BALCONY_HOME = '00000000-0000-4000-8000-000000000010';
+const TERRACE_HOME = '00000000-0000-4000-8000-000000000011';
+function demoViewings(snapshot: Snapshot): Snapshot {
+  const inDays = (days: number) =>
+    new Date(Math.ceil((Date.now() + days * 24 * HOUR) / HOUR) * HOUR);
+  const slot = (days: number, hours = 1) => ({
+    startsAt: inDays(days).toISOString(),
+    endsAt: new Date(inDays(days).getTime() + hours * HOUR).toISOString(),
+  });
+  return {
+    ...snapshot,
+    listings: snapshot.listings.map((listing) =>
+      listing.id === BALCONY_HOME
+        ? { ...listing, viewings: [slot(1), slot(8)] }
+        : listing.id === TERRACE_HOME
+          ? { ...listing, viewings: [slot(3)] }
+          : listing,
+    ),
+  };
+}
+
 export function useDemoHousehold() {
   const [snapshot, setSnapshot] = useState<Snapshot>(() =>
-    structuredClone(SYNTHETIC_SNAPSHOT),
+    demoViewings(structuredClone(SYNTHETIC_SNAPSHOT)),
   );
   const [notes] = useState(createDemoNoteStore);
   async function saveFavorite(listingId: string) {

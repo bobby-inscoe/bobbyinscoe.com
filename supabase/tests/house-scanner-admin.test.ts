@@ -583,6 +583,7 @@ beforeAll(async () => {
     '202610120003_house_scanner_admin.sql',
     '202610170001_house_scanner_hidden.sql',
     '202610170002_house_scanner_snapshot_notes.sql',
+    '202610180001_house_scanner_viewings.sql',
   ])
     await db.exec(
       await readFile(
@@ -1364,10 +1365,27 @@ describe('hs.valid_policy and hs.admin_set_source_policy', () => {
   }
 
   it('covers every key of the schema, so a new key forces a validator update', () => {
-    expect(Object.keys(sourcePolicySchema.shape)).toHaveLength(20);
+    // Twenty required keys and the optional viewings flag.
+    expect(Object.keys(sourcePolicySchema.shape)).toHaveLength(21);
     expect(
       Object.keys(sourcePolicySchema.shape.capabilities.shape),
     ).toHaveLength(7);
+  });
+
+  it('accepts the optional viewings flag as a boolean or left out, and refuses anything else, as the schema does', async () => {
+    for (const viewings of [true, false, undefined]) {
+      const candidate = { ...policy(), viewings };
+      expect(await dbAccepts(candidate)).toBe(true);
+      expect(schemaAccepts(candidate)).toBe(true);
+    }
+    for (const viewings of ['yes', 1, null, [], {}]) {
+      const candidate = { ...policy(), viewings };
+      expect(await dbAccepts(candidate)).toBe(false);
+      expect(schemaAccepts(candidate)).toBe(false);
+    }
+    expect(await dbAccepts({ ...policy(), viewings: true, extra: 1 })).toBe(
+      false,
+    );
   });
 
   it('accepts the fixture and every status', async () => {

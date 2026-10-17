@@ -15,6 +15,9 @@ export const STADSHEM_SOURCE_ID = 'stadshem';
 export const STADSHEM_ORIGIN = 'https://stadshem.se';
 // Google Cloud Storage, shared by many sites; the bucket is in each image's path.
 export const STADSHEM_IMAGE_ORIGIN = 'https://storage.googleapis.com';
+export const LUNDIN_SOURCE_ID = 'lundin';
+// Photos come from the same host as the listing pages.
+export const LUNDIN_ORIGIN = 'https://www.lundin.se';
 export const ERIK_OLSSON_SOURCE_ID = 'erik-olsson';
 export const ERIK_OLSSON_ORIGIN = 'https://www.erikolsson.se';
 // Cloudflare Images, shared by many sites; the account is in each image's path.
@@ -29,6 +32,7 @@ export const capabilitySchema = z.strictObject({
     'bjurfors-personal-read',
     'erik-olsson-personal-read',
     'stadshem-personal-read',
+    'lundin-personal-read',
     'none',
   ]),
   nativeNumericFiltersVerified: z.boolean(),
@@ -114,7 +118,8 @@ export function sourceRegistry(): SourceCapability[] {
         // Pending is not approved: the operator sets approval in the database.
         status: 'pending',
         // Revision 2 turned on hotlinked photos from the image host. Revision 3 adds outdoor and glazed. Revision 4 adds groundFloor.
-        revision: 4,
+        revision: 5,
+        viewings: true,
         retentionDays: 14,
         listingOrigins: [BONEO_ORIGIN],
         imageOrigins: [BONEO_IMAGE_ORIGIN],
@@ -155,6 +160,7 @@ export function sourceRegistry(): SourceCapability[] {
             'Outdoor, glazing and floor come from each kept listing page; glazing only from description wording. Only floor 2 or higher (or an explicit ground floor) is a fact; floor 1 stays unknown. Lift and build year are not collected.',
             'Only the first photo is shown, hotlinked from the broker image host. Nothing is copied or stored.',
             'Listing identity and episode rules come from property_id and created_date and are unproven across relistings.',
+            'Viewing times are the full list in the search data (group_viewings, UTC). A viewing can be cancelled between scans.',
             'Known listings cannot be refreshed outside discovery.',
           ],
         },
@@ -167,6 +173,8 @@ export function sourceRegistry(): SourceCapability[] {
       policy: {
         ...common,
         sourceId: BJURFORS_SOURCE_ID,
+        revision: 2,
+        viewings: true,
         // Pending is not approved: the operator sets approval in the database.
         status: 'pending',
         retentionDays: 14,
@@ -212,6 +220,7 @@ export function sourceRegistry(): SourceCapability[] {
             'Upcoming status is inferred from the PreOrder availability value on one page and is unproven.',
             'Only the first photo is shown, hotlinked from the broker host. It loaded without a referrer. Nothing is copied or stored.',
             'Listing identity is the listing page path and the episode never changes, so a relisting of the same home is not told apart.',
+            'Viewing times come from each home page, which is read again at most weekly, so a new viewing can appear late and a cancelled one can linger until then. Times are Stockholm time with no zone, converted here.',
             'Known listings cannot be refreshed outside discovery.',
           ],
         },
@@ -224,6 +233,8 @@ export function sourceRegistry(): SourceCapability[] {
       policy: {
         ...common,
         sourceId: ERIK_OLSSON_SOURCE_ID,
+        revision: 2,
+        viewings: true,
         // Pending is not approved: the operator sets approval in the database.
         status: 'pending',
         retentionDays: 14,
@@ -267,6 +278,7 @@ export function sourceRegistry(): SourceCapability[] {
             'Coordinates come from the broker and are used only when the address is not hidden. They are labelled address-level when the title has a house number; accuracy was not compared with an independent geocoder.',
             "Only the first photo is shown, hotlinked from the broker's Cloudflare Images address (imagedelivery.net, shared by other sites, with no robots.txt). The thumbnail variant loaded as a JPEG of about 39 kB on one sample. Nothing is copied or stored.",
             'Listing identity is the numeric id at the end of the page path and the episode never changes, so a relisting of the same home is not told apart.',
+            'Viewing times are only the next viewing shown on the search card, as Swedish text with no year; the year is worked out from the weekday and dates that do not fit are dropped.',
             'Known listings cannot be refreshed outside discovery.',
           ],
         },
@@ -279,6 +291,8 @@ export function sourceRegistry(): SourceCapability[] {
       policy: {
         ...common,
         sourceId: STADSHEM_SOURCE_ID,
+        revision: 2,
+        viewings: true,
         // Pending is not approved: the operator sets approval in the database.
         status: 'pending',
         retentionDays: 14,
@@ -320,11 +334,63 @@ export function sourceRegistry(): SourceCapability[] {
             'Coordinates come from the list and are labelled address-level when the title has a house number. They were not compared with an independent geocoder.',
             'Only the primary photo is shown, hotlinked from Google Cloud Storage (storage.googleapis.com, shared by other sites). Nothing is copied or stored.',
             'Listing identity is the estate id and the episode never changes, so a relisting of the same home is not told apart.',
+            'Viewing times are only the next viewing (nextViewing) in the list, in Stockholm time with no zone, converted here. Set on 39 of 94 homes on 17 October.',
             'Known listings cannot be refreshed outside discovery.',
           ],
         },
       },
       executor: 'stadshem-personal-read',
+      nativeNumericFiltersVerified: false,
+      geographicPartitioning: 'unverified',
+    }),
+    capabilitySchema.parse({
+      policy: {
+        ...common,
+        sourceId: LUNDIN_SOURCE_ID,
+        // Pending is not approved: the operator sets approval in the database.
+        status: 'pending',
+        retentionDays: 14,
+        listingOrigins: [LUNDIN_ORIGIN],
+        imageOrigins: [LUNDIN_ORIGIN],
+        imageDisplay: true,
+        imageHotlink: true,
+        automatedCollection: false,
+        privateDisplay: false,
+        rightsBasis:
+          "Permission unresolved. The household owner chose to read the broker's public list for personal use at their own judgment. The site publishes only a privacy policy and no terms of use, and its robots.txt disallows file paths only. Technical access is not a reuse license.",
+        allowedFactFields: [
+          'propertyType',
+          'tenure',
+          'purchase',
+          'livingAreaM2',
+          'rooms',
+          'askingPriceSek',
+          'municipality',
+          'baseFeeSek',
+          'status',
+        ],
+        capabilities: {
+          discovery: true,
+          knownListingRefresh: false,
+          unknownPrice: false,
+          upcoming: false,
+          pagination: false,
+          resultCap: null,
+          coverageGaps: [
+            'Permission is unresolved and the source is not approved.',
+            'Göteborg and Mölndal are supported. The list covers every place the broker sells in; the municipality is worked out from the city and district fields, and homes in other places or in unrecognised districts are skipped.',
+            'The data is the JSON list that the site page loads (api/list). It is not a documented public API and can change without notice.',
+            'The whole list is one request, so no home page is read: floor, lift, balcony and glazing stay unknown. Viewing times are not in the list.',
+            'Coming-soon homes are read too and marked upcoming; many have no asking price. Sold homes, plots and new production are skipped.',
+            'The list has no coordinates, so a position is estimated from the street address for the homes that are kept.',
+            "Only the primary photo is shown, hotlinked from the broker's own image address. Nothing is copied or stored.",
+            'Listing identity is the object id and the episode never changes, so a relisting of the same home is not told apart.',
+            'Viewing times are not published in the list; booking goes through a third-party page that is not read.',
+            'Known listings cannot be refreshed outside discovery.',
+          ],
+        },
+      },
+      executor: 'lundin-personal-read',
       nativeNumericFiltersVerified: false,
       geographicPartitioning: 'unverified',
     }),

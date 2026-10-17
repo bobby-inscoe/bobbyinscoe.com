@@ -13,6 +13,7 @@ import {
   PriceLine,
   ReasonChips,
 } from '@/features/house-scanner/components/listing-summary';
+import { NextViewing } from '@/features/house-scanner/components/viewing-list';
 import type { ListingNotesController } from '@/features/house-scanner/hooks/use-listing-notes';
 import type {
   Listing,
@@ -97,6 +98,7 @@ export const ListingCard = memo(function ListingCard({
       </Title>
       <FactsLine listing={listing} />
       <AlsoOn sites={alsoOn} />
+      <NextViewing listing={listing} />
       <ReasonChips listing={listing} snapshot={snapshot} />
       {(showStatus || listing.origin === 'manual' || stale || hidden) && (
         <Group gap="xs">

@@ -47,6 +47,8 @@ export function assertObservationAllowed(
     )
       throw new Error('Observation includes an unapproved fact field.');
   }
+  if (observation.viewings?.length && policy.viewings !== true)
+    throw new Error('Viewing times are not approved for this source.');
   if (
     observation.photo &&
     (!policy.imageDisplay ||

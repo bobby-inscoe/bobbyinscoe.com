@@ -48,6 +48,7 @@ export function assertAdapterOutput(
       policy.imageOrigins.includes(new URL(observation.photo.url).origin));
   if (
     !photoAllowed ||
+    (observation.viewings?.length && policy.viewings !== true) ||
     observation.evidence.length > 0 ||
     !policy.listingOrigins.includes(new URL(observation.sourceUrl).origin)
   )

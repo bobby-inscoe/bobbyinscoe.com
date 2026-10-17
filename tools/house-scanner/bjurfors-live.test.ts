@@ -559,7 +559,8 @@ describe('Bjurfors registry entry and run', () => {
     expect(policy).toMatchObject({
       sourceId: 'bjurfors',
       status: 'pending',
-      revision: 1,
+      revision: 2,
+      viewings: true,
       retentionDays: 14,
       automatedCollection: false,
       privateDisplay: false,
@@ -587,7 +588,7 @@ describe('Bjurfors registry entry and run', () => {
     expect(approved).toMatchObject({
       sourceId: 'bjurfors',
       status: 'approved',
-      revision: 1,
+      revision: 2,
       automatedCollection: true,
       privateDisplay: true,
       imageOrigins: ['https://www.bjurfors.se'],
@@ -873,7 +874,7 @@ describe('floor rule through both readers', () => {
     },
   );
 
-  it('allows groundFloor in both source policies and revises Boneo to 4', () => {
+  it('allows groundFloor in both source policies and revises Boneo to 5', () => {
     for (const id of ['boneo', 'bjurfors']) {
       const entry = sourceRegistry().find((e) => e.policy.sourceId === id);
       expect(entry?.policy.allowedFactFields).toContain('groundFloor');
@@ -881,6 +882,67 @@ describe('floor rule through both readers', () => {
     expect(
       sourceRegistry().find((e) => e.policy.sourceId === 'boneo')?.policy
         .revision,
-    ).toBe(4);
+    ).toBe(5);
+  });
+});
+
+describe('Bjurfors viewing times in a run', () => {
+  // The fake clock is 9 October 2025, so the first time is ahead of it and the second is behind it.
+  const block = `<div id="visning"><ol>${[
+    '2025-10-11T10:00',
+    '2025-10-01T10:00',
+  ]
+    .map(
+      (start) =>
+        `<li><time datetime="${start}">x</time><time datetime="PT1H">y</time></li>`,
+    )
+    .join('')}</ol></div>`;
+  const page = fixture('detail-full.html').replace(
+    '</body>',
+    `${block}</body>`,
+  );
+  const coming = [
+    {
+      startsAt: '2025-10-11T08:00:00.000Z',
+      endsAt: '2025-10-11T09:00:00.000Z',
+    },
+  ];
+
+  it('puts the future viewings on the observation and keeps them in the run memory', async () => {
+    const memory = { ...emptyMemory(), details: {} } as RunMemory;
+    const { impl } = fakeFetch(fixtureSite(page));
+    const result = await run(goteborg, deps(impl), keepAll, memory);
+    expect(result.observations.every((o) => o.viewings?.length === 1)).toBe(
+      true,
+    );
+    expect(result.observations[0].viewings).toEqual(coming);
+    expect(Object.values(memory.details)[0].viewings).toEqual(coming);
+  });
+
+  it('applies remembered viewings without a request, and drops those that have passed', async () => {
+    const memory = { ...emptyMemory(), details: {} } as RunMemory;
+    await run(
+      goteborg,
+      deps(fakeFetch(fixtureSite(page)).impl),
+      keepAll,
+      memory,
+    );
+    const again = fakeFetch(fixtureSite(page));
+    for (const entry of Object.values(memory.details))
+      entry.readAt = new Date(
+        Date.parse(entry.readAt) - 86_400_000,
+      ).toISOString();
+    const cached = await run(goteborg, deps(again.impl), keepAll, memory);
+    expect(detailCalls(again.calls)).toHaveLength(0);
+    expect(cached.observations[0].viewings).toEqual(coming);
+    for (const entry of Object.values(memory.details))
+      entry.viewings = [{ startsAt: '2025-10-01T08:00:00.000Z', endsAt: null }];
+    const stale = await run(
+      goteborg,
+      deps(fakeFetch(fixtureSite(page)).impl),
+      keepAll,
+      memory,
+    );
+    expect(stale.observations[0]).not.toHaveProperty('viewings');
   });
 });

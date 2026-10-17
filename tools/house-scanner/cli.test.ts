@@ -202,7 +202,7 @@ it('prints the SQL that approves the Boneo policy without any network or file ac
   expect(Date.parse(policy.reviewDueAt)).toBeGreaterThan(Date.now());
 });
 
-it('prints the SQL that approves the Bjurfors policy at revision 1', () => {
+it('prints the SQL that approves the Bjurfors policy at revision 2', () => {
   const result = runPrinter('--source=bjurfors', `--household=${HOUSEHOLD}`);
   expect(result.status).toBe(0);
   const match =
@@ -213,7 +213,7 @@ it('prints the SQL that approves the Bjurfors policy at revision 1', () => {
   const policy = JSON.parse((match?.[2] ?? '').replaceAll("''", "'"));
   expect(policy).toMatchObject({
     sourceId: 'bjurfors',
-    revision: 1,
+    revision: 2,
     status: 'approved',
     automatedCollection: true,
     privateDisplay: true,
