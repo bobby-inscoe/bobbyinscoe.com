@@ -1,5 +1,6 @@
-import { Stack, Text, Title } from '@mantine/core';
+import { Flex, Stack, Text, Title } from '@mantine/core';
 
+import { CriteriaHelp } from '@/features/house-scanner/components/criteria-help';
 import { ProfileEditor } from '@/features/house-scanner/components/profile-editor';
 import type { Snapshot } from '@/features/house-scanner/types/contracts';
 import type { HouseholdActions } from '@/features/house-scanner/types/household';
@@ -20,7 +21,10 @@ export function SettingsPanel({
   const member = snapshot.members.find((entry) => entry.userId === userId);
   return (
     <Stack maw="48rem">
-      <Title order={2}>Search criteria</Title>
+      <Flex gap="sm" justify="space-between" align="center" wrap="wrap">
+        <Title order={2}>Search criteria</Title>
+        <CriteriaHelp />
+      </Flex>
       {synthetic && (
         <Text size="sm" c="dimmed">
           These criteria are fictional. Edits affect this demo only.

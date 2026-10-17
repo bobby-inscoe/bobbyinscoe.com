@@ -208,7 +208,7 @@ export function useHouseholdSession() {
           fail('Could not load your household. Retry or sign out.');
       }
     },
-    [client, fail, refresh],
+    [client, fail],
   );
   useEffect(() => {
     mounted.current = true;

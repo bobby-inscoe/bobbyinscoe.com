@@ -1,5 +1,7 @@
 import { Button, CloseButton, Group, Text, Title } from '@mantine/core';
 
+import { FavoriteStar } from '@/features/house-scanner/components/favorite-star';
+import { HideButton } from '@/features/house-scanner/components/hide-button';
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import { ListingPhoto } from '@/features/house-scanner/components/listing-photo';
 import type { Listing } from '@/features/house-scanner/types/contracts';
@@ -8,10 +10,19 @@ import { formatPrice } from '@/features/house-scanner/utils/format';
 // A compact card for the home chosen on the map: photo, headline facts and the way to the listing.
 export function PinCard({
   listing,
+  favorite,
+  hidden,
+  onFavorite,
+  onToggleHidden,
   onClose,
   onDetails,
 }: {
   listing: Listing;
+  // The member's own favorite of this home.
+  favorite: { mine: boolean; canSave: boolean; busy: boolean };
+  hidden: boolean;
+  onFavorite: (listingId: string) => void;
+  onToggleHidden: (listingId: string) => void;
   onClose: () => void;
   onDetails: () => void;
 }) {
@@ -26,7 +37,15 @@ export function PinCard({
         </Title>
         <CloseButton aria-label="Close selected home" onClick={onClose} />
       </Group>
-      <ListingPhoto listing={listing} />
+      <div className={styles.photoWrap}>
+        <ListingPhoto listing={listing} />
+        <HideButton
+          listingId={listing.id}
+          hidden={hidden}
+          onToggle={onToggleHidden}
+        />
+        <FavoriteStar {...favorite} onToggle={() => onFavorite(listing.id)} />
+      </div>
       <Text fw={600}>
         {formatPrice(listing.facts.askingPriceSek)}
         {listing.conflicts.includes('askingPriceSek') && ' (disputed)'}

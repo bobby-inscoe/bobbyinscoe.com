@@ -8,8 +8,8 @@ export const ALL_HOSTS = 'all';
 export type HiddenView = 'not-hidden' | 'hidden-only' | 'both';
 
 export interface ListingFilters {
-  minPriceMsek: number | null;
-  maxPriceMsek: number | null;
+  minPriceSek: number | null;
+  maxPriceSek: number | null;
   minAreaM2: number | null;
   maxAreaM2: number | null;
   minRooms: number | null;
@@ -24,8 +24,8 @@ export interface ListingFilters {
 }
 
 export const emptyFilters: ListingFilters = {
-  minPriceMsek: null,
-  maxPriceMsek: null,
+  minPriceSek: null,
+  maxPriceSek: null,
   minAreaM2: null,
   maxAreaM2: null,
   minRooms: null,
@@ -54,8 +54,7 @@ export function listingHost(listing: Listing): string {
 
 export function activeFilterCount(filters: ListingFilters): number {
   return [
-    clean(filters.minPriceMsek) !== null ||
-      clean(filters.maxPriceMsek) !== null,
+    clean(filters.minPriceSek) !== null || clean(filters.maxPriceSek) !== null,
     clean(filters.minAreaM2) !== null || clean(filters.maxAreaM2) !== null,
     clean(filters.minRooms) !== null,
     filters.host !== ALL_HOSTS,
@@ -73,8 +72,8 @@ export function applyListingFilters(
   filters: ListingFilters,
   hiddenIds: ReadonlySet<string> = new Set(),
 ): Listing[] {
-  const minPrice = clean(filters.minPriceMsek);
-  const maxPrice = clean(filters.maxPriceMsek);
+  const minPrice = clean(filters.minPriceSek);
+  const maxPrice = clean(filters.maxPriceSek);
   const minArea = clean(filters.minAreaM2);
   const maxArea = clean(filters.maxAreaM2);
   const minRooms = clean(filters.minRooms);
@@ -91,11 +90,9 @@ export function applyListingFilters(
   }
   return listings.filter((listing) => {
     const { facts, conflicts } = listing;
-    const price =
-      facts.askingPriceSek === null ? null : facts.askingPriceSek / 1_000_000;
     return (
       inRange(
-        price,
+        facts.askingPriceSek,
         minPrice,
         maxPrice,
         conflicts.includes('askingPriceSek'),

@@ -22,6 +22,16 @@ async function openDemo(page: import('@playwright/test').Page) {
   ).toBeVisible();
 }
 
+// Selects in this app are Mantine comboboxes: open one, then pick an option from its list.
+async function choose(
+  page: import('@playwright/test').Page,
+  name: string,
+  option: string,
+) {
+  await page.getByRole('combobox', { name }).click();
+  await page.getByRole('option', { name: option, exact: true }).click();
+}
+
 test('private access is closed by default and demo state leaves no browser storage', async ({
   page,
 }) => {
@@ -322,7 +332,7 @@ test('personal filters change the list and the map together, and Clear restores 
     'aria-controls',
     'listing-filters',
   );
-  await page.getByRole('textbox', { name: 'Min living area (m²)' }).fill('90');
+  await choose(page, 'Min living area (m²)', '90 m²');
   await expect(page.getByText('1 homes', { exact: false })).toBeVisible();
   await expect(page.getByText('Showing 1 of 5 homes')).toBeVisible();
   await expect(page.getByText('1 active')).toBeVisible();
@@ -430,7 +440,7 @@ test('a hidden home keeps a dimmed, selectable pin when hidden homes are shown',
   await routeImagery(page);
   await openDemo(page);
   await page.getByRole('button', { name: 'Filters', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Min living area (m²)' }).fill('90');
+  await choose(page, 'Min living area (m²)', '90 m²');
   await page
     .getByRole('article', { name: 'Example detached home', exact: true })
     .getByRole('button', { name: 'Hide this home' })
@@ -455,7 +465,7 @@ test('unknown prices are kept or hidden by the checkbox, and an empty result say
 }) => {
   await openDemo(page);
   await page.getByRole('button', { name: 'Filters', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Max price (MSEK)' }).fill('3');
+  await page.getByRole('textbox', { name: 'Max price (SEK)' }).fill('3000000');
   await expect(page.getByRole('article')).toHaveCount(4);
   await page
     .getByRole('checkbox', {
@@ -463,7 +473,7 @@ test('unknown prices are kept or hidden by the checkbox, and an empty result say
     })
     .uncheck();
   await expect(page.getByRole('article')).toHaveCount(3);
-  await page.getByRole('textbox', { name: 'Max price (MSEK)' }).fill('1');
+  await page.getByRole('textbox', { name: 'Max price (SEK)' }).fill('1000000');
   await expect(page.getByRole('article')).toHaveCount(0);
   await expect(
     page.getByText('Clear the filters', { exact: false }),
@@ -836,7 +846,7 @@ test('pressing a map marker keeps keyboard focus on it and marks it pressed', as
   await routeImagery(page);
   await openDemo(page);
   await page.getByRole('button', { name: 'Filters', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Min living area (m²)' }).fill('90');
+  await choose(page, 'Min living area (m²)', '90 m²');
   await page.getByRole('button', { name: 'Map', exact: true }).click();
   const marker = page.getByRole('button', { name: /^Example detached home:/ });
   await expect(marker).toHaveAttribute('aria-pressed', 'false');
@@ -1148,4 +1158,170 @@ test('the selected home is a bottom sheet on a phone and a floating card on desk
       );
     })
     .toBe(true);
+});
+
+test('living area and rooms are dropdowns, and price fields group their digits as you type', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  const price = page.getByRole('textbox', { name: 'Max price (SEK)' });
+  await price.fill('4500000');
+  await expect(price).toHaveValue('4 500 000');
+  for (const name of [
+    'Min living area (m²)',
+    'Max living area (m²)',
+    'Minimum rooms',
+  ])
+    await expect(page.getByRole('combobox', { name })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Minimum rooms' }).click();
+  await expect(
+    page.getByRole('option', { name: '2,5 rooms', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('option', { name: '3 rooms', exact: true }).click();
+  await expect(page.getByText('Showing', { exact: false })).toBeVisible();
+  await choose(page, 'Minimum rooms', 'Any');
+  await expect(page.getByText('Showing 5 of 5 homes')).toBeVisible();
+});
+
+test('the count and the List/Map toggle sit under the open filters on a phone and beside the controls on a wide screen', async ({
+  page,
+}) => {
+  await openDemo(page);
+  const filtersButton = page.getByRole('button', {
+    name: 'Filters',
+    exact: true,
+  });
+  const toggle = page.getByRole('group', { name: 'View' });
+  const closed = await toggle.boundingBox();
+  await filtersButton.click();
+  const clear = page.getByRole('button', { name: 'Clear filters' });
+  await expect(clear).toBeVisible();
+  const box = async (locator: import('@playwright/test').Locator) => {
+    const found = await locator.boundingBox();
+    if (!found) throw new Error('Element has no box');
+    return found;
+  };
+  if (test.info().project.name === 'narrow') {
+    // The panel opens with an animation, so wait for the toggle to settle below its last button.
+    await expect
+      .poll(async () => (await box(toggle)).y - (await box(clear)).y)
+      .toBeGreaterThan(20);
+    // Fields use the width of the screen instead of floating in half-empty rows.
+    const field = await box(
+      page.getByRole('combobox', { name: 'Minimum rooms' }),
+    );
+    expect(field.width).toBeGreaterThan(200);
+  } else {
+    const [toggleBox, filtersBox] = [
+      await box(toggle),
+      await box(filtersButton),
+    ];
+    expect(Math.abs(toggleBox.y - filtersBox.y)).toBeLessThan(40);
+    // The wide layout does not move the toggle when the filters open.
+    expect(closed && Math.abs(closed.y - toggleBox.y)).toBeLessThan(2);
+  }
+  await expect(
+    page.getByText('5 homes · 3 not located', { exact: false }),
+  ).toBeVisible();
+});
+
+test('Settings uses dropdowns, names the places and the search circle, and explains itself', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  for (const name of [
+    'Minimum living area (m²)',
+    'Maximum living area (m²)',
+    'Minimum rooms',
+    'Radius',
+    'Centre of the search circle',
+    'Places to search',
+  ])
+    await expect(page.getByRole('combobox', { name })).toBeVisible();
+  await expect(page.getByLabel(/longitude|latitude/i)).toHaveCount(0);
+  // The field itself is a thin input inside a box that takes the click.
+  await page.locator('div.mantine-MultiSelect-input').click();
+  await expect(
+    page.getByRole('option', { name: 'Mölndal (coming soon)', exact: true }),
+  ).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Escape');
+  if (test.info().project.name === 'narrow') {
+    const overflow = await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+    const width = await page
+      .getByRole('combobox', { name: 'Minimum living area (m²)' })
+      .evaluate((element) => element.getBoundingClientRect().width);
+    expect(width).toBeGreaterThan(250);
+  }
+  const help = page.getByRole('button', { name: 'How does this work?' });
+  await help.click();
+  const dialog = page.getByRole('dialog', { name: 'How the search works' });
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole('heading', { name: 'How a home is sorted' }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(help).toBeFocused();
+});
+
+test('the details sheet and the map card carry a favorite star, and the map card hides a home until the switch brings it back', async ({
+  page,
+}) => {
+  await page.route('https://tiles.openfreemap.org/styles/liberty', (route) =>
+    route.fulfill({ json: LOCAL_STREET_STYLE }),
+  );
+  await routeImagery(page);
+  await openDemo(page);
+  // Details sheet: the star sits over the photo.
+  await page
+    .getByRole('article', { name: 'Example balcony home', exact: true })
+    .getByRole('button', { name: 'Details', exact: true })
+    .click();
+  const sheet = page.getByRole('dialog', { name: 'Example balcony home' });
+  await sheet.getByRole('button', { name: 'Save favorite' }).click();
+  await expect(
+    sheet.getByRole('button', { name: 'Remove my favorite' }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  // One home left, so its pin stands alone on the map instead of in a stack.
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await choose(page, 'Min living area (m²)', '90 m²');
+  // Map card: star and hide.
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  const marker = page.getByRole('button', { name: /^Example detached home:/ });
+  await marker.click();
+  const card = page.getByRole('article', {
+    name: 'Selected home: Example detached home',
+  });
+  await card.getByRole('button', { name: 'Save favorite' }).click();
+  await expect(
+    card.getByRole('button', { name: 'Remove my favorite' }),
+  ).toBeVisible();
+  await card.getByRole('button', { name: 'Hide this home' }).click();
+  await expect(card).toBeHidden();
+  await expect(marker).toHaveCount(0);
+  // The switch brings hidden homes back onto the map, dimmed, with a way to unhide them.
+  const hiddenSwitch = page.getByRole('switch', { name: 'Show hidden homes' });
+  await hiddenSwitch.check();
+  const pin = page.getByRole('button', {
+    name: /^Example detached home:.*hidden$/,
+  });
+  await expect(pin).toBeVisible();
+  await pin.click();
+  await page
+    .getByRole('article', { name: 'Selected home: Example detached home' })
+    .getByRole('button', { name: 'Unhide this home' })
+    .click();
+  await hiddenSwitch.uncheck();
+  await expect(
+    page.getByRole('button', { name: /^Example detached home:/ }),
+  ).toBeVisible();
 });

@@ -65,6 +65,16 @@
   top: 8px;
   right: 8px;
   z-index: 1;
+  /* The glyph fills most of the circle. */
+  font-size: 1.6rem;
+  line-height: 1;
+}
+/* Left of the star: room for a 44 px star on a touch screen plus a gap. */
+.hide {
+  position: absolute;
+  top: 8px;
+  right: 56px;
+  z-index: 1;
 }
 .photo {
   display: block;
@@ -206,4 +216,37 @@
 .drawerTitle {
   font-family: var(--mantine-font-family-headings);
   font-size: var(--mantine-h4-font-size);
+}
+/* Controls, then the filters, then the count and the List/Map toggle, so the toggle sits under an open filter panel. */
+.toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "controls" "filters" "view";
+  min-width: 0;
+}
+.toolbarControls {
+  grid-area: controls;
+}
+.toolbarFilters {
+  grid-area: filters;
+  min-width: 0;
+}
+.toolbarFilters[data-open="true"] {
+  padding-top: var(--mantine-spacing-sm);
+}
+.toolbarView {
+  grid-area: view;
+  padding-top: var(--mantine-spacing-sm);
+}
+/* On a wide screen the count and toggle share the first row and the filters open full width below it. */
+@media (min-width: 48em) {
+  .toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "controls view" "filters filters";
+    align-items: end;
+  }
+  .toolbarView {
+    padding-top: 0;
+    justify-content: flex-end;
+  }
 }

@@ -2,21 +2,55 @@ import {
   Button,
   Checkbox,
   Group,
+  MultiSelect,
   NumberInput,
   Paper,
+  Select,
+  SimpleGrid,
   Stack,
   Text,
-  TextInput,
   Title,
 } from '@mantine/core';
 import { useState } from 'react';
 
+import { NumberSelect } from '@/features/house-scanner/components/number-select';
 import {
   type Criteria,
   criteriaSchema,
   type SearchProfile,
 } from '@/features/house-scanner/types/contracts';
+import {
+  AREA_OPTIONS,
+  BRUNNSPARKEN,
+  formatArea,
+  formatKm,
+  formatRooms,
+  isNear,
+  MUNICIPALITIES,
+  RADIUS_OPTIONS_KM,
+  ROOM_OPTIONS,
+} from '@/features/house-scanner/utils/criteria-options';
 import { formatDate } from '@/features/house-scanner/utils/format';
+
+// Supported places can be picked; the rest show why they cannot. A saved name that is in neither
+// stays visible, so opening the editor never drops it silently.
+function places(saved: string[]) {
+  const known = new Set(MUNICIPALITIES.map(({ value }) => value));
+  return [
+    ...MUNICIPALITIES.map(({ value, supported }) => ({
+      value,
+      label: supported ? value : `${value} (coming soon)`,
+      disabled: !supported,
+    })),
+    ...saved
+      .filter((value) => !known.has(value))
+      .map((value) => ({
+        value,
+        label: `${value} (not supported)`,
+        disabled: true,
+      })),
+  ];
+}
 
 export function ProfileEditor({
   profile,
@@ -32,13 +66,7 @@ export function ProfileEditor({
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   function numeric(
-    key:
-      | 'minAreaM2'
-      | 'maxAreaM2'
-      | 'minRooms'
-      | 'preferredPriceSek'
-      | 'stretchPriceSek'
-      | 'feeReferenceSek',
+    key: 'preferredPriceSek' | 'stretchPriceSek' | 'feeReferenceSek',
     label: string,
   ) {
     return (
@@ -46,18 +74,14 @@ export function ProfileEditor({
         key={key}
         label={label}
         thousandSeparator=" "
-        value={criteria[key] ?? ''}
+        value={criteria[key]}
         min={0}
+        allowDecimal={false}
         disabled={!canEdit || !onSave}
         onChange={(value) =>
           setCriteria((current) => ({
             ...current,
-            [key]:
-              typeof value === 'number'
-                ? value
-                : key === 'maxAreaM2'
-                  ? null
-                  : 0,
+            [key]: typeof value === 'number' ? value : 0,
           }))
         }
       />
@@ -151,15 +175,47 @@ export function ProfileEditor({
           disabled={!canEdit || !onSave}
           onChange={(event) => setEnabled(event.currentTarget.checked)}
         />
-        <Group grow>
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
           {numeric('preferredPriceSek', 'Preferred budget (SEK)')}
           {numeric('stretchPriceSek', 'Stretch budget (SEK)')}
-        </Group>
-        <Group grow>
-          {numeric('minAreaM2', 'Minimum living area (m²)')}
-          {numeric('maxAreaM2', 'Maximum living area (m², optional)')}
-          {numeric('minRooms', 'Minimum rooms')}
-        </Group>
+        </SimpleGrid>
+        <SimpleGrid cols={{ base: 1, sm: 3 }}>
+          <NumberSelect
+            label="Minimum living area"
+            ariaLabel="Minimum living area (m²)"
+            value={criteria.minAreaM2}
+            onChange={(value) =>
+              value !== null &&
+              setCriteria((current) => ({ ...current, minAreaM2: value }))
+            }
+            options={AREA_OPTIONS}
+            format={formatArea}
+            disabled={!canEdit || !onSave}
+          />
+          <NumberSelect
+            label="Maximum living area"
+            ariaLabel="Maximum living area (m²)"
+            value={criteria.maxAreaM2}
+            onChange={(value) =>
+              setCriteria((current) => ({ ...current, maxAreaM2: value }))
+            }
+            options={AREA_OPTIONS}
+            format={formatArea}
+            anyLabel="No maximum"
+            disabled={!canEdit || !onSave}
+          />
+          <NumberSelect
+            label="Minimum rooms"
+            value={criteria.minRooms}
+            onChange={(value) =>
+              value !== null &&
+              setCriteria((current) => ({ ...current, minRooms: value }))
+            }
+            options={ROOM_OPTIONS}
+            format={formatRooms}
+            disabled={!canEdit || !onSave}
+          />
+        </SimpleGrid>
         <Group>
           <Checkbox
             label="Apartments"
@@ -188,50 +244,72 @@ export function ProfileEditor({
           'Prefer glazed outdoor space (exceptions stay visible)',
         )}
         {numeric('feeReferenceSek', 'Monthly fee reference (SEK, a cost flag)')}
-        <TextInput
-          label="Municipalities (comma separated)"
-          value={criteria.geography.municipalities.join(', ')}
-          disabled={!canEdit || !onSave}
-          onChange={(event) => {
-            const values = event.currentTarget.value
-              .split(',')
-              .map((value) => value.trim());
+        <MultiSelect
+          label="Places to search"
+          description="The areas the collector reads, and the areas a home can be in to count as inside your search."
+          value={criteria.geography.municipalities}
+          onChange={(municipalities) =>
             setCriteria((current) => ({
               ...current,
-              geography: { ...current.geography, municipalities: values },
-            }));
-          }}
+              geography: { ...current.geography, municipalities },
+            }))
+          }
+          data={places(criteria.geography.municipalities)}
+          comboboxProps={{ withinPortal: false }}
+          disabled={!canEdit || !onSave}
         />
-        <Group grow>
-          {([0, 1] as const).map((index) => (
-            <NumberInput
-              key={index}
-              label={
-                index === 0 ? 'Scope centre longitude' : 'Scope centre latitude'
-              }
-              value={criteria.geography.center[index]}
-              disabled={!canEdit || !onSave}
-              onChange={(next) =>
-                setCriteria((current) => {
-                  const center: [number, number] = [
-                    ...current.geography.center,
-                  ];
-                  center[index] = typeof next === 'number' ? next : 0;
-                  return {
-                    ...current,
-                    geography: { ...current.geography, center },
-                  };
-                })
-              }
-            />
-          ))}
-          {nestedNumber(
-            'geography',
-            'radiusKm',
-            'Geographic radius (km)',
-            criteria.geography.radiusKm,
-          )}
-        </Group>
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <Select
+            label="Centre of the search circle"
+            description="A home within the radius of this point also counts as inside your search."
+            value={
+              isNear(criteria.geography.center, BRUNNSPARKEN)
+                ? 'brunnsparken'
+                : 'current'
+            }
+            onChange={(next) => {
+              if (next === 'brunnsparken')
+                setCriteria((current) => ({
+                  ...current,
+                  geography: {
+                    ...current.geography,
+                    center: [...BRUNNSPARKEN],
+                  },
+                }));
+            }}
+            data={[
+              {
+                value: 'brunnsparken',
+                label: 'Brunnsparken, central Göteborg',
+              },
+              ...(isNear(criteria.geography.center, BRUNNSPARKEN)
+                ? []
+                : [
+                    {
+                      value: 'current',
+                      label: `Current point (${criteria.geography.center[1].toFixed(3)}, ${criteria.geography.center[0].toFixed(3)})`,
+                    },
+                  ]),
+            ]}
+            allowDeselect={false}
+            comboboxProps={{ withinPortal: false }}
+            disabled={!canEdit || !onSave}
+          />
+          <NumberSelect
+            label="Radius"
+            value={criteria.geography.radiusKm}
+            onChange={(radiusKm) =>
+              radiusKm !== null &&
+              setCriteria((current) => ({
+                ...current,
+                geography: { ...current.geography, radiusKm },
+              }))
+            }
+            options={RADIUS_OPTIONS_KM}
+            format={formatKm}
+            disabled={!canEdit || !onSave}
+          />
+        </SimpleGrid>
         <Checkbox
           label="Prefer immediate greenery"
           checked={criteria.nature.preferImmediateGreenery}
@@ -253,7 +331,7 @@ export function ProfileEditor({
         <Text size="sm" c="dimmed">
           Walking times are preferences, not measured distances.
         </Text>
-        <Group grow>
+        <SimpleGrid cols={{ base: 1, sm: 3 }}>
           {nestedNumber(
             'transit',
             'preferredWalkMinutes',
@@ -272,7 +350,7 @@ export function ProfileEditor({
             'Trade-off journey (minutes)',
             criteria.transit.tradeoffJourneyMinutes,
           )}
-        </Group>
+        </SimpleGrid>
         <Button disabled={!canEdit || !onSave} loading={busy} onClick={save}>
           Save criteria
         </Button>
