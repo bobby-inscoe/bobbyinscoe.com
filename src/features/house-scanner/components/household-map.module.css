@@ -60,8 +60,16 @@
   border-radius: var(--mantine-radius-xs);
   padding: 0 8px;
 }
+/* The selected pin is filled and ringed so it reads on both basemaps; MapLibre owns transform, so no scaling. */
 .marker[aria-pressed="true"] {
-  background: var(--mantine-color-moss-0);
+  background: var(--mantine-color-moss-7);
+  border-color: var(--mantine-color-moss-9);
+  color: var(--mantine-color-flax-0);
+  font-weight: 700;
+  box-shadow:
+    0 0 0 3px var(--mantine-color-flax-0),
+    0 2px 8px rgb(0 0 0 / 35%);
+  z-index: 1;
 }
 .marker:focus-visible {
   outline: 3px solid var(--mantine-color-text);
