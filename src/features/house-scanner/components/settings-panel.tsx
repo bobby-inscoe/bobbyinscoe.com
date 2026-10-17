@@ -19,7 +19,7 @@ export function SettingsPanel({
 }: SettingsPanelProps) {
   const member = snapshot.members.find((entry) => entry.userId === userId);
   return (
-    <Stack>
+    <Stack maw="48rem">
       <Title order={2}>Search criteria</Title>
       {synthetic && (
         <Text size="sm" c="dimmed">

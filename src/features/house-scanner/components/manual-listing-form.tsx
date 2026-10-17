@@ -70,7 +70,7 @@ export function ManualListingForm({
   }
   return (
     <form onSubmit={submit}>
-      <Stack>
+      <Stack maw="36rem">
         <Title order={2}>Add a listing link</Title>
         <Text size="sm" c="dimmed">
           Bookmarks the page without fetching it. Notes are shared with the

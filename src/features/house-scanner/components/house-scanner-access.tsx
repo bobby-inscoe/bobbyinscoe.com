@@ -86,6 +86,8 @@ export function HouseScannerAccess({
             <Title order={2}>Sign in with your access code</Title>
             <TextInput
               label="Email or username"
+              w="100%"
+              maw="22rem"
               autoComplete="username"
               autoCapitalize="none"
               required
@@ -95,6 +97,8 @@ export function HouseScannerAccess({
             />
             <TextInput
               label="Access code"
+              w="100%"
+              maw="22rem"
               type="password"
               autoComplete="current-password"
               required
