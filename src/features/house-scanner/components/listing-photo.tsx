@@ -24,9 +24,7 @@ export function ListingPhoto({ listing }: { listing: Listing }) {
     failedUrl === photo.url ||
     Date.parse(photo.expiresAt) <= Date.now()
   )
-    return (
-      <div className={styles.placeholder}>No permitted photo available</div>
-    );
+    return <div className={styles.placeholder}>No photo</div>;
   return (
     <Stack gap="xs">
       <a
@@ -47,7 +45,9 @@ export function ListingPhoto({ listing }: { listing: Listing }) {
           onError={() => setFailedUrl(photo.url)}
         />
       </a>
-      <Text size="xs">{photo.attribution}</Text>
+      <Text size="xs" c="dimmed">
+        {photo.attribution}
+      </Text>
     </Stack>
   );
 }

@@ -65,6 +65,8 @@ export function ListingCard({
     current !== null &&
     previous !== current &&
     !listing.conflicts.includes('askingPriceSek');
+  const statusDisputed = listing.conflicts.includes('status');
+  const showStatus = statusDisputed || listing.facts.status !== 'available';
   const memberName = (id: string | null) =>
     snapshot.members.find((member) => member.userId === id)?.displayName ||
     'Household member';
@@ -89,21 +91,7 @@ export function ListingCard({
           {mine ? '★' : '☆'}
         </ActionIcon>
       </div>
-      <Group gap="xs">
-        <Badge variant="light">
-          {listing.conflicts.includes('status')
-            ? 'Status disputed'
-            : listing.facts.status}
-        </Badge>
-        {listing.origin === 'manual' && (
-          <Badge variant="outline">
-            Added by {memberName(listing.addedBy)}
-          </Badge>
-        )}
-        {stale && <Badge variant="outline">Not in latest scan</Badge>}
-      </Group>
-      <Title order={3}>{listing.title}</Title>
-      <Text>
+      <Text fz="lg" fw={700}>
         {changed && (
           <>
             <s>{formatPrice(previous)}</s>{' '}
@@ -120,7 +108,10 @@ export function ListingCard({
         {formatPrice(current)}
         {listing.conflicts.includes('askingPriceSek') && ' (disputed)'}
       </Text>
-      <Text size="sm">
+      <Title order={3} size="h5" lineClamp={1}>
+        {listing.title}
+      </Title>
+      <Text size="sm" c="dimmed">
         {listing.facts.livingAreaM2 ?? 'Unknown'} m²
         {listing.conflicts.includes('livingAreaM2') && ' (disputed)'} ·{' '}
         {listing.facts.rooms ?? 'Unknown'} rooms
@@ -128,10 +119,26 @@ export function ListingCard({
         {listing.facts.propertyType ?? 'Type unknown'}
         {listing.conflicts.includes('propertyType') && ' (disputed)'}
       </Text>
+      {(showStatus || listing.origin === 'manual' || stale) && (
+        <Group gap="xs">
+          {showStatus && (
+            <Badge variant="light">
+              {statusDisputed ? 'Status disputed' : listing.facts.status}
+            </Badge>
+          )}
+          {listing.origin === 'manual' && (
+            <Badge variant="outline">
+              Added by {memberName(listing.addedBy)}
+            </Badge>
+          )}
+          {stale && <Badge variant="outline">Not in latest scan</Badge>}
+        </Group>
+      )}
       {matches.map(({ profile, result }) => (
         <Stack key={profile.id} gap={4}>
           <Text size="sm" fw={600}>
-            {profile.name}: {SECTION_LABELS[result.section]}
+            {matches.length > 1 && `${profile.name}: `}
+            {SECTION_LABELS[result.section]}
           </Text>
           {details && (
             <>
@@ -154,15 +161,17 @@ export function ListingCard({
           {saved.map((favorite) => memberName(favorite.userId)).join(', ')}
         </Text>
       )}
+      <div className={styles.grow} />
       <Group>
         <Button
           component="a"
-          size="sm"
+          size="xs"
+          variant="default"
           href={listing.sourceUrls[0]}
           target="_blank"
           rel="noopener noreferrer"
           referrerPolicy="no-referrer"
-          // The global `a { color: inherit }` rule would otherwise hide the label on the filled button.
+          // The global `a { color: inherit }` rule would otherwise override the button's label color.
           style={{ color: 'var(--button-color)', textDecoration: 'none' }}
         >
           Open original listing

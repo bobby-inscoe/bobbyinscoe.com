@@ -25,7 +25,7 @@
 .list {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: stretch;
   gap: var(--mantine-spacing-md);
   min-width: 0;
 }
@@ -42,6 +42,10 @@
   flex: 1 1 320px;
   max-width: 480px;
   min-width: 0;
+}
+/* Pushes the actions row to the bottom so cards in a row share a height. */
+.grow {
+  flex-grow: 1;
 }
 .selected {
   border-color: var(--scanner-accent);

@@ -55,7 +55,7 @@ it('removes a permitted photo as soon as its display permission expires', async 
     vi.advanceTimersByTime(1001);
   });
   expect(screen.queryByRole('img')).toBeNull();
-  expect(screen.getByText('No permitted photo available')).toBeTruthy();
+  expect(screen.getByText('No photo')).toBeTruthy();
 });
 
 async function renderCard(stale: boolean, details: boolean) {
