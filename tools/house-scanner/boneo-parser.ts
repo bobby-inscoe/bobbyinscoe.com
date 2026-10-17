@@ -13,6 +13,10 @@ import {
 } from '@house-scanner-tools/page-read';
 import { BONEO_IMAGE_ORIGIN } from '@house-scanner-tools/source-registry';
 import {
+  finishViewings,
+  viewingFromUtc,
+} from '@house-scanner-tools/viewing-time';
+import {
   type Observation,
   observationSchema,
 } from '@/features/house-scanner/types/contracts';
@@ -241,6 +245,21 @@ function observationFromItem(
     status,
   };
 
+  const viewings = finishViewings(
+    (Array.isArray(item.group_viewings) ? item.group_viewings : [])
+      .slice(0, 30)
+      .flatMap((entry) => {
+        const viewing = isRecord(entry)
+          ? viewingFromUtc(
+              entry.field_viewing_start_time,
+              entry.field_viewing_end_time,
+            )
+          : null;
+        return viewing === null ? [] : [viewing];
+      }),
+    new Date(observedAt),
+  );
+
   const parsed = observationSchema.safeParse({
     sourceListingId: String(propertyId),
     episodeId: `created:${episodeStart}`,
@@ -253,6 +272,7 @@ function observationFromItem(
     coordinates: coordinates(item, observedAt, title),
     evidence: [],
     photo: photo(item, observedAt),
+    ...(viewings ? { viewings } : {}),
   });
   return parsed.success ? parsed.data : null;
 }

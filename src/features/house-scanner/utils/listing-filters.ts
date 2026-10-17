@@ -1,5 +1,6 @@
 import type { Listing } from '@/features/house-scanner/types/contracts';
 import { hasPin } from '@/features/house-scanner/utils/listing-position';
+import { hasViewingWithin } from '@/features/house-scanner/utils/viewings';
 
 export const MANUAL_HOST = 'Added by household';
 export const ALL_HOSTS = 'all';
@@ -23,6 +24,8 @@ export interface ListingFilters {
   hidden: HiddenView;
   // Cross-posted copies of a home stay out of view unless this is on.
   showDuplicates: boolean;
+  // Only homes with a viewing in the next so many days; null means any.
+  viewingWithinDays: number | null;
 }
 
 export const emptyFilters: ListingFilters = {
@@ -40,6 +43,7 @@ export const emptyFilters: ListingFilters = {
   includeUnknown: true,
   hidden: 'not-hidden',
   showDuplicates: false,
+  viewingWithinDays: null,
 };
 
 // Values come from form inputs, so anything not a finite non-negative number is unset.
@@ -68,6 +72,7 @@ export function activeFilterCount(filters: ListingFilters): number {
     filters.notOnMapOnly,
     filters.hidden !== emptyFilters.hidden,
     filters.showDuplicates,
+    filters.viewingWithinDays !== null,
   ].filter(Boolean).length;
 }
 
@@ -76,6 +81,7 @@ export function applyListingFilters(
   filters: ListingFilters,
   hiddenIds: ReadonlySet<string> = new Set(),
   duplicateIds: ReadonlySet<string> = new Set(),
+  now: number = Date.now(),
 ): Listing[] {
   const minPrice = clean(filters.minPriceSek);
   const maxPrice = clean(filters.maxPriceSek);
@@ -117,7 +123,9 @@ export function applyListingFilters(
       (!filters.notOnMapOnly || !hasPin(listing.coordinates)) &&
       (filters.hidden === 'both' ||
         hiddenIds.has(listing.id) === (filters.hidden === 'hidden-only')) &&
-      (filters.showDuplicates || !duplicateIds.has(listing.id))
+      (filters.showDuplicates || !duplicateIds.has(listing.id)) &&
+      (filters.viewingWithinDays === null ||
+        hasViewingWithin(listing, filters.viewingWithinDays, now))
     );
   });
 }

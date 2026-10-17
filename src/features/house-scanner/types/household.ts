@@ -28,6 +28,7 @@ export interface Household extends HouseholdActions {
 export type WorkspaceTab =
   | 'suggestions'
   | 'favorites'
+  | 'viewings'
   | 'manual'
   | 'sources'
   | 'settings';

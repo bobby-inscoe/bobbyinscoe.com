@@ -12,6 +12,10 @@ import {
 } from '@house-scanner-tools/page-read';
 import type { DetailFacts } from '@house-scanner-tools/run-memory';
 import {
+  finishViewings,
+  viewingFromLocal,
+} from '@house-scanner-tools/viewing-time';
+import {
   type Observation,
   observationSchema,
 } from '@/features/house-scanner/types/contracts';
@@ -303,13 +307,35 @@ export type BjurforsDetailRead =
   | { kind: 'detail'; facts: DetailFacts }
   | { kind: 'failed'; reason: PageFailure };
 
+// The page lists each viewing as <li class="c-stack__time"> holding a local start (datetime="2026-10-24T15:00")
+// and a duration (datetime="PT1H"). Its booking text is dropped.
+function viewingsFrom(html: string, now: Date) {
+  const start = html.indexOf('id="visning"');
+  if (start < 0) return undefined;
+  const end = html.indexOf('</ol>', start);
+  const block = html.slice(start, end < 0 ? start + 20_000 : end);
+  return finishViewings(
+    [...block.matchAll(/<li[\s\S]*?<\/li>/g)].flatMap((item) => {
+      const times = [...item[0].matchAll(/<time[^>]*datetime="([^"]+)"/g)].map(
+        (match) => match[1],
+      );
+      const viewing = viewingFromLocal(times[0], times[1]);
+      return viewing === null ? [] : [viewing];
+    }),
+    now,
+  );
+}
+
 /**
  * Listing page: facts from the RealEstateListing JSON and the definition
  * lists. A missing or non-numeric value is unknown, never zero, and an absent
  * or unticked box is unknown, never "none". Descriptions, seller details and
  * every other text are read past and dropped.
  */
-export function readBjurforsDetailPage(html: string): BjurforsDetailRead {
+export function readBjurforsDetailPage(
+  html: string,
+  now: Date = new Date(),
+): BjurforsDetailRead {
   if (html.length > MAX_HTML_CHARS)
     return { kind: 'failed', reason: 'too-large' };
   if (!html.includes('application/ld+json'))
@@ -370,5 +396,7 @@ export function readBjurforsDetailPage(html: string): BjurforsDetailRead {
     ),
     ...(hasPoint ? { latitude, longitude } : {}),
   };
+  const viewings = viewingsFrom(html, now);
+  if (viewings) facts.viewings = viewings;
   return { kind: 'detail', facts };
 }

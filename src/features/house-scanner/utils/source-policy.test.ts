@@ -113,6 +113,25 @@ describe('source content permission', () => {
       ).toThrow();
     },
   );
+  it('accepts viewing times only for a source whose policy allows them', () => {
+    const withViewings = {
+      ...observation,
+      viewings: [{ startsAt: '2026-10-24T13:00:00Z', endsAt: null }],
+    };
+    expect(() => assertObservationAllowed(policy, withViewings, now)).toThrow(
+      'Viewing times',
+    );
+    expect(() =>
+      assertObservationAllowed(
+        { ...policy, viewings: true },
+        withViewings,
+        now,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertObservationAllowed(policy, { ...observation, viewings: [] }, now),
+    ).not.toThrow();
+  });
   it('rejects unapproved fields, image origin, image expiry and evidence origins', () => {
     expect(() =>
       assertObservationAllowed(

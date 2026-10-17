@@ -669,8 +669,10 @@ beforeAll(async () => {
   for (const migration of [
     '202610120001_house_scanner.sql',
     '202610120002_house_scanner_retention.sql',
+    '202610120003_house_scanner_admin.sql',
     '202610170001_house_scanner_hidden.sql',
     '202610170002_house_scanner_snapshot_notes.sql',
+    '202610180001_house_scanner_viewings.sql',
   ])
     await db.exec(
       await readFile(
@@ -755,7 +757,8 @@ describe('actual migration and private RPC grants', () => {
       from pg_class c join pg_namespace n on n.oid=c.relnamespace
       where n.nspname='hs' and c.relkind='r'
     `);
-    expect(result.rows).toHaveLength(16);
+    // Sixteen from the base, hide and notes migrations and the admin log the viewings migration depends on.
+    expect(result.rows).toHaveLength(17);
     for (const row of result.rows)
       expect(row).toMatchObject({
         relrowsecurity: true,
@@ -3247,7 +3250,7 @@ describe('bounded retention purge', () => {
       from pg_class c join pg_namespace n on n.oid=c.relnamespace,unnest(array['anon','authenticated','service_role']) r
       where n.nspname='hs' and c.relkind='r'
     `);
-    expect(tables.rows).toHaveLength(48);
+    expect(tables.rows).toHaveLength(51);
     expect(tables.rows.every((row) => !row.granted)).toBe(true);
   });
 
@@ -3642,5 +3645,106 @@ describe('notes in the snapshot', () => {
     await expect(rawSnapshot(OWNER_B, HOUSE_A)).rejects.toThrow(
       'Household access denied',
     );
+  });
+});
+
+describe('viewing times', () => {
+  // One clock reading, so the same day always gives the same instant.
+  const start = Date.now();
+  const inDays = (days: number) => new Date(start + days * DAY).toISOString();
+  const viewing = (days: number) => ({ startsAt: inDays(days), endsAt: null });
+  const rawSnapshot = () =>
+    asRole('authenticated', OWNER_A, () =>
+      rpc('select public.hs_snapshot($1) as value', [HOUSE_A]),
+    );
+  const viewingsOf = async (path: string) =>
+    (await snapshot()).listings.find(
+      (listing) => listing.sourceUrls[0] === `${ORIGIN}/${path}`,
+    )?.viewings;
+
+  it('refuses viewings from a source whose policy does not allow them', async () => {
+    const begin = beginRequest();
+    await ingest(begin);
+    await expect(
+      ingest(
+        stageRequest(begin.runId, [observation({ viewings: [viewing(3)] })]),
+      ),
+    ).rejects.toThrow('Viewing times not permitted');
+    await setPolicy({ viewings: true });
+    await expect(
+      ingest(
+        stageRequest(begin.runId, [observation({ viewings: [viewing(3)] })]),
+      ),
+    ).resolves.toBeDefined();
+  });
+
+  it('shows future viewings in order, drops past ones, and leaves the key out when there are none', async () => {
+    await setPolicy({ viewings: true });
+    await publishOne(
+      observation({
+        sourceListingId: 'with',
+        sourceUrl: `${ORIGIN}/with`,
+        viewings: [viewing(5), viewing(2)],
+      }),
+    );
+    await publishOne(
+      observation({ sourceListingId: 'none', sourceUrl: `${ORIGIN}/none` }),
+    );
+    const shown = await viewingsOf('with');
+    expect(shown?.map((v) => v.startsAt)).toEqual([
+      viewing(2).startsAt,
+      viewing(5).startsAt,
+    ]);
+    const raw = (await rawSnapshot()) as {
+      listings: Record<string, unknown>[];
+    };
+    expect(
+      raw.listings.find(
+        (l) => (l.sourceUrls as string[])[0] === `${ORIGIN}/none`,
+      ),
+    ).not.toHaveProperty('viewings');
+    // A viewing that has begun is no longer shown, whatever is stored.
+    await db.query(
+      "update hs.listings set value=jsonb_set(value,'{viewings}',$1::jsonb) where value->>'sourceUrl'=$2",
+      [JSON.stringify([viewing(-1), viewing(4)]), `${ORIGIN}/with`],
+    );
+    expect((await viewingsOf('with'))?.map((v) => v.startsAt)).toEqual([
+      viewing(4).startsAt,
+    ]);
+  });
+
+  it('shows none once the policy stops allowing them, or lapses', async () => {
+    await setPolicy({ viewings: true });
+    await publishOne(
+      observation({ sourceUrl: `${ORIGIN}/home`, viewings: [viewing(3)] }),
+    );
+    expect(await viewingsOf('home')).toHaveLength(1);
+    await setPolicy({ viewings: false });
+    expect(await viewingsOf('home')).toBeUndefined();
+    await setPolicy({ viewings: true });
+    await lapse('alpha');
+    expect(await viewingsOf('home')).toBeUndefined();
+  });
+
+  it('does not count a changed viewing list as a change of the listing', async () => {
+    await setPolicy({ viewings: true });
+    await publishOne(observation({ viewings: [viewing(3)] }));
+    const first = await listingByUrl('home');
+    await publishOne(
+      observation({
+        observedAt: new Date(baseTime + HOUR).toISOString(),
+        viewings: [viewing(3), viewing(6)],
+      }),
+    );
+    const second = await listingByUrl('home');
+    expect(second.revision).toBe(first.revision);
+    expect(await count('select count(*)::int count from hs.observations')).toBe(
+      1,
+    );
+    expect(second.value.viewings).toHaveLength(2);
+    expect((await viewingsOf('home'))?.map((v) => v.startsAt)).toEqual([
+      viewing(3).startsAt,
+      viewing(6).startsAt,
+    ]);
   });
 });

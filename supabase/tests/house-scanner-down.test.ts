@@ -99,3 +99,46 @@ describe('rollback of the personal-hide migration', () => {
     expect(await describeObjects(afterDb)).toEqual(migrated);
   });
 });
+
+describe('rollback of the viewings migration', () => {
+  const VIEWINGS = '../migrations/202610180001_house_scanner_viewings.sql';
+  const DOWN_VIEWINGS =
+    '../rollbacks/202610180001_house_scanner_viewings_down.sql';
+  const ADMIN = '../migrations/202610120003_house_scanner_admin.sql';
+  const upTo = [BEFORE[0], BEFORE[1], ADMIN, HIDE, NOTES];
+
+  // The functions the migration touches, with their grants, as text.
+  async function objects(db: PGlite) {
+    const result = await db.query<{ line: string }>(`
+      select p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ') '
+        || md5(pg_get_functiondef(p.oid)) || ' anon=' || has_function_privilege('anon', p.oid, 'execute')
+        || ' auth=' || has_function_privilege('authenticated', p.oid, 'execute') as line
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname in ('hs', 'public')
+        and (p.proname like '%snapshot%' or p.proname like '%observation%' or p.proname like '%viewings%')
+      order by line
+    `);
+    return result.rows.map((row) => row.line);
+  }
+
+  it('restores the fingerprint, the observation check and the snapshot exactly, and can be reapplied', async () => {
+    const plain = await create(upTo);
+    const expected = await objects(plain);
+    await plain.close();
+    const db = await create(upTo);
+    try {
+      await db.exec(await read(VIEWINGS));
+      const migrated = await objects(db);
+      expect(migrated).not.toEqual(expected);
+      const text = migrated.join(' | ');
+      expect(text).toContain('with_viewings');
+      expect(text).toContain('assert_observation_facts');
+      await db.exec(await read(DOWN_VIEWINGS));
+      expect(await objects(db)).toEqual(expected);
+      await db.exec(await read(VIEWINGS));
+      expect(await objects(db)).toEqual(migrated);
+    } finally {
+      await db.close();
+    }
+  });
+});

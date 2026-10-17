@@ -8,6 +8,7 @@ import {
   AlsoOn,
   KeyFacts,
 } from '@/features/house-scanner/components/listing-summary';
+import { NextViewing } from '@/features/house-scanner/components/viewing-list';
 import type { Listing } from '@/features/house-scanner/types/contracts';
 import { formatPrice } from '@/features/house-scanner/utils/format';
 
@@ -58,6 +59,7 @@ export function PinCard({
       </Text>
       <KeyFacts listing={listing} />
       <AlsoOn sites={alsoOn} />
+      <NextViewing listing={listing} />
       <Group gap="xs">
         <Button
           component="a"

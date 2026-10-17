@@ -381,3 +381,33 @@ describe('Erik Olsson listing page', () => {
     expect(detail(listingPage(tricky)).livingAreaM2).toBe(70.5);
   });
 });
+
+describe('Erik Olsson viewing times', () => {
+  const withViewing = (line?: string) => ({
+    ...APARTMENT,
+    lines: [...APARTMENT.lines.slice(0, 4), ...(line ? [line] : [])],
+  });
+  const viewingsOf = (line?: string) =>
+    page(search([withViewing(line)], 1)).observations[0].viewings;
+
+  it('reads the next viewing as a UTC time, with the year found from the weekday', () => {
+    expect(viewingsOf('Nästa visning: Söndag 1 november kl. 15:00')).toEqual([
+      { startsAt: '2026-11-01T14:00:00.000Z', endsAt: null },
+    ]);
+    expect(viewingsOf('Nästa visning: Torsdag 22 oktober kl. 17:00')).toEqual([
+      { startsAt: '2026-10-22T15:00:00.000Z', endsAt: null },
+    ]);
+  });
+
+  it('leaves the key out for a card with no viewing, a past one, or a date that does not fit its weekday', () => {
+    for (const line of [
+      undefined,
+      'Nästa visning: Fredag 16 oktober kl. 17:00',
+      'Nästa visning: Måndag 1 november kl. 15:00',
+      'Nästa visning: snart',
+    ])
+      expect(
+        page(search([withViewing(line)], 1)).observations[0],
+      ).not.toHaveProperty('viewings');
+  });
+});

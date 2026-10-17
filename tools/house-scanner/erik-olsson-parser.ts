@@ -12,6 +12,10 @@ import {
 } from '@house-scanner-tools/page-read';
 import type { DetailFacts } from '@house-scanner-tools/run-memory';
 import {
+  finishViewings,
+  viewingFromSwedishText,
+} from '@house-scanner-tools/viewing-time';
+import {
   type Observation,
   observationSchema,
 } from '@/features/house-scanner/types/contracts';
@@ -122,6 +126,14 @@ function observationFromCard(
   );
   if (!lines[0]) return null;
   const card = cardFacts(lines);
+  // The card shows only the next viewing, as Swedish text with no year.
+  const next = lines.find((line) => line.startsWith('Nästa visning'));
+  const viewing = next
+    ? viewingFromSwedishText(next, new Date(observedAt))
+    : null;
+  const viewings = viewing
+    ? finishViewings([viewing], new Date(observedAt))
+    : undefined;
   const facts: Facts = {
     propertyType: card.propertyType,
     tenure: 'unknown',
@@ -156,6 +168,7 @@ function observationFromCard(
     coordinates: null,
     evidence: [],
     photo: null,
+    ...(viewings ? { viewings } : {}),
   });
   return parsed.success ? parsed.data : null;
 }

@@ -502,3 +502,48 @@ describe('Bjurfors listing page', () => {
     ).toBe(50);
   });
 });
+
+describe('Bjurfors viewing times', () => {
+  const item = (start: string, duration: string) =>
+    `<li class="c-stack__time"><span aria-label="lör 24 oktober"><time datetime="${start}" aria-hidden="true">lör 24 oktober</time><time datetime="${duration}" aria-hidden="true">KL 15:00 - 16:00</time></span><p>Bokad visning. Ring Bokningscenter 031-000 00 00.</p></li>`;
+  const withViewings = (items: string[]) =>
+    fixture('detail-full.html').replace(
+      '</body>',
+      `<div id="visning"><h3>ANMÄL DIG TILL VISNING</h3><ol aria-label="Visningstider">${items.join('')}</ol></div></body>`,
+    );
+  const factsOf = (html: string) => {
+    const read = readBjurforsDetailPage(html, observedAt);
+    if (read.kind !== 'detail') throw new Error(read.reason);
+    return read.facts;
+  };
+
+  it('reads each time as Stockholm time with its duration, sorted, and drops the booking text', () => {
+    const facts = factsOf(
+      withViewings([
+        item('2026-10-27T16:30', 'PT1H'),
+        item('2026-10-24T15:00', 'PT1H'),
+      ]),
+    );
+    expect(facts.viewings).toEqual([
+      {
+        startsAt: '2026-10-24T13:00:00.000Z',
+        endsAt: '2026-10-24T14:00:00.000Z',
+      },
+      {
+        startsAt: '2026-10-27T15:30:00.000Z',
+        endsAt: '2026-10-27T16:30:00.000Z',
+      },
+    ]);
+    expect(JSON.stringify(facts)).not.toContain('Bokningscenter');
+  });
+
+  it('leaves the key out when the page lists none, only past times, or unreadable ones', () => {
+    for (const html of [
+      fixture('detail-full.html'),
+      withViewings([]),
+      withViewings([item('2026-10-01T15:00', 'PT1H')]),
+      withViewings([item('tomorrow', 'PT1H')]),
+    ])
+      expect(factsOf(html)).not.toHaveProperty('viewings');
+  });
+});

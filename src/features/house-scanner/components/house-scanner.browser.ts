@@ -1072,7 +1072,8 @@ test('the tab buttons stay on one row and the view heading is only for screen re
     .evaluateAll((buttons) =>
       buttons.map((button) => Math.round(button.getBoundingClientRect().top)),
     );
-  expect(tops).toHaveLength(4);
+  // Listings, Favorites, Viewings, Add link and Settings.
+  expect(tops).toHaveLength(5);
   expect(new Set(tops).size).toBe(1);
   const heading = page.getByRole('heading', { name: 'Listings', level: 2 });
   await expect(heading).toHaveCount(1);
@@ -1324,4 +1325,35 @@ test('the details sheet and the map card carry a favorite star, and the map card
   await expect(
     page.getByRole('button', { name: /^Example detached home:/ }),
   ).toBeVisible();
+});
+
+test('the Viewings tab lists saved homes with their times and hands over a calendar file, and the filter keeps homes with a viewing', async ({
+  page,
+}) => {
+  await openDemo(page);
+  const card = page.getByRole('article', {
+    name: 'Example balcony home',
+    exact: true,
+  });
+  await expect(card.getByText(/^Viewing /)).toBeVisible();
+
+  await page.getByRole('button', { name: /^Viewings/ }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Viewings', level: 2 }),
+  ).toBeVisible();
+  // Two viewings are listed for this home, one a day away and one a week away.
+  await expect(page.getByText('Example balcony home')).toHaveCount(2);
+  const download = page.waitForEvent('download');
+  await page
+    .getByRole('button', { name: /Add to calendar: Example balcony home/ })
+    .first()
+    .click();
+  expect((await download).suggestedFilename()).toMatch(
+    /^viewing-\d{4}-\d{2}-\d{2}-example-balcony-home\.ics$/,
+  );
+
+  await page.getByRole('button', { name: 'Listings', exact: true }).click();
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await choose(page, 'Viewing within', 'Next 7 days');
+  await expect(page.getByText('Showing 2 of', { exact: false })).toBeVisible();
 });

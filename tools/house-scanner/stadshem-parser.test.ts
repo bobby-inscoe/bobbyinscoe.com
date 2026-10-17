@@ -325,3 +325,24 @@ describe('Stadshem estate record', () => {
     ).toEqual({ kind: 'failed', reason: 'too-large' });
   });
 });
+
+describe('Stadshem viewing times', () => {
+  const viewingsOf = (nextViewing: unknown) =>
+    page(list([estate({ nextViewing })])).observations[0];
+
+  it('reads the next viewing as Stockholm time converted to UTC', () => {
+    expect(viewingsOf('2026-10-25T12:00:00').viewings).toEqual([
+      { startsAt: '2026-10-25T11:00:00.000Z', endsAt: null },
+    ]);
+    expect(viewingsOf('2026-10-24T14:30:00').viewings).toEqual([
+      { startsAt: '2026-10-24T12:30:00.000Z', endsAt: null },
+    ]);
+  });
+
+  it.each([undefined, null, '', '2026-10-01T12:00:00', 'nästa lördag', 42])(
+    'leaves the key out for %j',
+    (nextViewing) => {
+      expect(viewingsOf(nextViewing)).not.toHaveProperty('viewings');
+    },
+  );
+});

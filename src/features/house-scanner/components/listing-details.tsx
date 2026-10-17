@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import { ListingNotes } from '@/features/house-scanner/components/listing-notes';
+import { ViewingRows } from '@/features/house-scanner/components/viewing-list';
 import type { ListingNotesController } from '@/features/house-scanner/hooks/use-listing-notes';
 import type {
   Listing,
@@ -14,6 +15,7 @@ import {
   formatPrice,
 } from '@/features/house-scanner/utils/format';
 import { hasPin } from '@/features/house-scanner/utils/listing-position';
+import { upcomingViewings } from '@/features/house-scanner/utils/viewings';
 
 interface ListingDetailsProps {
   listing: Listing;
@@ -170,6 +172,11 @@ export function ListingDetails({
         />
         {conflicts.length > 0 && (
           <Text size="sm">Conflicting fields: {conflicts.join(', ')}</Text>
+        )}
+        {upcomingViewings(listing, Date.now()).length > 0 && (
+          <Section title="Viewings" order={sectionOrder}>
+            <ViewingRows listing={listing} />
+          </Section>
         )}
         <Section title="Building and outdoor" order={sectionOrder}>
           <FactList

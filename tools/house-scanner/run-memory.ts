@@ -6,7 +6,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { z } from 'zod';
-import { factsSchema } from '@/features/house-scanner/types/contracts';
+import {
+  factsSchema,
+  viewingSchema,
+} from '@/features/house-scanner/types/contracts';
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
@@ -34,6 +37,8 @@ export const detailFactsSchema = z.strictObject({
   rooms: shape.rooms.optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
+  // Viewing times a listing page published. Future ones are applied again from memory; past ones are dropped.
+  viewings: z.array(viewingSchema).max(10).optional(),
   // Where a source's image host holds the first photo: "<account>/<image id>". Erik Olsson only.
   photoPath: z
     .string()

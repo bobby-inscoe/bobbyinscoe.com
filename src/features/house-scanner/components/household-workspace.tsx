@@ -1,4 +1,4 @@
-import { Button, Group, Text } from '@mantine/core';
+import { Badge, Button, Group, Text } from '@mantine/core';
 import { useDeferredValue, useMemo, useState } from 'react';
 
 import { AddLinkPanel } from '@/features/house-scanner/components/add-link-panel';
@@ -6,6 +6,10 @@ import styles from '@/features/house-scanner/components/household-workspace.modu
 import { ListingsPanel } from '@/features/house-scanner/components/listings-panel';
 import { SettingsPanel } from '@/features/house-scanner/components/settings-panel';
 import { SourcesPanel } from '@/features/house-scanner/components/sources-panel';
+import {
+  favoriteViewings,
+  ViewingsPanel,
+} from '@/features/house-scanner/components/viewings-panel';
 import { useFavoriteToggle } from '@/features/house-scanner/hooks/use-favorite-toggle';
 import { useHiddenListings } from '@/features/house-scanner/hooks/use-hidden-listings';
 import { useListingNotes } from '@/features/house-scanner/hooks/use-listing-notes';
@@ -23,6 +27,7 @@ import {
   listingHost,
 } from '@/features/house-scanner/utils/listing-filters';
 import { scopeListings } from '@/features/house-scanner/utils/listing-view';
+import { viewingsWithin } from '@/features/house-scanner/utils/viewings';
 
 // Any action may be missing, which turns its control off.
 export interface HouseholdWorkspaceProps extends Partial<HouseholdActions> {
@@ -108,6 +113,15 @@ export function HouseholdWorkspace({
         : 0,
     [scoped, deferredFilters, hidden, duplicateIds],
   );
+  // Saved homes with a viewing in the next two days, for the badge on the tab.
+  const viewingsSoon = useMemo(() => {
+    const now = Date.now();
+    return viewingsWithin(
+      favoriteViewings(snapshot, 'everyone', userId, now),
+      48,
+      now,
+    );
+  }, [snapshot, userId]);
   const filterHosts = useMemo(
     () => [...new Set(snapshot.listings.map(listingHost))],
     [snapshot.listings],
@@ -117,7 +131,10 @@ export function HouseholdWorkspace({
   const notesListingId =
     tab === 'manual' ? (duplicate?.id ?? null) : (selected?.id ?? null);
   const notes = useListingNotes({
-    listingId: tab === 'settings' || tab === 'sources' ? null : notesListingId,
+    listingId:
+      tab === 'settings' || tab === 'sources' || tab === 'viewings'
+        ? null
+        : notesListingId,
     userId,
     onLoad: onLoadNotes,
     onSave: onSaveNote,
@@ -149,10 +166,17 @@ export function HouseholdWorkspace({
         p={4}
       >
         {(synthetic
-          ? (['suggestions', 'favorites', 'manual', 'settings'] as const)
+          ? ([
+              'suggestions',
+              'favorites',
+              'viewings',
+              'manual',
+              'settings',
+            ] as const)
           : ([
               'suggestions',
               'favorites',
+              'viewings',
               'manual',
               'sources',
               'settings',
@@ -167,15 +191,31 @@ export function HouseholdWorkspace({
               setDetailsOpen(false);
             }}
           >
-            {value === 'manual'
-              ? 'Add link'
-              : value === 'sources'
-                ? 'Sources'
-                : value === 'settings'
-                  ? 'Settings'
-                  : value === 'favorites'
-                    ? 'Favorites'
-                    : 'Listings'}
+            {value === 'viewings' ? (
+              <>
+                Viewings
+                {viewingsSoon > 0 && (
+                  <Badge
+                    ml={6}
+                    size="sm"
+                    variant="light"
+                    aria-label={`${viewingsSoon} saved ${viewingsSoon === 1 ? 'viewing' : 'viewings'} in the next 48 hours`}
+                  >
+                    {viewingsSoon}
+                  </Badge>
+                )}
+              </>
+            ) : value === 'manual' ? (
+              'Add link'
+            ) : value === 'sources' ? (
+              'Sources'
+            ) : value === 'settings' ? (
+              'Settings'
+            ) : value === 'favorites' ? (
+              'Favorites'
+            ) : (
+              'Listings'
+            )}
           </Button>
         ))}
       </Group>
@@ -195,6 +235,8 @@ export function HouseholdWorkspace({
           onCloseDuplicate={() => setDuplicateId(null)}
           onFavorite={favorite}
         />
+      ) : tab === 'viewings' ? (
+        <ViewingsPanel snapshot={snapshot} userId={userId} />
       ) : tab === 'sources' ? (
         <SourcesPanel snapshot={snapshot} />
       ) : tab === 'settings' ? (

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  extractNextData,
   parseBoneoDetail,
   parseBoneoNextData,
   readBoneoDetailPage,
@@ -369,5 +370,62 @@ describe('Boneo listing page parser', () => {
     expect(
       parseBoneoDetail(detail({ field_property_balcony: true, body: 5 })),
     ).toMatchObject({ glazed: null });
+  });
+});
+
+describe('Boneo viewing times', () => {
+  // The fixture is read afresh each time, so a test can change one item without touching the others.
+  function readWith(groupViewings: unknown) {
+    const data = extractNextData(fixture('search-page.html')) as {
+      props: { pageProps: { listData: { pData: Record<string, unknown>[] } } };
+    };
+    const [first] = data.props.pageProps.listData.pData;
+    if (groupViewings === undefined) delete first.group_viewings;
+    else first.group_viewings = groupViewings;
+    const read = parseBoneoNextData(data, context);
+    if (read.kind !== 'page') throw new Error(read.reason);
+    return read.observations.find((o) => o.sourceListingId === '9000001');
+  }
+  const viewing = (start: string, end: string | null = null) => ({
+    field_viewing_start_time: start,
+    field_viewing_end_time: end,
+    field_viewing_commentary: 'Bokad visning. Anmäl dig hos mäklaren.',
+    field_viewing_id: 'VIS0001',
+    field_viewing_type: null,
+    _id: 'abc',
+  });
+
+  it('reads the listed viewings as UTC times, sorted, and drops the free text', () => {
+    const observation = readWith([
+      viewing('2026-10-31T13:00:00.000Z', '2026-10-31T13:30:00.000Z'),
+      viewing('2026-10-25T10:00:00.000Z'),
+    ]);
+    expect(observation?.viewings).toEqual([
+      { startsAt: '2026-10-25T10:00:00.000Z', endsAt: null },
+      {
+        startsAt: '2026-10-31T13:00:00.000Z',
+        endsAt: '2026-10-31T13:30:00.000Z',
+      },
+    ]);
+    expect(JSON.stringify(observation)).not.toContain('Anmäl');
+  });
+
+  it('leaves the key out when there are none, or only past, unreadable or zoneless times', () => {
+    for (const groupViewings of [
+      undefined,
+      [],
+      'soon',
+      [viewing('2026-10-01T13:00:00.000Z')],
+      [viewing('2026-10-31T13:00:00')],
+      [viewing('not a time'), 'x', null],
+    ])
+      expect(readWith(groupViewings)).not.toHaveProperty('viewings');
+  });
+
+  it('keeps at most ten', () => {
+    const many = Array.from({ length: 14 }, (_v, i) =>
+      viewing(`2026-10-${String(14 + i).padStart(2, '0')}T10:00:00.000Z`),
+    );
+    expect(readWith(many)?.viewings).toHaveLength(10);
   });
 });

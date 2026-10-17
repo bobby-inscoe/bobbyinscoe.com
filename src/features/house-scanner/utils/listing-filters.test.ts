@@ -228,3 +228,39 @@ describe('duplicate listings view', () => {
     );
   });
 });
+
+describe('viewing within filter', () => {
+  const [first, second] = SYNTHETIC_SNAPSHOT.listings;
+  const now = Date.parse('2026-10-17T09:00:00Z');
+  const soon = {
+    ...first,
+    viewings: [{ startsAt: '2026-10-19T09:00:00Z', endsAt: null }],
+  };
+  const later = {
+    ...second,
+    viewings: [{ startsAt: '2026-10-27T09:00:00Z', endsAt: null }],
+  };
+  const none = SYNTHETIC_SNAPSHOT.listings[2];
+  const ids = (viewingWithinDays: number | null) =>
+    applyListingFilters(
+      [soon, later, none],
+      { ...emptyFilters, viewingWithinDays },
+      new Set(),
+      new Set(),
+      now,
+    ).map((listing) => listing.id);
+
+  it('keeps homes with a viewing inside the window, and all homes when off', () => {
+    expect(emptyFilters.viewingWithinDays).toBeNull();
+    expect(ids(null)).toEqual([soon.id, later.id, none.id]);
+    expect(ids(3)).toEqual([soon.id]);
+    expect(ids(14)).toEqual([soon.id, later.id]);
+  });
+
+  it('counts as an active filter only when it is on', () => {
+    expect(activeFilterCount(emptyFilters)).toBe(0);
+    expect(activeFilterCount({ ...emptyFilters, viewingWithinDays: 7 })).toBe(
+      1,
+    );
+  });
+});

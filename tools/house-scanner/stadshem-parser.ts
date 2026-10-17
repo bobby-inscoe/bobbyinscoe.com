@@ -12,6 +12,10 @@ import {
 } from '@house-scanner-tools/page-read';
 import type { DetailFacts } from '@house-scanner-tools/run-memory';
 import {
+  finishViewings,
+  viewingFromLocal,
+} from '@house-scanner-tools/viewing-time';
+import {
   type Observation,
   observationSchema,
 } from '@/features/house-scanner/types/contracts';
@@ -131,6 +135,11 @@ function observationFrom(
     mandatoryMonthlySek: null,
     status: statusOf(data.status),
   };
+  // The list gives only the next viewing, in Stockholm time with no zone.
+  const next = viewingFromLocal(data.nextViewing);
+  const viewings = next
+    ? finishViewings([next], new Date(observedAt))
+    : undefined;
   const parsed = observationSchema.safeParse({
     sourceListingId: estateId,
     // The record gives no relisting marker, so a home keeps one episode.
@@ -152,6 +161,7 @@ function observationFrom(
       : null,
     evidence: [],
     photo: photoFrom(data, observedAt),
+    ...(viewings ? { viewings } : {}),
   });
   return parsed.success ? parsed.data : null;
 }

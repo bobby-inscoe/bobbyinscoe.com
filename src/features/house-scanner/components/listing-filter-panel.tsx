@@ -126,6 +126,29 @@ export function ListingFilterPanel({
             />
           </Stack>
           <Select
+            label="Viewing within"
+            value={
+              filters.viewingWithinDays === null
+                ? 'any'
+                : String(filters.viewingWithinDays)
+            }
+            onChange={(value) =>
+              onChange({
+                ...filters,
+                viewingWithinDays:
+                  value === null || value === 'any' ? null : Number(value),
+              })
+            }
+            data={[
+              { value: 'any', label: 'Any time' },
+              { value: '3', label: 'Next 3 days' },
+              { value: '7', label: 'Next 7 days' },
+              { value: '14', label: 'Next 14 days' },
+            ]}
+            comboboxProps={{ withinPortal: false }}
+            flex="1 1 15rem"
+          />
+          <Select
             label="Source"
             value={filters.host}
             onChange={(value) =>

@@ -159,6 +159,11 @@ export const photoSchema = z.strictObject({
   displayAllowed: z.literal(true),
   hotlinkAllowed: z.literal(true),
 });
+// One viewing the broker published: a start, and an end when the source gives one. Times are UTC.
+export const viewingSchema = z.strictObject({
+  startsAt: timestamp,
+  endsAt: timestamp.nullable(),
+});
 export const observationSchema = z.strictObject({
   sourceListingId: z.string().min(1).max(200),
   episodeId: z.string().min(1).max(200),
@@ -171,6 +176,8 @@ export const observationSchema = z.strictObject({
   coordinates: coordinateSchema.nullable(),
   evidence: z.array(evidenceSchema).max(50),
   photo: photoSchema.nullable(),
+  // Future viewings, sorted. The key is left out when there are none, so older readers keep parsing.
+  viewings: z.array(viewingSchema).max(10).optional(),
 });
 export const sourcePolicySchema = z.strictObject({
   sourceId: z.string().regex(/^[a-z0-9-]{1,60}$/),
@@ -190,6 +197,8 @@ export const sourcePolicySchema = z.strictObject({
   modelProcessing: z.boolean(),
   emailDigest: z.boolean(),
   telegramDigest: z.boolean(),
+  // Whether this source's viewing times may be shown. Absent means no.
+  viewings: z.boolean().optional(),
   allowedFactFields: z.array(factsSchema.keyof()).max(20),
   retentionDays: z.number().int().positive().max(180),
   capabilities: z.strictObject({
@@ -237,6 +246,8 @@ export const listingSchema = z.strictObject({
   observedAt: timestamp,
   addedBy: id.nullable(),
   userTags: z.array(z.string().max(40)).max(10),
+  // Future viewings the policy allows, sorted. Left out when there are none.
+  viewings: z.array(viewingSchema).max(10).optional(),
 });
 export const snapshotSchema = z.strictObject({
   contractVersion: z.literal(CONTRACT_VERSION),
@@ -324,6 +335,7 @@ export const annotationSchema = z.strictObject({
 });
 export type Criteria = z.infer<typeof criteriaSchema>;
 export type SearchProfile = z.infer<typeof profileSchema>;
+export type Viewing = z.infer<typeof viewingSchema>;
 export type Listing = z.infer<typeof listingSchema>;
 export type Observation = z.infer<typeof observationSchema>;
 export type Evidence = z.infer<typeof evidenceSchema>;
