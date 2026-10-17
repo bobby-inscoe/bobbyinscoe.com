@@ -4,6 +4,7 @@ import {
   Collapse,
   Flex,
   NumberInput,
+  Radio,
   Select,
   Stack,
   Text,
@@ -12,8 +13,15 @@ import {
 import {
   ALL_HOSTS,
   emptyFilters,
+  type HiddenView,
   type ListingFilters,
 } from '@/features/house-scanner/utils/listing-filters';
+
+const HIDDEN_VIEWS: { value: HiddenView; label: string }[] = [
+  { value: 'not-hidden', label: 'Not hidden' },
+  { value: 'hidden-only', label: 'Hidden only' },
+  { value: 'both', label: 'Both' },
+];
 
 interface ListingFilterPanelProps {
   // The Filters toggle lives in the listings controls row.
@@ -136,6 +144,24 @@ export function ListingFilterPanel({
             }
           />
         </Flex>
+        <Radio.Group
+          label="Hidden homes"
+          value={filters.hidden}
+          onChange={(value) =>
+            onChange({
+              ...filters,
+              hidden:
+                HIDDEN_VIEWS.find((view) => view.value === value)?.value ??
+                emptyFilters.hidden,
+            })
+          }
+        >
+          <Flex gap="md" wrap="wrap">
+            {HIDDEN_VIEWS.map(({ value, label }) => (
+              <Radio key={value} value={value} label={label} />
+            ))}
+          </Flex>
+        </Radio.Group>
         <Flex gap="sm" align="center" wrap="wrap">
           <Button variant="default" onClick={() => onChange(emptyFilters)}>
             Clear filters

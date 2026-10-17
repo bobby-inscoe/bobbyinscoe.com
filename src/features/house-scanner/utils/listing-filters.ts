@@ -4,6 +4,9 @@ import { hasPin } from '@/features/house-scanner/utils/listing-position';
 export const MANUAL_HOST = 'Added by household';
 export const ALL_HOSTS = 'all';
 
+// Which of this member's hidden homes to include.
+export type HiddenView = 'not-hidden' | 'hidden-only' | 'both';
+
 export interface ListingFilters {
   minPriceMsek: number | null;
   maxPriceMsek: number | null;
@@ -17,6 +20,7 @@ export interface ListingFilters {
   glazedOnly: boolean;
   notOnMapOnly: boolean;
   includeUnknown: boolean;
+  hidden: HiddenView;
 }
 
 export const emptyFilters: ListingFilters = {
@@ -32,6 +36,7 @@ export const emptyFilters: ListingFilters = {
   glazedOnly: false,
   notOnMapOnly: false,
   includeUnknown: true,
+  hidden: 'not-hidden',
 };
 
 // Values come from form inputs, so anything not a finite non-negative number is unset.
@@ -59,12 +64,14 @@ export function activeFilterCount(filters: ListingFilters): number {
     filters.liftOnly,
     filters.glazedOnly,
     filters.notOnMapOnly,
+    filters.hidden !== emptyFilters.hidden,
   ].filter(Boolean).length;
 }
 
 export function applyListingFilters(
   listings: Listing[],
   filters: ListingFilters,
+  hiddenIds: ReadonlySet<string> = new Set(),
 ): Listing[] {
   const minPrice = clean(filters.minPriceMsek);
   const maxPrice = clean(filters.maxPriceMsek);
@@ -105,7 +112,9 @@ export function applyListingFilters(
         (facts.lift === true && !conflicts.includes('lift'))) &&
       (!filters.glazedOnly ||
         (facts.glazed === true && !conflicts.includes('glazed'))) &&
-      (!filters.notOnMapOnly || !hasPin(listing.coordinates))
+      (!filters.notOnMapOnly || !hasPin(listing.coordinates)) &&
+      (filters.hidden === 'both' ||
+        hiddenIds.has(listing.id) === (filters.hidden === 'hidden-only'))
     );
   });
 }

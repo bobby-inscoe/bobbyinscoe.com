@@ -1,6 +1,6 @@
 import { Button, Drawer, Group, Stack } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
-
+import { HideButton } from '@/features/house-scanner/components/hide-button';
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import { ListingDetails } from '@/features/house-scanner/components/listing-details';
 import { ListingPhoto } from '@/features/house-scanner/components/listing-photo';
@@ -25,7 +25,9 @@ interface ListingDrawerProps {
   userId: string;
   opened: boolean;
   stale?: boolean;
+  hidden: boolean;
   notes: ListingNotesController;
+  onToggleHidden: (listingId: string) => void;
   onClose: () => void;
   onSeeOnMap: () => void;
 }
@@ -37,7 +39,9 @@ export function ListingDrawer({
   userId,
   opened,
   stale,
+  hidden,
   notes,
+  onToggleHidden,
   onClose,
   onSeeOnMap,
 }: ListingDrawerProps) {
@@ -66,6 +70,11 @@ export function ListingDrawer({
           <MatchLines listing={listing} snapshot={snapshot} details />
           <Group>
             <OriginalListingButton listing={listing} />
+            <HideButton
+              listingId={listing.id}
+              hidden={hidden}
+              onToggle={onToggleHidden}
+            />
             {hasPin(listing.coordinates) && (
               <Button size="xs" variant="default" onClick={onSeeOnMap}>
                 See on map

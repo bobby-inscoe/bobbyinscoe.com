@@ -79,6 +79,12 @@ interface ListingsPanelProps {
   section: string;
   onSectionChange: (section: string) => void;
   filters: ListingFilters;
+  // This member's hidden homes, which stay out of view unless the filter says otherwise.
+  hiddenIds: ReadonlySet<string>;
+  // How many hidden homes the current filters keep out of view.
+  hiddenCount: number;
+  onHide: (listingId: string) => void;
+  onUnhide: (listingId: string) => void;
   onFiltersChange: (filters: ListingFilters) => void;
   filterHosts: string[];
   // How many homes the tab holds before the filters apply.
@@ -110,6 +116,10 @@ export function ListingsPanel({
   section,
   onSectionChange,
   filters,
+  hiddenIds,
+  hiddenCount,
+  onHide,
+  onUnhide,
   onFiltersChange,
   filterHosts,
   total,
@@ -130,7 +140,10 @@ export function ListingsPanel({
 }: ListingsPanelProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filtersActive = activeFilterCount(filters);
-  const points = useMemo(() => mapPoints(visible), [visible]);
+  const points = useMemo(
+    () => mapPoints(visible, hiddenIds),
+    [visible, hiddenIds],
+  );
   // One handler per action, shared by every card, so unchanged cards skip rendering.
   // The favorite handler is rebuilt on every render, so the latest one is read through a ref.
   const favorite = useRef(onFavorite);
@@ -148,6 +161,15 @@ export function ListingsPanel({
       onViewChange('map');
     },
     [onSelectedIdChange, onViewChange],
+  );
+  const hiddenRef = useRef(hiddenIds);
+  hiddenRef.current = hiddenIds;
+  const toggleHidden = useCallback(
+    (listingId: string) =>
+      hiddenRef.current.has(listingId)
+        ? onUnhide(listingId)
+        : onHide(listingId),
+    [onHide, onUnhide],
   );
   const favoriteListing = useCallback(
     (listingId: string) => void favorite.current(listingId),
@@ -243,6 +265,7 @@ export function ListingsPanel({
           <Text size="sm" c="dimmed">
             {visible.length} homes
             {notLocated > 0 && ` · ${notLocated} not located`}
+            {hiddenCount > 0 && ` · ${hiddenCount} hidden`}
           </Text>
           <Group gap="xs" role="group" aria-label="View">
             <Button
@@ -288,6 +311,8 @@ export function ListingsPanel({
               stale={isListingStale(listing, snapshot.edition)}
               busy={pending.includes(listing.id)}
               canSave={canSave(listing.id)}
+              hidden={hiddenIds.has(listing.id)}
+              onToggleHidden={toggleHidden}
               onSelect={selectListing}
               onSeeOnMap={showOnMap}
               onFavorite={favoriteListing}
@@ -349,7 +374,9 @@ export function ListingsPanel({
         userId={userId}
         opened={detailsOpen && selected !== null}
         stale={selected ? isListingStale(selected, snapshot.edition) : false}
+        hidden={selected ? hiddenIds.has(selected.id) : false}
         notes={notes}
+        onToggleHidden={toggleHidden}
         onClose={() => onDetailsOpenChange(false)}
         onSeeOnMap={() => {
           onDetailsOpenChange(false);

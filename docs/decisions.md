@@ -48,6 +48,13 @@ trigger down is what makes that happen.
 
 <!-- Add new entries directly below this line, newest first. -->
 
+## 2026-10-17 House Scanner hides homes per device until the database phase
+**Decision.** "Hide" is stored only as listing ids in the browser's localStorage, under a key for the household and member. The demo keeps it in memory. A later phase converts it to a table and RPCs, together with the estimated coordinate flag, in one migration.
+**Why.** The owner wants every database change shipped as one migration, and hiding is useful now. The hook `use-hidden-listings.ts` is the only code that knows where the ids live, so the later swap does not touch components.
+**Instead of.** Building the table, RPCs and snapshot field now, which would need its own migration before the coordinate flag. Hiding in the browser with no storage, which would lose the list on every reload.
+**Costs.** A hidden home is hidden on this device and browser only, and signing out does not clear it. Clearing site data or switching devices brings the homes back. Nothing is shared with the other member, which matches the intent that hiding is personal.
+**Revisit if.** The database phase starts, or the two members need their hide lists to follow them across devices sooner.
+
 ## 2026-10-17 House Scanner refreshes on focus only, without a timer
 **Decision.** The app reloads household data when the window regains focus and after the member's own saves, and no longer polls every 60 seconds.
 **Why.** Listings change about once a day, when the owner runs the collector, and own saves already refresh themselves. The poll cost four requests a minute per open tab, mostly returning identical data. The owner does not want automatic polling that cannot justify itself.

@@ -7,6 +7,7 @@ import { ListingsPanel } from '@/features/house-scanner/components/listings-pane
 import { SettingsPanel } from '@/features/house-scanner/components/settings-panel';
 import { SourcesPanel } from '@/features/house-scanner/components/sources-panel';
 import { useFavoriteToggle } from '@/features/house-scanner/hooks/use-favorite-toggle';
+import { useHiddenListings } from '@/features/house-scanner/hooks/use-hidden-listings';
 import { useListingNotes } from '@/features/house-scanner/hooks/use-listing-notes';
 import type { Snapshot } from '@/features/house-scanner/types/contracts';
 import type {
@@ -65,9 +66,27 @@ export function HouseholdWorkspace({
     () => scopeListings(snapshot, { tab, person, section, userId }),
     [snapshot, tab, person, userId, section],
   );
+  // Per device and member; the demo keeps nothing in the browser.
+  const { hidden, hide, unhide } = useHiddenListings({
+    householdId: snapshot.householdId,
+    userId,
+    persist: !synthetic,
+  });
   const visible = useMemo(
-    () => applyListingFilters(scoped, deferredFilters),
-    [scoped, deferredFilters],
+    () => applyListingFilters(scoped, deferredFilters, hidden),
+    [scoped, deferredFilters, hidden],
+  );
+  // Hidden homes the filters leave out, so the count line can say they exist.
+  const hiddenCount = useMemo(
+    () =>
+      deferredFilters.hidden === 'not-hidden'
+        ? applyListingFilters(
+            scoped,
+            { ...deferredFilters, hidden: 'hidden-only' },
+            hidden,
+          ).length
+        : 0,
+    [scoped, deferredFilters, hidden],
   );
   const filterHosts = useMemo(
     () => [...new Set(snapshot.listings.map(listingHost))],
@@ -176,6 +195,10 @@ export function HouseholdWorkspace({
           section={section}
           onSectionChange={setSection}
           filters={filters}
+          hiddenIds={hidden}
+          hiddenCount={hiddenCount}
+          onHide={hide}
+          onUnhide={unhide}
           onFiltersChange={setFilters}
           filterHosts={filterHosts}
           total={scoped.length}

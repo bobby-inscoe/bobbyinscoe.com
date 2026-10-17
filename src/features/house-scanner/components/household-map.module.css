@@ -60,12 +60,18 @@
   border-radius: var(--mantine-radius-xs);
   padding: 0 8px;
 }
+/* A hidden home, shown because the view includes hidden homes; it stays selectable. */
+.dimmed {
+  /* MapLibre writes inline opacity on markers, so a filter does the dimming. */
+  filter: grayscale(1) opacity(0.5);
+}
 /* The selected pin is filled and ringed so it reads on both basemaps; MapLibre owns transform, so no scaling. */
 .marker[aria-pressed="true"] {
   background: var(--mantine-color-moss-7);
   border-color: var(--mantine-color-moss-9);
   color: var(--mantine-color-flax-0);
   font-weight: 700;
+  filter: none;
   box-shadow:
     0 0 0 3px var(--mantine-color-flax-0),
     0 2px 8px rgb(0 0 0 / 35%);

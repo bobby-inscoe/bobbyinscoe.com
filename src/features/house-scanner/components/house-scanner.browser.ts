@@ -362,6 +362,94 @@ test('Lift only and Glazed only narrow the list and count as active filters', as
   ).toBeVisible();
 });
 
+test('hiding a home removes it from the list, keeps it findable and leaves browser storage empty in the demo', async ({
+  page,
+}) => {
+  await openDemo(page);
+  const home = page.getByRole('article', {
+    name: 'Example balcony home',
+    exact: true,
+  });
+  await home.getByRole('button', { name: 'Hide this home' }).click();
+  await expect(home).toHaveCount(0);
+  await expect(page.getByRole('article')).toHaveCount(4);
+  await expect(
+    page.getByText('4 homes · 3 not located · 1 hidden'),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await expect(page.getByText('1 active')).toHaveCount(0);
+  await page.getByRole('radio', { name: 'Hidden only' }).check();
+  await expect(page.getByText('1 active')).toBeVisible();
+  await expect(page.getByRole('article')).toHaveCount(1);
+  await expect(home.getByText('Hidden', { exact: true })).toBeVisible();
+  await page.getByRole('radio', { name: 'Both' }).check();
+  await expect(page.getByRole('article')).toHaveCount(5);
+  await home.getByRole('button', { name: 'Show this home again' }).click();
+  await expect(
+    home.getByRole('button', { name: 'Hide this home' }),
+  ).toBeVisible();
+  await expect(home.getByText('Hidden', { exact: true })).toHaveCount(0);
+  await page.getByRole('radio', { name: 'Not hidden' }).check();
+  await expect(page.getByRole('article')).toHaveCount(5);
+  expect(
+    await page.evaluate(() => ({
+      local: Object.keys(localStorage),
+      session: Object.keys(sessionStorage),
+    })),
+  ).toEqual({ local: [], session: [] });
+});
+
+test('hiding from the details sheet applies to Favorites too and never changes favorites', async ({
+  page,
+}) => {
+  await openDemo(page);
+  const home = page.getByRole('article', {
+    name: 'Example older listing',
+    exact: true,
+  });
+  await home.getByRole('button', { name: 'Details', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Example older listing', exact: true })
+    .getByRole('button', { name: 'Hide this home' })
+    .click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Favorites', exact: true }).click();
+  await expect(home).toHaveCount(0);
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await page.getByRole('radio', { name: 'Both' }).check();
+  await expect(home.getByText('Saved by Demo Alex')).toBeVisible();
+  await expect(home.getByText('Hidden', { exact: true })).toBeVisible();
+});
+
+test('a hidden home keeps a dimmed, selectable pin when hidden homes are shown', async ({
+  page,
+}) => {
+  await page.route('https://tiles.openfreemap.org/styles/liberty', (route) =>
+    route.fulfill({ json: LOCAL_STREET_STYLE }),
+  );
+  await routeImagery(page);
+  await openDemo(page);
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Min living area (m²)' }).fill('90');
+  await page
+    .getByRole('article', { name: 'Example detached home', exact: true })
+    .getByRole('button', { name: 'Hide this home' })
+    .click();
+  await expect(page.getByRole('article')).toHaveCount(0);
+  await page.getByRole('radio', { name: 'Both' }).check();
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  const pin = page.getByRole('button', {
+    name: /^Example detached home:.*hidden$/,
+  });
+  await expect(pin).toHaveCSS('filter', 'grayscale(1) opacity(0.5)');
+  await pin.click();
+  await expect(
+    page.getByRole('article', { name: 'Selected home: Example detached home' }),
+  ).toBeVisible();
+  await expect(pin).toHaveAttribute('aria-pressed', 'true');
+  await expect(pin).toHaveCSS('filter', 'none');
+});
+
 test('unknown prices are kept or hidden by the checkbox, and an empty result says filters are active', async ({
   page,
 }) => {

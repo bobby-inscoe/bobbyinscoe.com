@@ -186,7 +186,9 @@ export function HouseholdMap({
       const button = document.createElement('button');
       button.type = 'button';
       const unlocated = group[0].unlocated === true;
-      button.className = `${styles.marker} ${unlocated ? styles.unlocated : ''}`;
+      // A shared marker dims only when every home on it is hidden.
+      const dimmed = group.every((point) => point.dimmed);
+      button.className = `${styles.marker} ${unlocated ? styles.unlocated : ''} ${dimmed ? styles.dimmed : ''}`;
       button.textContent = unlocated
         ? `${group.length} not located`
         : group.length === 1
