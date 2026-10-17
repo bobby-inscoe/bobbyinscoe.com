@@ -119,9 +119,21 @@ export function useHouseholdSession() {
       }
       const selected = householdId.current ?? own[0].householdId;
       householdId.current = selected;
-      const snapshot = await householdSnapshot(client, selected, data.user.id);
+      const snapshot = await householdSnapshot(
+        client,
+        selected,
+        data.user.id,
+        own,
+      );
       if (mounted.current && ticket === generation.current)
-        setState({ status: 'authenticated', snapshot, userId: data.user.id });
+        // An unchanged poll keeps the old object, so the workspace does not re-render every card.
+        setState((previous) =>
+          previous.status === 'authenticated' &&
+          previous.userId === data.user.id &&
+          JSON.stringify(previous.snapshot) === JSON.stringify(snapshot)
+            ? previous
+            : { status: 'authenticated', snapshot, userId: data.user.id },
+        );
     } catch {
       if (mounted.current && ticket === generation.current)
         fail('Could not load your household. Retry or sign out.');
@@ -190,17 +202,16 @@ export function useHouseholdSession() {
         });
       }
     });
+    // Data changes about once a day and own saves refresh themselves, so returning to the tab is enough; no timer polls.
     const onFocus = () => {
       if (document.visibilityState === 'visible') void refresh();
     };
     window.addEventListener('focus', onFocus);
-    const timer = window.setInterval(onFocus, 60000);
     return () => {
       mounted.current = false;
       generation.current += 1;
       subscription.unsubscribe();
       window.removeEventListener('focus', onFocus);
-      window.clearInterval(timer);
     };
   }, [client, refresh, fail]);
   // The access code is the password the owner set for this member's user, so no email is sent.

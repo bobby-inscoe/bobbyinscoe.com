@@ -1,4 +1,5 @@
 import { ActionIcon, Badge, Button, Group, Text, Title } from '@mantine/core';
+import { memo } from 'react';
 
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import { ListingDetails } from '@/features/house-scanner/components/listing-details';
@@ -27,13 +28,14 @@ interface ListingCardProps {
   busy: boolean;
   canSave: boolean;
   notes?: ListingNotesController;
-  onSelect: () => void;
-  onFavorite: () => void;
+  // The handlers take the card's id so a list can share one of each, which lets memo skip unchanged cards.
+  onSelect: (listingId: string) => void;
+  onFavorite: (listingId: string) => void;
   // Shown only for homes that have a pin.
-  onSeeOnMap?: () => void;
+  onSeeOnMap?: (listingId: string) => void;
 }
 
-export function ListingCard({
+export const ListingCard = memo(function ListingCard({
   listing,
   snapshot,
   userId,
@@ -72,7 +74,7 @@ export function ListingCard({
           aria-label={mine ? 'Remove my favorite' : 'Save favorite'}
           disabled={!canSave}
           loading={busy}
-          onClick={onFavorite}
+          onClick={() => onFavorite(listing.id)}
         >
           {mine ? '★' : '☆'}
         </ActionIcon>
@@ -110,7 +112,7 @@ export function ListingCard({
         <Button
           size="xs"
           variant="default"
-          onClick={onSelect}
+          onClick={() => onSelect(listing.id)}
           // Inline details toggle in place; otherwise the button opens a dialog.
           aria-pressed={details ? selected : undefined}
           aria-haspopup={details ? undefined : 'dialog'}
@@ -118,7 +120,11 @@ export function ListingCard({
           Details
         </Button>
         {onSeeOnMap && hasPin(listing.coordinates) && (
-          <Button size="xs" variant="default" onClick={onSeeOnMap}>
+          <Button
+            size="xs"
+            variant="default"
+            onClick={() => onSeeOnMap(listing.id)}
+          >
             See on map
           </Button>
         )}
@@ -137,4 +143,4 @@ export function ListingCard({
       )}
     </article>
   );
-}
+});

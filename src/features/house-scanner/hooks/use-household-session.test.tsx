@@ -452,6 +452,53 @@ describe('House Scanner session privacy', () => {
     expect(sdk.auth.getUser).toHaveBeenCalledTimes(1);
     expect(hook.result.current.state.status).toBe('authenticated');
   });
+  it('does not poll while the tab stays open without focus changes', async () => {
+    // Installed before mount so any interval the hook sets runs on this clock.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await authenticated();
+      sdk.auth.getUser.mockClear();
+      sdk.rpc.mockClear();
+      await act(async () => {
+        vi.advanceTimersByTime(5 * 60_000);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(sdk.auth.getUser).not.toHaveBeenCalled();
+    expect(sdk.rpc).not.toHaveBeenCalled();
+  });
+  it('asks for memberships once per refresh and keeps an unchanged snapshot object', async () => {
+    const hook = await authenticated();
+    const first = hook.result.current.state;
+    sdk.rpc.mockClear();
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await waitFor(() =>
+      expect(sdk.rpc).toHaveBeenCalledWith('hs_snapshot', expect.any(Object)),
+    );
+    await settle();
+    expect(
+      sdk.rpc.mock.calls.filter(([name]) => name === 'hs_memberships'),
+    ).toHaveLength(1);
+    expect(hook.result.current.state).toBe(first);
+    const changed = fixtureSnapshot();
+    changed.listings[0].title = 'Renamed by the latest edition';
+    sdk.rpc.mockImplementation(async (name) =>
+      name === 'hs_memberships'
+        ? reply([fixtureSnapshot().members[0]])
+        : reply(changed),
+    );
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await waitFor(() => expect(hook.result.current.state).not.toBe(first));
+    const state = hook.result.current.state;
+    expect(
+      state.status === 'authenticated' && state.snapshot.listings[0].title,
+    ).toBe('Renamed by the latest edition');
+  });
   it('signs in with an email and the selected storage preference', async () => {
     const hook = renderHook(useHouseholdSession);
     await act(() =>

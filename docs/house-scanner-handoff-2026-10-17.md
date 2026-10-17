@@ -29,7 +29,7 @@ Small known issues: the Sources tab shows one scan note for every source; filter
 
 ## Backlog from the owner, in rough order
 
-1. **Structure and developer-experience pass first** (see below).
+1. ~~Structure and developer-experience pass~~ Done and live on 17 October; see "After the structure pass" below.
 2. **Click or tap outside the selected-home card on the map closes it**, mobile and desktop, without the X.
 3. **Reason chips**: up to three factual chips per card (for example Within budget, Balcony, Lift) plus one gray caveat chip (for example Transit not checked), filterable by chip. No numeric score and no ranking, which matches the spec. This also resolves deviation 1.
 4. **Hide button, personal**: hiding affects only the person who hid it. Needs a table (household, listing, user, timestamp), an RPC pair, a snapshot field and a contract change. The filter panel gets a three-way view: not hidden, hidden, both. Hidden homes show a badge on the card and a dimmed pin on the map, so the list and map stay in sync. Never delete anything; it is a view filter.
@@ -48,3 +48,21 @@ The feature grew to about 25k lines, most of it tests. Goals: easier scaling, cl
 - Update `docs/architecture.md` to the real layout afterwards, since the spec's proposed paths differ from the actual ones.
 
 Plan the structure first with a stronger model, then execute mechanically with a mid-tier one, running `npm run check`, `typecheck`, `test:typecheck`, `test`, `test:browser` and `build` after each step. Keep behavior unchanged during the pass.
+
+## After the structure pass (17 October, evening)
+
+Start the next session from this file. It already carries what the private spec says about these features; open the spec only for intent questions (it says dismissal is personal and never hides a home from anyone else). Then read `docs/architecture.md` for where code goes and `docs/house-scanner-structure-plan.md` for why.
+
+Done and merged: every step of the structure plan (R1 to R8, F1 to F3, D1 to D6), the attribution fix, a filled and ringed selected pin, one membership request per refresh instead of two, and no re-render when a refresh brings back identical data. The work record in `docs/house-scanner.md` lists the evidence.
+
+Network calls the owner saw, explained: a refresh is `getUser`, `hs_memberships` and `hs_snapshot`. It runs on window focus (including clicking back into the page from DevTools) and after the member's own saves. The spec's 60-second poll was removed on 17 October; see decisions.md. `hs_notes` runs when Details opens a home; an empty array means nobody has written a note on it.
+
+Speed: list cards are memoized, so opening Details with about 260 homes went from 110 to 38 ms to a visible drawer (527 to 177 ms at 4x CPU throttling). A favorite toggle still re-renders every card, because cards read the whole snapshot; passing cards their own saved-by and match values instead would fix it if it ever feels slow.
+
+Where the next features land:
+- Click outside the map card (backlog 2): a background-click callback on `components/household-map.tsx`, cleared in `components/listings-panel.tsx`. Markers are no longer rebuilt on selection, so a map click can be told apart from a marker click.
+- Reason chips (backlog 3): build the chips in `utils/match-listing.ts` beside the section labels, render them in `components/listing-summary.tsx` so the card and the details sheet share them, and add a chip filter to `utils/listing-filters.ts`.
+- Personal hide (backlog 4): high rigor, because it adds a table, two RPCs and a contract field. Plan it, record it in `docs/decisions.md`, then build: migration and PGlite tests in `supabase/`, a `hidden` field in `types/contracts.ts` and the snapshot, client calls in `api/household-client.ts`, a three-way value in `utils/listing-filters.ts`, a badge in `listing-card.tsx` and a `dimmed` flag from `utils/listing-view.ts` `mapPoints`. List and map read one filtered array, so they stay in sync without extra wiring.
+- Estimated positions (deviation 2): an `estimated` boolean on the coordinate contract and column, set by `tools/house-scanner/geocoder.ts`, labelled through `utils/listing-position.ts`.
+
+Suggested order: click outside (small, no backend), reason chips (no backend), then hide and the estimated flag together, since both change the contract and need one migration. Backups and the scheduler stay next after that.

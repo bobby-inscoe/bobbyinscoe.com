@@ -17,7 +17,9 @@ import {
   type ReactNode,
   type SetStateAction,
   Suspense,
+  useCallback,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -129,6 +131,28 @@ export function ListingsPanel({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filtersActive = activeFilterCount(filters);
   const points = useMemo(() => mapPoints(visible), [visible]);
+  // One handler per action, shared by every card, so unchanged cards skip rendering.
+  // The favorite handler is rebuilt on every render, so the latest one is read through a ref.
+  const favorite = useRef(onFavorite);
+  favorite.current = onFavorite;
+  const selectListing = useCallback(
+    (listingId: string) => {
+      onSelectedIdChange(listingId);
+      onDetailsOpenChange(true);
+    },
+    [onSelectedIdChange, onDetailsOpenChange],
+  );
+  const showOnMap = useCallback(
+    (listingId: string) => {
+      onSelectedIdChange(listingId);
+      onViewChange('map');
+    },
+    [onSelectedIdChange, onViewChange],
+  );
+  const favoriteListing = useCallback(
+    (listingId: string) => void favorite.current(listingId),
+    [],
+  );
   const notLocated = visible.filter(
     (listing) => !hasPin(listing.coordinates),
   ).length;
@@ -264,15 +288,9 @@ export function ListingsPanel({
               stale={isListingStale(listing, snapshot.edition)}
               busy={pending.includes(listing.id)}
               canSave={canSave(listing.id)}
-              onSelect={() => {
-                onSelectedIdChange(listing.id);
-                onDetailsOpenChange(true);
-              }}
-              onSeeOnMap={() => {
-                onSelectedIdChange(listing.id);
-                onViewChange('map');
-              }}
-              onFavorite={() => void onFavorite(listing.id)}
+              onSelect={selectListing}
+              onSeeOnMap={showOnMap}
+              onFavorite={favoriteListing}
             />
           ))}
         </div>
