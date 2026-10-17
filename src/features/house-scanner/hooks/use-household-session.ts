@@ -12,6 +12,7 @@ import {
   saveNote as saveNoteRequest,
   saveProfile,
   setFavorite,
+  setHidden,
   setRememberDevice,
 } from '@/features/house-scanner/api/household-client';
 import type {
@@ -346,6 +347,10 @@ export function useHouseholdSession() {
       mutate((active, household) => setFavorite(active, household, id, true)),
     onRemoveFavorite: (id: string) =>
       mutate((active, household) => setFavorite(active, household, id, false)),
+    onSetHidden: (listingIds: string[], hidden: boolean) =>
+      mutate((active, household) =>
+        setHidden(active, household, listingIds, hidden),
+      ),
     onAddManual: (value: ManualSubmission) =>
       mutate((active, household) => addManual(active, household, value)),
     onSaveProfile: (value: SearchProfile) =>

@@ -25,6 +25,7 @@ describe('geocodeMissing', () => {
       home('Kavaljersgatan 26', { latitude: 1 }),
     ];
     const clock = deps(f.impl);
+    const supplied = homes[2].coordinates;
     const stats = await geocodeMissing(homes, cache, clock);
     expect(stats).toEqual({ looked: 1, found: 1, cached: 0 });
     expect(homes[0].coordinates).toMatchObject({
@@ -32,8 +33,11 @@ describe('geocodeMissing', () => {
       longitude: 11.9,
       precision: 'address',
       source: 'Estimated from the address (OpenStreetMap)',
+      estimated: true,
     });
     expect(homes[1].coordinates).toBeNull();
+    // A position the source supplied stays as it was, without the flag.
+    expect(homes[2].coordinates).toBe(supplied);
     expect(f.calls[0].init.headers).toMatchObject({
       'User-Agent': expect.stringContaining('HouseScannerPersonalReader'),
     });
@@ -54,6 +58,7 @@ describe('geocodeMissing', () => {
       deps(fakeFetch(() => hit('highway')).impl),
     );
     expect(street[0].coordinates?.source).toContain('street name');
+    expect(street[0].coordinates?.estimated).toBe(true);
     const miss = fakeFetch(() => ({ body: '[]', type: 'application/json' }));
     const cache = {};
     const homes = [home('Nowhere 1')];

@@ -14,6 +14,22 @@ afterEach(cleanup);
 const BALCONY = '00000000-0000-4000-8000-000000000010';
 const TERRACE = '00000000-0000-4000-8000-000000000011';
 
+describe('demo hidden homes', () => {
+  it('hides and unhides in memory, and leaves the field out when none are hidden', async () => {
+    const { result } = renderHook(useDemoHousehold);
+    expect(result.current.snapshot.hiddenListingIds).toBeUndefined();
+    await act(() => result.current.setHidden([BALCONY, TERRACE], true));
+    expect(result.current.snapshot.hiddenListingIds).toEqual([
+      BALCONY,
+      TERRACE,
+    ]);
+    await act(() => result.current.setHidden([BALCONY], false));
+    expect(result.current.snapshot.hiddenListingIds).toEqual([TERRACE]);
+    await act(() => result.current.setHidden([TERRACE], false));
+    expect(result.current.snapshot.hiddenListingIds).toBeUndefined();
+  });
+});
+
 describe('demo household notes', () => {
   it('seeds fictional notes from both members', async () => {
     const { result } = renderHook(useDemoHousehold);

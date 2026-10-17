@@ -14,6 +14,8 @@ export interface HouseholdActions {
   onRemoveFavorite: (listingId: string) => Promise<void>;
   onAddManual: (submission: ManualSubmission) => Promise<void>;
   onSaveProfile: (profile: SearchProfile) => Promise<void>;
+  // Hides or unhides homes for the signed-in member only.
+  onSetHidden: (listingIds: string[], hidden: boolean) => Promise<void>;
   onLoadNotes: LoadNotes;
   onSaveNote: SaveNote;
 }

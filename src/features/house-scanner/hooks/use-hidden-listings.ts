@@ -1,84 +1,84 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import type { Snapshot } from '@/features/house-scanner/types/contracts';
+import type { HouseholdActions } from '@/features/house-scanner/types/household';
 
-export const MAX_HIDDEN = 2000;
-
-interface UseHiddenListingsOptions {
-  householdId: string;
+interface UseHiddenListingsOptions
+  extends Partial<Pick<HouseholdActions, 'onSetHidden'>> {
+  snapshot: Snapshot;
   userId: string;
-  // False in the demo, which keeps nothing in the browser.
+  // False in the demo, which never had a browser list to move.
   persist: boolean;
 }
 
-// shortcut: ids live in this browser only, so hiding is per device; the database phase swaps
-// this for a table and RPCs, and only this hook changes.
+// Before the database held hides, a member's list lived in this browser under this key.
+// It is read once to move it to the server and then removed.
 function storageKey(householdId: string, userId: string) {
   return `house-scanner:hidden:${householdId}:${userId}`;
 }
 
-function read(key: string, persist: boolean): Set<string> {
-  if (!persist) return new Set();
+function readStored(key: string): string[] {
   try {
-    const stored: unknown = JSON.parse(localStorage.getItem(key) ?? '[]');
-    return new Set(
-      Array.isArray(stored)
-        ? stored
-            .filter((id): id is string => typeof id === 'string')
-            .slice(0, MAX_HIDDEN)
-        : [],
-    );
+    const stored: unknown = JSON.parse(localStorage.getItem(key) ?? 'null');
+    return Array.isArray(stored)
+      ? stored.filter((id): id is string => typeof id === 'string')
+      : [];
   } catch {
-    return new Set();
+    return [];
   }
 }
 
-function write(key: string, ids: Set<string>) {
+function removeStored(key: string) {
   try {
-    localStorage.setItem(key, JSON.stringify([...ids]));
+    localStorage.removeItem(key);
   } catch {
-    // Storage is denied or full; the in-memory set still works for this visit.
+    // Storage is denied; the old list stays unread.
   }
 }
 
 export function useHiddenListings({
-  householdId,
+  snapshot,
   userId,
   persist,
+  onSetHidden,
 }: UseHiddenListingsOptions) {
-  const key = storageKey(householdId, userId);
-  const [state, setState] = useState(() => ({
-    key,
-    ids: read(key, persist),
-  }));
-  // A different household or member brings their own list.
-  let current = state;
-  if (state.key !== key) {
-    current = { key, ids: read(key, persist) };
-    setState(current);
-  }
-  const latest = useRef(current);
-  latest.current = current;
-  const change = useCallback(
-    (update: (ids: Set<string>) => void) => {
-      const ids = new Set(latest.current.ids);
-      update(ids);
-      // Drop the oldest ids rather than grow without limit.
-      for (const id of ids) {
-        if (ids.size <= MAX_HIDDEN) break;
-        ids.delete(id);
-      }
-      latest.current = { key: latest.current.key, ids };
-      setState(latest.current);
-      if (persist) write(latest.current.key, ids);
-    },
-    [persist],
+  const hidden = useMemo(
+    () => new Set(snapshot.hiddenListingIds ?? []),
+    [snapshot.hiddenListingIds],
   );
+  // The session hands out a new action on every render; callers keep stable functions.
+  const action = useRef(onSetHidden);
+  action.current = onSetHidden;
+  const write = useCallback((listingId: string, hide: boolean) => {
+    // The session has already put the app in its error state when a write fails, so there is nothing to add here.
+    action.current?.([listingId], hide).catch(() => {});
+  }, []);
   const hide = useCallback(
-    (listingId: string) => change((ids) => ids.add(listingId)),
-    [change],
+    (listingId: string) => write(listingId, true),
+    [write],
   );
   const unhide = useCallback(
-    (listingId: string) => change((ids) => ids.delete(listingId)),
-    [change],
+    (listingId: string) => write(listingId, false),
+    [write],
   );
-  return { hidden: current.ids, hide, unhide };
+  const moving = useRef<string | null>(null);
+  const { householdId, listings } = snapshot;
+  useEffect(() => {
+    const key = storageKey(householdId, userId);
+    if (!persist || !action.current || moving.current === key) return;
+    const stored = readStored(key);
+    if (stored.length === 0) return removeStored(key);
+    const present = new Set(listings.map((listing) => listing.id));
+    const ids = stored.filter((id) => present.has(id));
+    if (ids.length === 0) return removeStored(key);
+    // A refresh while the call is pending must not send it twice.
+    moving.current = key;
+    action
+      .current(ids, true)
+      .then(() => removeStored(key))
+      .catch(() => {
+        // The key stays, and the next load tries again.
+        moving.current = null;
+      });
+  }, [householdId, listings, userId, persist]);
+  return { hidden, hide, unhide };
 }

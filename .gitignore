@@ -40,3 +40,6 @@ yarn.lock
 house-scanner.profiles*.json
 *.private.json
 house-scanner.cache*.json
+
+# Planning and decision docs stay on this machine
+/docs/

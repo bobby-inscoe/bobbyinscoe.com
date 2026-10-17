@@ -7,6 +7,10 @@ import {
   readBoneoSearchPage,
 } from '@house-scanner-tools/boneo-parser';
 import {
+  readErikOlssonDetailPage,
+  readErikOlssonSearchPage,
+} from '@house-scanner-tools/erik-olsson-parser';
+import {
   type LivePartitionInput,
   type SourceAdapter,
   USER_AGENT,
@@ -17,6 +21,8 @@ import {
   BONEO_IMAGE_ORIGIN,
   BONEO_ORIGIN,
   BONEO_SOURCE_ID,
+  ERIK_OLSSON_ORIGIN,
+  ERIK_OLSSON_SOURCE_ID,
   type SourceCapability,
 } from '@house-scanner-tools/source-registry';
 
@@ -92,10 +98,42 @@ export const bjurforsAdapter: SourceAdapter = {
   readDetailPage: readBjurforsDetailPage,
 };
 
+// The municipality segment of the search page: a name and the site's own numeric id. Goteborg only.
+const ERIK_OLSSON_PATHS: Record<string, string> = {
+  göteborg: 'goteborg-166',
+};
+
+export const erikOlssonAdapter: SourceAdapter = {
+  sourceId: ERIK_OLSSON_SOURCE_ID,
+  executor: 'erik-olsson-personal-read',
+  origin: ERIK_OLSSON_ORIGIN,
+  // No photos are shown for this source.
+  imageOrigin: null,
+  headers: {
+    'user-agent': USER_AGENT,
+    accept: 'text/html,application/xhtml+xml',
+    'accept-language': 'sv-SE,sv;q=0.9,en;q=0.8',
+  },
+  coordinateSource: 'erik-olsson-listing-page',
+  detailLabel: 'Listing pages',
+  notCovered: 'Not covered: pre-market homes, other cities.',
+  partitionUrl(partition: LivePartitionInput) {
+    const path = ERIK_OLSSON_PATHS[partition.municipality.trim().toLowerCase()];
+    // The one search lists apartments and houses; the profile filter sorts them later.
+    return path === undefined
+      ? { unsupported: 'municipality-path-unproven' }
+      : `${ERIK_OLSSON_ORIGIN}/municipalities/${path}?tab=homes`;
+  },
+  // The search address already carries a query.
+  pageUrl: (base, page) => `${base}&page=${page}`,
+  readSearchPage: readErikOlssonSearchPage,
+  readDetailPage: readErikOlssonDetailPage,
+};
+
 /** The adapter for a capability, only when its policy names exactly this adapter's source and hosts. */
 export function adapterFor(capability: SourceCapability): SourceAdapter {
   const { policy } = capability;
-  const adapter = [boneoAdapter, bjurforsAdapter].find(
+  const adapter = [boneoAdapter, bjurforsAdapter, erikOlssonAdapter].find(
     (candidate) => candidate.executor === capability.executor,
   );
   if (
@@ -104,8 +142,8 @@ export function adapterFor(capability: SourceCapability): SourceAdapter {
     policy.listingOrigins.length !== 1 ||
     policy.listingOrigins[0] !== adapter.origin ||
     // Photos are allowed from the one image host only, shown by the browser and never fetched here.
-    policy.imageOrigins.length !== 1 ||
-    policy.imageOrigins[0] !== adapter.imageOrigin
+    policy.imageOrigins.length !== (adapter.imageOrigin === null ? 0 : 1) ||
+    policy.imageOrigins[0] !== (adapter.imageOrigin ?? undefined)
   )
     throw new Error('No permitted executor for this source.');
   return adapter;

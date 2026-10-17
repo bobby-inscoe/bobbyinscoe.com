@@ -173,6 +173,9 @@ export async function householdSnapshot(
         !listingIds.has(favorite.listingId) ||
         !memberIds.has(favorite.userId),
     ) ||
+    snapshot.hiddenListingIds?.some(
+      (listingId) => !listingIds.has(listingId),
+    ) ||
     listingIds.size !== snapshot.listings.length ||
     memberIds.size !== snapshot.members.length
   )
@@ -192,6 +195,23 @@ export function setFavorite(
       p_household_id: z.uuid().parse(householdId),
       p_listing_id: z.uuid().parse(listingId),
       p_saved: saved,
+    },
+    okSchema,
+  );
+}
+export function setHidden(
+  client: SupabaseClient,
+  householdId: string,
+  listingIds: string[],
+  hidden: boolean,
+) {
+  return rpc(
+    client,
+    'hs_set_hidden',
+    {
+      p_household_id: z.uuid().parse(householdId),
+      p_listing_ids: z.array(z.uuid()).min(1).max(500).parse(listingIds),
+      p_hidden: hidden,
     },
     okSchema,
   );

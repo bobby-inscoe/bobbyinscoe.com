@@ -63,6 +63,7 @@ const TABLES = [
   'editions',
   'favorites',
   'notes',
+  'hidden_listings',
   'admin_log',
 ] as const;
 // Obviously fictional criteria. No real preference appears in the migration or here.
@@ -580,6 +581,7 @@ beforeAll(async () => {
     '202610120001_house_scanner.sql',
     '202610120002_house_scanner_retention.sql',
     '202610120003_house_scanner_admin.sql',
+    '202610170001_house_scanner_hidden.sql',
   ])
     await db.exec(
       await readFile(
@@ -665,7 +667,7 @@ describe('operator-only access', () => {
     const exposed = await db.query<{ proname: string }>(
       "select proname from pg_proc where pronamespace='public'::regnamespace order by proname",
     );
-    expect(exposed.rows).toHaveLength(12);
+    expect(exposed.rows).toHaveLength(13);
     for (const row of exposed.rows) expect(row.proname).toMatch(/^hs_/);
     expect(exposed.rows.map((row) => row.proname)).not.toContainEqual(
       expect.stringContaining('admin'),

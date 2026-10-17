@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  coordinateSchema,
   factsSchema,
   listingUrlSchema,
   type SourcePolicy,
+  snapshotSchema,
   sourcePolicySchema,
 } from '@/features/house-scanner/types/contracts';
 
@@ -70,4 +72,64 @@ describe('URL refinements fail validation instead of throwing', () => {
       }
     },
   );
+});
+
+describe('optional fields added without a version bump', () => {
+  const position = {
+    longitude: 11.9,
+    latitude: 57.7,
+    precision: 'address',
+    source: 'Synthetic position',
+    observedAt: '2026-10-17T10:00:00Z',
+  };
+
+  it.each([undefined, true, false])('accepts estimated %s', (estimated) => {
+    expect(coordinateSchema.safeParse({ ...position, estimated }).success).toBe(
+      true,
+    );
+  });
+
+  it('rejects a flag that is not a boolean and still rejects unknown keys', () => {
+    expect(
+      coordinateSchema.safeParse({ ...position, estimated: 'yes' }).success,
+    ).toBe(false);
+    expect(
+      coordinateSchema.safeParse({ ...position, exact: true }).success,
+    ).toBe(false);
+  });
+
+  const snapshot = {
+    contractVersion: 1,
+    householdId: '10000000-0000-4000-8000-000000000001',
+    edition: null,
+    members: [],
+    profiles: [],
+    listings: [],
+    favorites: [],
+  };
+
+  it('accepts a snapshot without hidden ids and with a list of them', () => {
+    expect(snapshotSchema.safeParse(snapshot).success).toBe(true);
+    expect(
+      snapshotSchema.safeParse({
+        ...snapshot,
+        hiddenListingIds: ['10000000-0000-4000-8000-000000000002'],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects hidden ids that are not ids or exceed the listing ceiling', () => {
+    expect(
+      snapshotSchema.safeParse({ ...snapshot, hiddenListingIds: ['nope'] })
+        .success,
+    ).toBe(false);
+    const many = Array.from(
+      { length: 501 },
+      (_, index) =>
+        `10000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    );
+    expect(
+      snapshotSchema.safeParse({ ...snapshot, hiddenListingIds: many }).success,
+    ).toBe(false);
+  });
 });
