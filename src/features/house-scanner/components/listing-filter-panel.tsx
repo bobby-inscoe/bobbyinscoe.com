@@ -182,6 +182,16 @@ export function ListingFilterPanel({
             }
           />
           <Checkbox
+            label="Show duplicate listings"
+            checked={filters.showDuplicates}
+            onChange={(event) =>
+              onChange({
+                ...filters,
+                showDuplicates: event.currentTarget.checked,
+              })
+            }
+          />
+          <Checkbox
             label="Keep homes with unknown or disputed values"
             checked={filters.includeUnknown}
             onChange={(event) =>

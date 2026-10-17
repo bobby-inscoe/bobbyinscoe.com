@@ -84,6 +84,10 @@ interface ListingsPanelProps {
   hiddenIds: ReadonlySet<string>;
   // How many hidden homes the current filters keep out of view.
   hiddenCount: number;
+  // How many cross-posted copies the current filters keep out of view.
+  duplicateCount: number;
+  // For a home that stays visible: the other sites carrying it.
+  alsoOn: ReadonlyMap<string, string[]>;
   onHide: (listingId: string) => void;
   onUnhide: (listingId: string) => void;
   onFiltersChange: (filters: ListingFilters) => void;
@@ -119,6 +123,8 @@ export function ListingsPanel({
   filters,
   hiddenIds,
   hiddenCount,
+  duplicateCount,
+  alsoOn,
   onHide,
   onUnhide,
   onFiltersChange,
@@ -297,6 +303,7 @@ export function ListingsPanel({
             {visible.length} homes
             {notLocated > 0 && ` · ${notLocated} not located`}
             {hiddenCount > 0 && ` · ${hiddenCount} hidden`}
+            {duplicateCount > 0 && ` · ${duplicateCount} duplicates folded`}
           </Text>
           <Group gap="xs" role="group" aria-label="View">
             <Button
@@ -335,6 +342,7 @@ export function ListingsPanel({
               busy={pending.includes(listing.id)}
               canSave={canSave(listing.id)}
               hidden={hiddenIds.has(listing.id)}
+              alsoOn={alsoOn.get(listing.id)}
               onToggleHidden={toggleHidden}
               onSelect={selectListing}
               onSeeOnMap={showOnMap}
@@ -391,6 +399,7 @@ export function ListingsPanel({
                         listing={selected}
                         favorite={selectedFavorite}
                         hidden={hiddenIds.has(selected.id)}
+                        alsoOn={alsoOn.get(selected.id)}
                         onFavorite={favoriteListing}
                         onToggleHidden={(listingId) => {
                           toggleHidden(listingId);

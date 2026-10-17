@@ -6,6 +6,7 @@ import styles from '@/features/house-scanner/components/household-workspace.modu
 import { ListingDetails } from '@/features/house-scanner/components/listing-details';
 import { ListingPhoto } from '@/features/house-scanner/components/listing-photo';
 import {
+  AlsoOn,
   FactsLine,
   MatchLines,
   OriginalListingButton,
@@ -32,6 +33,8 @@ interface ListingCardProps {
   // Hidden by this member; shown only while the view includes hidden homes.
   hidden?: boolean;
   notes?: ListingNotesController;
+  // Other sites carrying the same home.
+  alsoOn?: string[];
   // The handlers take the card's id so a list can share one of each, which lets memo skip unchanged cards.
   onSelect: (listingId: string) => void;
   onFavorite: (listingId: string) => void;
@@ -52,6 +55,7 @@ export const ListingCard = memo(function ListingCard({
   canSave,
   hidden,
   notes,
+  alsoOn,
   onSelect,
   onFavorite,
   onToggleHidden,
@@ -92,6 +96,7 @@ export const ListingCard = memo(function ListingCard({
         {listing.title}
       </Title>
       <FactsLine listing={listing} />
+      <AlsoOn sites={alsoOn} />
       <ReasonChips listing={listing} snapshot={snapshot} />
       {(showStatus || listing.origin === 'manual' || stale || hidden) && (
         <Group gap="xs">

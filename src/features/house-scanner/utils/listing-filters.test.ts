@@ -205,3 +205,26 @@ describe('hidden homes view', () => {
     );
   });
 });
+
+describe('duplicate listings view', () => {
+  const [first, second] = SYNTHETIC_SNAPSHOT.listings;
+  const duplicates = new Set([second.id]);
+  const ids = (showDuplicates: boolean) =>
+    applyListingFilters(
+      [first, second],
+      { ...emptyFilters, showDuplicates },
+      new Set(),
+      duplicates,
+    ).map((listing) => listing.id);
+  it('leaves cross-posted copies out unless asked', () => {
+    expect(emptyFilters.showDuplicates).toBe(false);
+    expect(ids(false)).toEqual([first.id]);
+    expect(ids(true)).toEqual([first.id, second.id]);
+  });
+  it('counts as an active filter only when it is on', () => {
+    expect(activeFilterCount(emptyFilters)).toBe(0);
+    expect(activeFilterCount({ ...emptyFilters, showDuplicates: true })).toBe(
+      1,
+    );
+  });
+});
