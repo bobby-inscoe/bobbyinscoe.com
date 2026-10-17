@@ -307,7 +307,17 @@ test('personal filters change the list and the map together, and Clear restores 
   await routeImagery(page);
   await openDemo(page);
   await expect(page.getByLabel('Min living area (m²)')).toBeHidden();
-  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  const filtersToggle = page.getByRole('button', {
+    name: 'Filters',
+    exact: true,
+  });
+  await expect(filtersToggle).toHaveAttribute('aria-expanded', 'false');
+  await filtersToggle.click();
+  await expect(filtersToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(filtersToggle).toHaveAttribute(
+    'aria-controls',
+    'listing-filters',
+  );
   await page.getByRole('textbox', { name: 'Min living area (m²)' }).fill('90');
   await expect(page.getByText('1 homes', { exact: false })).toBeVisible();
   await expect(page.getByText('Showing 1 of 5 homes')).toBeVisible();
@@ -681,4 +691,50 @@ test('on a touch screen every button in the Listings view is at least 44 px tall
         .filter(({ width }) => width < 44),
     );
   expect(narrowIcons).toEqual([]);
+});
+
+test('the tab buttons stay on one row and the view heading is only for screen readers', async ({
+  page,
+}) => {
+  await openDemo(page);
+  const tabs = page.getByRole('navigation', { name: 'Shortlist sections' });
+  const tops = await tabs
+    .getByRole('button')
+    .evaluateAll((buttons) =>
+      buttons.map((button) => Math.round(button.getBoundingClientRect().top)),
+    );
+  expect(tops).toHaveLength(4);
+  expect(new Set(tops).size).toBe(1);
+  const heading = page.getByRole('heading', { name: 'Listings', level: 2 });
+  await expect(heading).toHaveCount(1);
+  const box = await heading.boundingBox();
+  expect(box?.width).toBeLessThanOrEqual(1);
+  expect(box?.height).toBeLessThanOrEqual(1);
+  await page.getByRole('button', { name: 'Favorites', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Favorites', level: 2 }),
+  ).toHaveCount(1);
+});
+
+test('the basemap toggle sits in the map corner, clear of the map navigation controls', async ({
+  page,
+}) => {
+  await page.route('https://tiles.openfreemap.org/styles/liberty', (route) =>
+    route.fulfill({ json: LOCAL_STREET_STYLE }),
+  );
+  await routeImagery(page);
+  await openDemo(page);
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  const toggle = page.getByRole('group', { name: 'Basemap' });
+  await expect(toggle).toBeVisible();
+  const [mapBox, toggleBox, navBox] = await Promise.all([
+    page.getByLabel('Listing map').boundingBox(),
+    toggle.boundingBox(),
+    page.locator('.maplibregl-ctrl-top-right').boundingBox(),
+  ]);
+  if (!mapBox || !toggleBox || !navBox) throw new Error('Missing box.');
+  expect(toggleBox.x).toBeGreaterThanOrEqual(mapBox.x);
+  expect(toggleBox.y).toBeGreaterThanOrEqual(mapBox.y);
+  expect(toggleBox.x + toggleBox.width).toBeLessThanOrEqual(navBox.x);
+  expect(toggleBox.y).toBeLessThan(mapBox.y + 40);
 });

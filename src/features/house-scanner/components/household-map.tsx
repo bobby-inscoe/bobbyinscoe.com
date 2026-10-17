@@ -20,6 +20,8 @@ const MAX_STACK_BUTTONS = 6;
 // Room kept around a pin so its marker is not clipped, and between the card and the map edge.
 const MARKER_MARGIN = 24;
 const CARD_GAP = 24;
+// The tallest marker, on coarse pointers.
+const MARKER_SIZE = 44;
 
 const SATELLITE_STYLE: StyleSpecification = {
   version: 8,
@@ -36,6 +38,11 @@ const SATELLITE_STYLE: StyleSpecification = {
   },
   layers: [{ id: 'imagery', type: 'raster', source: 'imagery' }],
 };
+
+// Rows kept clear at the top so the corner controls never hide a marker.
+function controlsInset(element: HTMLElement | null) {
+  return element ? element.offsetTop + element.offsetHeight + MARKER_MARGIN : 0;
+}
 
 interface MarkerEntry {
   marker: Marker;
@@ -60,6 +67,8 @@ interface HouseholdMapProps {
   satellite?: boolean;
   // Drawn over the map, for the selected home's card.
   overlay?: ReactNode;
+  // Small controls in the map's top-left corner, clear of MapLibre's own top-right ones.
+  controls?: ReactNode;
 }
 
 export function HouseholdMap({
@@ -69,6 +78,7 @@ export function HouseholdMap({
   styleUrl = 'https://tiles.openfreemap.org/styles/liberty',
   satellite = false,
   overlay,
+  controls,
 }: HouseholdMapProps) {
   const container = useRef<HTMLElement>(null);
   const map = useRef<MapLibreMap | null>(null);
@@ -78,6 +88,7 @@ export function HouseholdMap({
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
   const overlayRef = useRef<HTMLDivElement>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
   const markers = useRef<MarkerEntry[]>([]);
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
@@ -113,7 +124,15 @@ export function HouseholdMap({
         zoom: 11,
         bounds,
         // Wider than half the not-located marker, so that marker is not clipped at the edge.
-        fitBoundsOptions: { padding: 56, maxZoom: 14 },
+        fitBoundsOptions: {
+          padding: {
+            top: Math.max(56, controlsInset(controlsRef.current)),
+            right: 56,
+            bottom: 56,
+            left: 56,
+          },
+          maxZoom: 14,
+        },
         attributionControl: { compact: false },
       });
       map.current = instance;
@@ -202,17 +221,25 @@ export function HouseholdMap({
     const cardHeight =
       overlayRef.current?.firstElementChild?.getBoundingClientRect().height ??
       0;
-    const inset = cardHeight
-      ? Math.min(cardHeight + CARD_GAP, clientHeight - 2 * MARKER_MARGIN)
+    const cardInset = cardHeight ? cardHeight + CARD_GAP : 0;
+    // Clear the corner controls only while a whole marker still fits between them and the card.
+    const top = Math.min(
+      controlsInset(controlsRef.current),
+      Math.max(0, clientHeight - cardInset - 2 * MARKER_MARGIN - MARKER_SIZE),
+    );
+    const freeTop = Math.max(top, MARKER_MARGIN);
+    const inset = cardInset
+      ? Math.min(cardInset, clientHeight - freeTop - MARKER_MARGIN)
       : 0;
     const { x, y } = instance.project(center);
     const inFreeArea =
       x >= MARKER_MARGIN &&
       x <= clientWidth - MARKER_MARGIN &&
-      y >= MARKER_MARGIN &&
+      y >= freeTop &&
       y <= clientHeight - inset - MARKER_MARGIN;
     // Keep the first view, which frames every marker, when the pin is already in sight.
-    if (!inFreeArea) instance.jumpTo({ center, padding: { bottom: inset } });
+    if (!inFreeArea)
+      instance.jumpTo({ center, padding: { top, bottom: inset } });
   }, [points, selectedId, loaded, error]);
   const provider = satellite ? 'Esri' : 'OpenFreeMap';
   const availableStack = stack.filter((id) =>
@@ -233,6 +260,11 @@ export function HouseholdMap({
               className={styles.map}
               aria-label="Listing map"
             />
+            {controls && (
+              <div ref={controlsRef} className={styles.controls}>
+                {controls}
+              </div>
+            )}
             {/* Measured for the card height; the card keeps its own absolute position. */}
             <div ref={overlayRef}>{overlay}</div>
           </div>

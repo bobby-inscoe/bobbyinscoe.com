@@ -21,8 +21,12 @@ export function HouseScannerPage() {
         </Anchor>
         <Group justify="space-between">
           <div>
-            <Title order={1}>House Scanner</Title>
-            <Text>A private shared home shortlist.</Text>
+            <Title order={1} size="h2" className={styles.pageTitle}>
+              House Scanner
+            </Title>
+            <Text size="sm" c="dimmed">
+              A private shared home shortlist.
+            </Text>
           </div>
           <Button variant="subtle" onClick={() => setDemo(!demo)}>
             {demo ? 'Leave demo' : 'Explore the synthetic demo'}

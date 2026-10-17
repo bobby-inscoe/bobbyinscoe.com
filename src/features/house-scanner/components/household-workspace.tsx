@@ -100,7 +100,14 @@ export function HouseholdWorkspace({
             ? `Updated ${formatDate(snapshot.edition.publishedAt)}${stale ? '. Over 36 hours old, so facts may be stale.' : ''}`
             : 'No data has been published yet.'}
       </Text>{' '}
-      <Group component="nav" aria-label="Shortlist sections">
+      <Group
+        component="nav"
+        aria-label="Shortlist sections"
+        className={styles.tabs}
+        wrap="nowrap"
+        // Room for the focus ring, which the scroll container would otherwise clip.
+        p={4}
+      >
         {(synthetic
           ? (['suggestions', 'favorites', 'manual', 'settings'] as const)
           : ([

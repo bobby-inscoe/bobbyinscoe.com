@@ -1,6 +1,8 @@
 import {
   ActionIcon,
+  Badge,
   Button,
+  Flex,
   Group,
   Select,
   Stack,
@@ -16,6 +18,7 @@ import {
   type SetStateAction,
   Suspense,
   useMemo,
+  useState,
 } from 'react';
 
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
@@ -117,21 +120,22 @@ export function ListingsPanel({
   notes,
   onFavorite,
 }: ListingsPanelProps) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersActive = activeFilterCount(filters);
   const points = useMemo(() => mapPoints(visible), [visible]);
   const notLocated = visible.filter(
     (listing) => !hasPin(listing.coordinates),
   ).length;
   return (
     <>
-      <Group align="flex-end" justify="space-between">
-        <Stack gap="xs">
-          <Title order={2}>
-            {tab === 'favorites' ? 'Favorites' : 'Listings'}
-          </Title>
-        </Stack>
+      <Title order={2} className={styles.visuallyHidden}>
+        {tab === 'favorites' ? 'Favorites' : 'Listings'}
+      </Title>
+      <Flex gap="sm" align="flex-end" wrap="wrap">
         {tab === 'favorites' ? (
           <Select
             label="Saved by"
+            w={{ base: 140, sm: 200 }}
             value={person}
             onChange={(value) => onPersonChange(value ?? 'everyone')}
             data={[
@@ -148,6 +152,7 @@ export function ListingsPanel({
           <Group gap="xs" align="flex-end" wrap="nowrap">
             <Select
               label="Match"
+              w={{ base: 140, sm: 200 }}
               value={section}
               onChange={(value) => onSectionChange(value ?? 'all')}
               data={[
@@ -184,36 +189,57 @@ export function ListingsPanel({
             </Tooltip>
           </Group>
         )}
-      </Group>
+        <Group gap="xs">
+          <Button
+            variant="default"
+            aria-expanded={filtersOpen}
+            aria-controls="listing-filters"
+            onClick={() => setFiltersOpen((current) => !current)}
+          >
+            Filters
+          </Button>
+          {filtersActive > 0 && (
+            <Badge
+              variant="light"
+              color="gray"
+              aria-label={`${filtersActive} active filters`}
+            >
+              {filtersActive} active
+            </Badge>
+          )}
+        </Group>
+        {/* Grows to take the free space, which pushes the count and the view toggle to the right. */}
+        <Group gap="sm" justify="flex-end" flex="1 1 auto">
+          <Text size="sm" c="dimmed">
+            {visible.length} homes
+            {notLocated > 0 && ` · ${notLocated} not located`}
+          </Text>
+          <Group gap="xs" role="group" aria-label="View">
+            <Button
+              variant={view === 'list' ? 'filled' : 'default'}
+              aria-pressed={view === 'list'}
+              onClick={() => onViewChange('list')}
+            >
+              List
+            </Button>
+            <Button
+              variant={view === 'map' ? 'filled' : 'default'}
+              aria-pressed={view === 'map'}
+              onClick={() => onViewChange('map')}
+            >
+              Map
+            </Button>
+          </Group>
+        </Group>
+      </Flex>
       <ListingFilterPanel
+        open={filtersOpen}
         filters={filters}
         onChange={onFiltersChange}
         hosts={filterHosts}
         shown={visible.length}
         total={total}
       />
-      <Group justify="space-between">
-        <Text size="sm" c="dimmed">
-          {visible.length} homes
-          {notLocated > 0 && ` · ${notLocated} not located`}
-        </Text>
-        <Group gap="xs" role="group" aria-label="View">
-          <Button
-            variant={view === 'list' ? 'filled' : 'default'}
-            aria-pressed={view === 'list'}
-            onClick={() => onViewChange('list')}
-          >
-            List
-          </Button>
-          <Button
-            variant={view === 'map' ? 'filled' : 'default'}
-            aria-pressed={view === 'map'}
-            onClick={() => onViewChange('map')}
-          >
-            Map
-          </Button>
-        </Group>
-      </Group>
       {!visible.length && (
         <Text>
           No homes here.
@@ -251,27 +277,31 @@ export function ListingsPanel({
         <div className={styles.mapPanel}>
           {visible.length ? (
             <MapLoadBoundary>
-              <Group gap="xs" role="group" aria-label="Basemap">
-                <Button
-                  variant={satellite ? 'default' : 'filled'}
-                  aria-pressed={!satellite}
-                  onClick={() => onSatelliteChange(false)}
-                >
-                  Street map
-                </Button>
-                <Button
-                  variant={satellite ? 'filled' : 'default'}
-                  aria-pressed={satellite}
-                  onClick={() => onSatelliteChange(true)}
-                >
-                  Satellite
-                </Button>
-              </Group>
               <Suspense fallback={<Text role="status">Loading map…</Text>}>
                 <LazyMap
                   styleUrl={mapStyleUrl}
                   satellite={satellite}
                   points={points}
+                  controls={
+                    <Group gap="xs" role="group" aria-label="Basemap">
+                      <Button
+                        size="xs"
+                        variant={satellite ? 'default' : 'filled'}
+                        aria-pressed={!satellite}
+                        onClick={() => onSatelliteChange(false)}
+                      >
+                        Street map
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant={satellite ? 'filled' : 'default'}
+                        aria-pressed={satellite}
+                        onClick={() => onSatelliteChange(true)}
+                      >
+                        Satellite
+                      </Button>
+                    </Group>
+                  }
                   selectedId={selected?.id ?? null}
                   onSelect={onSelectedIdChange}
                   overlay={

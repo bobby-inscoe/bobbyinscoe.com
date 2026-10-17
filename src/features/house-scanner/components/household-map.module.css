@@ -1,6 +1,23 @@
 .stage {
   position: relative;
 }
+.controls {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  padding: var(--mantine-spacing-xs);
+  background: color-mix(in srgb, var(--mantine-color-flax-0) 80%, transparent);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--scanner-line);
+  border-radius: var(--mantine-radius-sm);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .controls {
+    background: var(--mantine-color-flax-0);
+    backdrop-filter: none;
+  }
+}
 .map {
   /* Tall enough that the selected-home card does not cover most of it. */
   height: clamp(430px, 70vh, 680px);

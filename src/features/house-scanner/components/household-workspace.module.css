@@ -137,3 +137,31 @@
     display: none;
   }
 }
+/* One row that never wraps; on a narrow screen it scrolls sideways. */
+.tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+.tabs > * {
+  flex-shrink: 0;
+}
+/* Stays in the accessibility tree while the active tab already names the view. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* The workshop stylesheet sets an unlayered, page-wide h1 size that beats Mantine's layered size prop. */
+.pageTitle {
+  font-size: var(--title-fz);
+  line-height: var(--title-lh);
+  letter-spacing: normal;
+}
