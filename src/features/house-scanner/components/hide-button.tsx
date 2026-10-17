@@ -36,10 +36,10 @@ export function HideButton({ listingId, hidden, onToggle }: HideButtonProps) {
       variant="subtle"
       color="gray"
       leftSection={<EyeIcon struck={!hidden} />}
-      aria-label={hidden ? 'Show this home again' : 'Hide this home'}
+      aria-label={hidden ? 'Unhide this home' : 'Hide this home'}
       onClick={() => onToggle(listingId)}
     >
-      {hidden ? 'Show again' : 'Hide'}
+      {hidden ? 'Unhide' : 'Hide'}
     </Button>
   );
 }

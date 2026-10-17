@@ -384,7 +384,7 @@ test('hiding a home removes it from the list, keeps it findable and leaves brows
   await expect(home.getByText('Hidden', { exact: true })).toBeVisible();
   await page.getByRole('radio', { name: 'Both' }).check();
   await expect(page.getByRole('article')).toHaveCount(5);
-  await home.getByRole('button', { name: 'Show this home again' }).click();
+  await home.getByRole('button', { name: 'Unhide this home' }).click();
   await expect(
     home.getByRole('button', { name: 'Hide this home' }),
   ).toBeVisible();
