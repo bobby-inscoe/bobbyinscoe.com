@@ -949,4 +949,19 @@ test('the selected home is a bottom sheet on a phone and a floating card on desk
         : cardBox.width <= 320 && gap >= 10;
     })
     .toBe(true);
+  if (!narrow) return;
+  // The tile attribution must stay readable above the sheet.
+  await expect
+    .poll(async () => {
+      const [attributionBox, cardBox] = await Promise.all([
+        page.locator('.maplibregl-ctrl-attrib').boundingBox(),
+        card.boundingBox(),
+      ]);
+      return Boolean(
+        attributionBox &&
+          cardBox &&
+          attributionBox.y + attributionBox.height <= cardBox.y + 1,
+      );
+    })
+    .toBe(true);
 });

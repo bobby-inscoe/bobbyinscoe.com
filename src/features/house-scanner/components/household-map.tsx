@@ -87,6 +87,7 @@ export function HouseholdMap({
   const [stack, setStack] = useState<string[]>([]);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const stageRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
   const markers = useRef<MarkerEntry[]>([]);
@@ -243,6 +244,24 @@ export function HouseholdMap({
     if (!inFreeArea)
       instance.jumpTo({ center, padding: { top, bottom: inset } });
   }, [points, selectedId, loaded, error]);
+  const hasOverlay = overlay != null;
+  // The phone sheet covers the bottom edge, so the tile attribution rides above it.
+  useEffect(() => {
+    const stage = stageRef.current;
+    const card = overlayRef.current?.firstElementChild;
+    if (!hasOverlay || !stage || !card) return;
+    const observer = new ResizeObserver(() =>
+      stage.style.setProperty(
+        '--card-height',
+        `${card.getBoundingClientRect().height}px`,
+      ),
+    );
+    observer.observe(card);
+    return () => {
+      observer.disconnect();
+      stage.style.removeProperty('--card-height');
+    };
+  }, [hasOverlay]);
   const provider = satellite ? 'Esri' : 'OpenFreeMap';
   const availableStack = stack.filter((id) =>
     points.some((point) => point.id === id),
@@ -256,7 +275,7 @@ export function HouseholdMap({
       ) : (
         <>
           {!loaded && <Text role="status">Loading map…</Text>}
-          <div className={styles.stage}>
+          <div ref={stageRef} className={styles.stage}>
             <section
               ref={container}
               className={styles.map}

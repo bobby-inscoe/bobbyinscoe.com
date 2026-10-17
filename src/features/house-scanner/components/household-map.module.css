@@ -39,6 +39,10 @@
   .map {
     height: clamp(430px, 80svh, 680px);
   }
+  /* The selected-home sheet spans the bottom edge; keep the attribution visible above it. */
+  .map :global(.maplibregl-ctrl-bottom-right) {
+    bottom: var(--card-height, 0px);
+  }
 }
 @media (pointer: coarse) {
   .marker {
