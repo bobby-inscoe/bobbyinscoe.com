@@ -1,10 +1,13 @@
 import {
   type CardInput,
   home,
+  IMAGE_ACCOUNT,
   listingPage,
+  PHOTO_ID,
   search,
 } from '@house-scanner-tools/erik-olsson-test-pages';
 import { runCollection, USER_AGENT } from '@house-scanner-tools/live-reader';
+import { assertAdapterOutput } from '@house-scanner-tools/live-run';
 import {
   deps,
   fakeFetch,
@@ -201,6 +204,34 @@ describe('Erik Olsson guarded run', () => {
     });
   });
 
+  it('shows the first photo from the broker image host, hotlinked, for a week', async () => {
+    const { impl } = fakeFetch(site(1, 1));
+    const result = await run(goteborg, deps(impl), (all) => all);
+    const [observation] = result.observations;
+    expect(observation.photo).toMatchObject({
+      url: `https://imagedelivery.net/${IMAGE_ACCOUNT}/${PHOTO_ID}/w=640,h=480,fit=cover,quality=80,format=auto`,
+      attribution: 'Erik Olsson',
+      displayAllowed: true,
+      hotlinkAllowed: true,
+      observedAt: observation.observedAt,
+    });
+    expect(
+      Date.parse(observation.photo?.expiresAt ?? '') -
+        Date.parse(observation.observedAt),
+    ).toBe(7 * 24 * 60 * 60 * 1000);
+    // The photo is not a fact: it never lands in the facts.
+    expect(observation.facts).not.toHaveProperty('photoPath');
+    assertAdapterOutput(erikOlsson().policy, observation);
+  });
+
+  it('leaves the photo off when a listing page names no image', async () => {
+    const { impl } = fakeFetch(
+      site(1, 1, () => ({ body: listingPage(home(), 3, false) })),
+    );
+    const result = await run(goteborg, deps(impl), (all) => all);
+    expect(result.observations[0].photo).toBeNull();
+  });
+
   it('leaves the extra facts unknown when a listing page fails, without stopping the run', async () => {
     const { impl } = fakeFetch(
       site(2, 2, () => ({ body: '<html>tom</html>' })),
@@ -224,7 +255,7 @@ function erikOlsson() {
 }
 
 describe('Erik Olsson registry entry', () => {
-  it('registers a pending source with an honest policy, no photos and the right host', () => {
+  it('registers a pending source with an honest policy, hotlinked photos and the right hosts', () => {
     const { policy, executor } = erikOlsson();
     expect(executor).toBe('erik-olsson-personal-read');
     expect(policy).toMatchObject({
@@ -233,9 +264,9 @@ describe('Erik Olsson registry entry', () => {
       automatedCollection: false,
       privateDisplay: false,
       listingOrigins: ['https://www.erikolsson.se'],
-      imageOrigins: [],
-      imageDisplay: false,
-      imageHotlink: false,
+      imageOrigins: ['https://imagedelivery.net'],
+      imageDisplay: true,
+      imageHotlink: true,
       retentionDays: 14,
     });
     expect(policy.rightsBasis).toContain('Permission unresolved');
@@ -277,6 +308,9 @@ describe('Erik Olsson registry entry', () => {
     const photos = structuredClone(erikOlsson());
     photos.policy.imageOrigins = ['https://www.erikolsson.se'];
     expect(() => adapterFor(photos)).toThrow('No permitted executor');
+    const noPhotos = structuredClone(erikOlsson());
+    noPhotos.policy.imageOrigins = [];
+    expect(() => adapterFor(noPhotos)).toThrow('No permitted executor');
     const other = structuredClone(erikOlsson());
     other.executor = 'boneo-personal-read';
     expect(() => adapterFor(other)).toThrow('No permitted executor');
@@ -286,14 +320,7 @@ describe('Erik Olsson registry entry', () => {
   });
 
   it('leaves the other candidates without an executor', () => {
-    for (const id of [
-      'stadshem',
-      'alvhem',
-      'fastighetsbyran',
-      'booli',
-      'hemnet',
-      'norban',
-    ])
+    for (const id of ['alvhem', 'fastighetsbyran', 'booli', 'hemnet', 'norban'])
       expect(
         sourceRegistry().find((e) => e.policy.sourceId === id)?.executor,
       ).toBe('none');

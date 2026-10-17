@@ -9,9 +9,26 @@ export interface MatchResult {
   section: 'preferred' | 'stretch' | 'exceptions' | 'needs-details' | 'outside';
   reasons: string[];
   caveats: string[];
+  // For "Missing info": the facts that are unknown or disputed, in plain words.
+  missing: string[];
 }
 
 type Section = MatchResult['section'];
+
+const MISSING_LABELS: Record<string, string> = {
+  purchase: 'whether it is for sale',
+  propertyType: 'home type',
+  livingAreaM2: 'living area',
+  rooms: 'rooms',
+  groundFloor: 'floor',
+  lift: 'lift',
+  outdoor: 'balcony or terrace',
+  glazed: 'glazing',
+  askingPriceSek: 'price',
+  tenure: 'tenure',
+  status: 'status',
+  'geographic scope': 'location',
+};
 
 export const SECTION_LABELS: Record<Section, string> = {
   preferred: 'Within budget',
@@ -224,16 +241,21 @@ export function matchListing(
   )
     caveats.push('Nature access not checked');
   if (excluded.length)
-    return { section: 'outside', reasons: excluded, caveats };
-  if (missing.length)
+    return { section: 'outside', reasons: excluded, caveats, missing: [] };
+  if (missing.length) {
+    const named = [
+      ...new Set(missing.map((key) => MISSING_LABELS[key] ?? key)),
+    ];
     return {
       section: 'needs-details',
       reasons: ['Details need confirmation'],
       caveats: [
         ...caveats,
-        ...missing.map((key) => `Unknown or conflicting: ${key}`),
+        ...named.map((label) => `Unknown or disputed: ${label}`),
       ],
+      missing: named,
     };
+  }
   const price = f.askingPriceSek;
 
   reasons.push(
@@ -250,5 +272,6 @@ export function matchListing(
         : 'preferred',
     reasons: reasons.slice(0, 3),
     caveats,
+    missing: [],
   };
 }

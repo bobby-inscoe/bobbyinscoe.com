@@ -6,10 +6,18 @@ import {
   NumberInput,
   Radio,
   Select,
+  SimpleGrid,
   Stack,
   Text,
 } from '@mantine/core';
 
+import { NumberSelect } from '@/features/house-scanner/components/number-select';
+import {
+  AREA_OPTIONS,
+  formatArea,
+  formatRooms,
+  ROOM_OPTIONS,
+} from '@/features/house-scanner/utils/criteria-options';
 import {
   ALL_HOSTS,
   emptyFilters,
@@ -41,19 +49,11 @@ export function ListingFilterPanel({
   shown,
   total,
 }: ListingFilterPanelProps) {
-  function number(
-    label: string,
-    key:
-      | 'minPriceMsek'
-      | 'maxPriceMsek'
-      | 'minAreaM2'
-      | 'maxAreaM2'
-      | 'minRooms',
-    unit: string,
-  ) {
+  function price(label: string, key: 'minPriceSek' | 'maxPriceSek') {
     return (
       <NumberInput
-        label={`${label} (${unit})`}
+        aria-label={`${label} price (SEK)`}
+        placeholder={label === 'Min' ? 'No min' : 'No max'}
         value={filters[key] ?? ''}
         onChange={(value) =>
           onChange({
@@ -61,22 +61,70 @@ export function ListingFilterPanel({
             [key]: typeof value === 'number' ? value : null,
           })
         }
-        min={0}
+        // Typing 4500000 shows 4 500 000, as prices are written everywhere else in the app.
+        thousandSeparator=" "
+        allowDecimal={false}
         allowNegative={false}
+        min={0}
         hideControls
-        flex="1 1 8rem"
       />
+    );
+  }
+  // A min and a max side by side under one heading, so a phone shows two fields per row instead of four.
+  function pair(heading: string, fields: React.ReactNode) {
+    return (
+      <Stack gap={4} flex="1 1 15rem">
+        <Text size="sm" fw={700}>
+          {heading}
+        </Text>
+        <SimpleGrid cols={2} spacing="xs">
+          {fields}
+        </SimpleGrid>
+      </Stack>
     );
   }
   return (
     <Collapse expanded={open} id="listing-filters">
       <Stack gap="sm">
         <Flex gap="sm" wrap="wrap">
-          {number('Min price', 'minPriceMsek', 'MSEK')}
-          {number('Max price', 'maxPriceMsek', 'MSEK')}
-          {number('Min living area', 'minAreaM2', 'm²')}
-          {number('Max living area', 'maxAreaM2', 'm²')}
-          {number('Minimum rooms', 'minRooms', 'rooms')}
+          {pair(
+            'Price (SEK)',
+            <>
+              {price('Min', 'minPriceSek')}
+              {price('Max', 'maxPriceSek')}
+            </>,
+          )}
+          {pair(
+            'Living area',
+            <>
+              <NumberSelect
+                ariaLabel="Min living area (m²)"
+                value={filters.minAreaM2}
+                onChange={(minAreaM2) => onChange({ ...filters, minAreaM2 })}
+                options={AREA_OPTIONS}
+                format={formatArea}
+                anyLabel="No min"
+              />
+              <NumberSelect
+                ariaLabel="Max living area (m²)"
+                value={filters.maxAreaM2}
+                onChange={(maxAreaM2) => onChange({ ...filters, maxAreaM2 })}
+                options={AREA_OPTIONS}
+                format={formatArea}
+                anyLabel="No max"
+              />
+            </>,
+          )}
+          <Stack gap={4} flex="1 1 15rem">
+            <NumberSelect
+              label="Minimum rooms"
+              value={filters.minRooms}
+              onChange={(minRooms) => onChange({ ...filters, minRooms })}
+              options={ROOM_OPTIONS}
+              format={formatRooms}
+              anyLabel="Any"
+            />
+          </Stack>
           <Select
             label="Source"
             value={filters.host}
@@ -85,7 +133,7 @@ export function ListingFilterPanel({
             }
             data={[{ value: ALL_HOSTS, label: 'All sources' }, ...hosts]}
             comboboxProps={{ withinPortal: false }}
-            flex="1 1 12rem"
+            flex="1 1 15rem"
           />
         </Flex>
         <Flex gap="md" wrap="wrap">

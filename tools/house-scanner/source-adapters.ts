@@ -21,10 +21,18 @@ import {
   BONEO_IMAGE_ORIGIN,
   BONEO_ORIGIN,
   BONEO_SOURCE_ID,
+  ERIK_OLSSON_IMAGE_ORIGIN,
   ERIK_OLSSON_ORIGIN,
   ERIK_OLSSON_SOURCE_ID,
   type SourceCapability,
+  STADSHEM_IMAGE_ORIGIN,
+  STADSHEM_ORIGIN,
+  STADSHEM_SOURCE_ID,
 } from '@house-scanner-tools/source-registry';
+import {
+  readStadshemDetailPage,
+  readStadshemSearchPage,
+} from '@house-scanner-tools/stadshem-parser';
 
 // Path segments proven from one public Goteborg district URL. The municipality
 // level path is derived by dropping the district segment and is unproven. A
@@ -103,12 +111,17 @@ const ERIK_OLSSON_PATHS: Record<string, string> = {
   göteborg: 'goteborg-166',
 };
 
+// A thumbnail size of the image account's flexible variants; the site's own pages use the same family.
+const PHOTO_VARIANT = 'w=640,h=480,fit=cover,quality=80,format=auto';
+// The daily run refreshes the photo, so a week is ample before the app stops showing it.
+const PHOTO_VALID_MS = 7 * 24 * 60 * 60 * 1000;
+
 export const erikOlssonAdapter: SourceAdapter = {
   sourceId: ERIK_OLSSON_SOURCE_ID,
   executor: 'erik-olsson-personal-read',
   origin: ERIK_OLSSON_ORIGIN,
-  // No photos are shown for this source.
-  imageOrigin: null,
+  // Photos are the broker's Cloudflare Images address, shown by the viewer's browser and never fetched here.
+  imageOrigin: ERIK_OLSSON_IMAGE_ORIGIN,
   headers: {
     'user-agent': USER_AGENT,
     accept: 'text/html,application/xhtml+xml',
@@ -124,26 +137,78 @@ export const erikOlssonAdapter: SourceAdapter = {
       ? { unsupported: 'municipality-path-unproven' }
       : `${ERIK_OLSSON_ORIGIN}/municipalities/${path}?tab=homes`;
   },
+  photoFor(facts, observedAt) {
+    if (facts.photoPath === undefined) return null;
+    return {
+      url: `${ERIK_OLSSON_IMAGE_ORIGIN}/${facts.photoPath}/${PHOTO_VARIANT}`,
+      attribution: 'Erik Olsson',
+      rightsBasis:
+        'Shown to the household owner for personal use, loaded from the broker image host and never copied or stored.',
+      expiresAt: new Date(
+        Date.parse(observedAt) + PHOTO_VALID_MS,
+      ).toISOString(),
+      observedAt,
+      displayAllowed: true,
+      hotlinkAllowed: true,
+    };
+  },
   // The search address already carries a query.
   pageUrl: (base, page) => `${base}&page=${page}`,
   readSearchPage: readErikOlssonSearchPage,
   readDetailPage: readErikOlssonDetailPage,
 };
 
+// One list of every estate, read for the one municipality proven so far.
+const STADSHEM_MUNICIPALITIES = ['göteborg'];
+const STADSHEM_LIST = `${STADSHEM_ORIGIN}/api/estates?per_page=100&orderby=published&order=desc&status[]=till-salu&status[]=snart-till-salu-kommande&page=1`;
+
+export const stadshemAdapter: SourceAdapter = {
+  sourceId: STADSHEM_SOURCE_ID,
+  executor: 'stadshem-personal-read',
+  origin: STADSHEM_ORIGIN,
+  // Photos are hotlinked from Google Cloud Storage and never fetched here.
+  imageOrigin: STADSHEM_IMAGE_ORIGIN,
+  headers: {
+    'user-agent': USER_AGENT,
+    // robots.txt is asked with the same headers, so plain text stays acceptable.
+    accept: 'application/json, text/plain;q=0.9',
+    'accept-language': 'sv-SE,sv;q=0.9,en;q=0.8',
+  },
+  coordinateSource: 'stadshem-estates',
+  detailLabel: 'Estate records',
+  notCovered: 'Not covered: other cities.',
+  partitionUrl(partition: LivePartitionInput) {
+    return STADSHEM_MUNICIPALITIES.includes(
+      partition.municipality.trim().toLowerCase(),
+    )
+      ? STADSHEM_LIST
+      : { unsupported: 'municipality-path-unproven' };
+  },
+  pageUrl: (base, page) => base.replace(/page=\d+$/, `page=${page}`),
+  // People open the public page; floor and lift are read from the estate's own record.
+  detailUrl: (observation) =>
+    `${STADSHEM_ORIGIN}/api/estates/${observation.sourceListingId}`,
+  readSearchPage: readStadshemSearchPage,
+  readDetailPage: readStadshemDetailPage,
+};
+
 /** The adapter for a capability, only when its policy names exactly this adapter's source and hosts. */
 export function adapterFor(capability: SourceCapability): SourceAdapter {
   const { policy } = capability;
-  const adapter = [boneoAdapter, bjurforsAdapter, erikOlssonAdapter].find(
-    (candidate) => candidate.executor === capability.executor,
-  );
+  const adapter = [
+    boneoAdapter,
+    bjurforsAdapter,
+    erikOlssonAdapter,
+    stadshemAdapter,
+  ].find((candidate) => candidate.executor === capability.executor);
   if (
     adapter === undefined ||
     policy.sourceId !== adapter.sourceId ||
     policy.listingOrigins.length !== 1 ||
     policy.listingOrigins[0] !== adapter.origin ||
     // Photos are allowed from the one image host only, shown by the browser and never fetched here.
-    policy.imageOrigins.length !== (adapter.imageOrigin === null ? 0 : 1) ||
-    policy.imageOrigins[0] !== (adapter.imageOrigin ?? undefined)
+    policy.imageOrigins.length !== 1 ||
+    policy.imageOrigins[0] !== adapter.imageOrigin
   )
     throw new Error('No permitted executor for this source.');
   return adapter;

@@ -214,6 +214,14 @@ export const favoriteSchema = z.strictObject({
   userId: id,
   savedAt: timestamp,
 });
+// One member's note on one listing, as the snapshot carries it.
+export const snapshotNoteSchema = z.strictObject({
+  listingId: id,
+  userId: id,
+  body: z.string().max(2000),
+  revision: z.number().int().positive(),
+  editedAt: timestamp,
+});
 export const listingSchema = z.strictObject({
   id,
   householdId: id,
@@ -248,6 +256,9 @@ export const snapshotSchema = z.strictObject({
   // The signed-in member's own hidden listings. The database leaves the key out when there are none,
   // so an app built before it still parses the snapshot. Absent means none.
   hiddenListingIds: z.array(id).max(500).optional(),
+  // Every member's notes on the listings above, so opening a listing needs no request. Ten members on
+  // 500 listings is the ceiling. The database leaves the key out when there are none; absent means none.
+  notes: z.array(snapshotNoteSchema).max(5000).optional(),
 });
 export const manualSubmissionSchema = z.strictObject({
   url: listingUrlSchema,
@@ -317,6 +328,7 @@ export type Listing = z.infer<typeof listingSchema>;
 export type Observation = z.infer<typeof observationSchema>;
 export type Evidence = z.infer<typeof evidenceSchema>;
 export type Favorite = z.infer<typeof favoriteSchema>;
+export type SnapshotNote = z.infer<typeof snapshotNoteSchema>;
 export type Member = z.infer<typeof memberSchema>;
 export type Snapshot = z.infer<typeof snapshotSchema>;
 export type SourcePolicy = z.infer<typeof sourcePolicySchema>;

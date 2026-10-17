@@ -1,5 +1,6 @@
-import { ActionIcon, Badge, Button, Group, Text, Title } from '@mantine/core';
+import { Badge, Button, Group, Text, Title } from '@mantine/core';
 import { memo } from 'react';
+import { FavoriteStar } from '@/features/house-scanner/components/favorite-star';
 import { HideButton } from '@/features/house-scanner/components/hide-button';
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import { ListingDetails } from '@/features/house-scanner/components/listing-details';
@@ -72,19 +73,19 @@ export const ListingCard = memo(function ListingCard({
     >
       <div className={styles.photoWrap}>
         <ListingPhoto listing={listing} />
-        <ActionIcon
-          className={styles.star}
-          variant={mine ? 'filled' : 'default'}
-          color="moss"
-          size="lg"
-          radius="xl"
-          aria-label={mine ? 'Remove my favorite' : 'Save favorite'}
-          disabled={!canSave}
-          loading={busy}
-          onClick={() => onFavorite(listing.id)}
-        >
-          {mine ? '★' : '☆'}
-        </ActionIcon>
+        {onToggleHidden && (
+          <HideButton
+            listingId={listing.id}
+            hidden={hidden === true}
+            onToggle={onToggleHidden}
+          />
+        )}
+        <FavoriteStar
+          mine={mine}
+          canSave={canSave}
+          busy={busy}
+          onToggle={() => onFavorite(listing.id)}
+        />
       </div>
       <PriceLine listing={listing} />
       <Title order={3} size="h5" lineClamp={1}>
@@ -128,13 +129,6 @@ export const ListingCard = memo(function ListingCard({
         >
           Details
         </Button>
-        {onToggleHidden && (
-          <HideButton
-            listingId={listing.id}
-            hidden={hidden === true}
-            onToggle={onToggleHidden}
-          />
-        )}
         {onSeeOnMap && hasPin(listing.coordinates) && (
           <Button
             size="xs"

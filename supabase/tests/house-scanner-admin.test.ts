@@ -582,6 +582,7 @@ beforeAll(async () => {
     '202610120002_house_scanner_retention.sql',
     '202610120003_house_scanner_admin.sql',
     '202610170001_house_scanner_hidden.sql',
+    '202610170002_house_scanner_snapshot_notes.sql',
   ])
     await db.exec(
       await readFile(

@@ -6,6 +6,7 @@ import {
   Group,
   Select,
   Stack,
+  Switch,
   Text,
   Title,
   Tooltip,
@@ -175,6 +176,15 @@ export function ListingsPanel({
     (listingId: string) => void favorite.current(listingId),
     [],
   );
+  const selectedFavorite = {
+    mine: selected
+      ? snapshot.favorites.some(
+          (entry) => entry.listingId === selected.id && entry.userId === userId,
+        )
+      : false,
+    canSave: selected ? canSave(selected.id) : false,
+    busy: selected ? pending.includes(selected.id) : false,
+  };
   const notLocated = visible.filter(
     (listing) => !hasPin(listing.coordinates),
   ).length;
@@ -183,85 +193,106 @@ export function ListingsPanel({
       <Title order={2} className={styles.visuallyHidden}>
         {tab === 'favorites' ? 'Favorites' : 'Listings'}
       </Title>
-      <Flex gap="sm" align="flex-end" wrap="wrap">
-        {tab === 'favorites' ? (
-          <Select
-            label="Saved by"
-            w={{ base: 140, sm: 200 }}
-            value={person}
-            onChange={(value) => onPersonChange(value ?? 'everyone')}
-            data={[
-              { value: 'everyone', label: 'Everyone' },
-              { value: 'mine', label: 'Mine' },
-              ...snapshot.members.map((entry) => ({
-                value: entry.userId,
-                label: entry.displayName,
-              })),
-            ]}
-            comboboxProps={{ withinPortal: false }}
-          />
-        ) : (
-          <Group gap="xs" align="flex-end" wrap="nowrap">
+      <div className={styles.toolbar}>
+        <Flex
+          gap="sm"
+          align="flex-end"
+          wrap="wrap"
+          className={styles.toolbarControls}
+        >
+          {tab === 'favorites' ? (
             <Select
-              label="Match"
+              label="Saved by"
               w={{ base: 140, sm: 200 }}
-              value={section}
-              onChange={(value) => onSectionChange(value ?? 'all')}
+              value={person}
+              onChange={(value) => onPersonChange(value ?? 'everyone')}
               data={[
-                { value: 'all', label: 'All' },
-                ...MATCH_CHOICES.map(({ value, label }) => ({
-                  value,
-                  label,
+                { value: 'everyone', label: 'Everyone' },
+                { value: 'mine', label: 'Mine' },
+                ...snapshot.members.map((entry) => ({
+                  value: entry.userId,
+                  label: entry.displayName,
                 })),
               ]}
               comboboxProps={{ withinPortal: false }}
             />
-            <Tooltip
-              multiline
-              w={300}
-              events={{ hover: true, focus: true, touch: true }}
-              label={
-                <Stack gap={4}>
-                  {MATCH_CHOICES.map(({ value, label, description }) => (
-                    <Text key={value} size="xs">
-                      {label}: {description}
-                    </Text>
-                  ))}
-                </Stack>
-              }
-            >
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                size="lg"
-                aria-label="What the match options mean"
+          ) : (
+            <Group gap="xs" align="flex-end" wrap="nowrap">
+              <Select
+                label="Match"
+                w={{ base: 140, sm: 200 }}
+                value={section}
+                onChange={(value) => onSectionChange(value ?? 'all')}
+                data={[
+                  { value: 'all', label: 'All' },
+                  ...MATCH_CHOICES.map(({ value, label }) => ({
+                    value,
+                    label,
+                  })),
+                ]}
+                comboboxProps={{ withinPortal: false }}
+              />
+              <Tooltip
+                multiline
+                w={300}
+                events={{ hover: true, focus: true, touch: true }}
+                label={
+                  <Stack gap={4}>
+                    {MATCH_CHOICES.map(({ value, label, description }) => (
+                      <Text key={value} size="xs">
+                        {label}: {description}
+                      </Text>
+                    ))}
+                  </Stack>
+                }
               >
-                ⓘ
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-        )}
-        <Group gap="xs">
-          <Button
-            variant="default"
-            aria-expanded={filtersOpen}
-            aria-controls="listing-filters"
-            onClick={() => setFiltersOpen((current) => !current)}
-          >
-            Filters
-          </Button>
-          {filtersActive > 0 && (
-            <Badge
-              variant="light"
-              color="gray"
-              aria-label={`${filtersActive} active filters`}
-            >
-              {filtersActive} active
-            </Badge>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="lg"
+                  aria-label="What the match options mean"
+                >
+                  ⓘ
+                </ActionIcon>
+              </Tooltip>
+            </Group>
           )}
-        </Group>
-        {/* Grows to take the free space, which pushes the count and the view toggle to the right. */}
-        <Group gap="sm" justify="flex-end" flex="1 1 auto">
+          <Group gap="xs">
+            <Button
+              variant="default"
+              aria-expanded={filtersOpen}
+              aria-controls="listing-filters"
+              onClick={() => setFiltersOpen((current) => !current)}
+            >
+              Filters
+            </Button>
+            {filtersActive > 0 && (
+              <Badge
+                variant="light"
+                color="gray"
+                aria-label={`${filtersActive} active filters`}
+              >
+                {filtersActive} active
+              </Badge>
+            )}
+          </Group>
+        </Flex>
+        <div className={styles.toolbarFilters} data-open={filtersOpen}>
+          <ListingFilterPanel
+            open={filtersOpen}
+            filters={filters}
+            onChange={onFiltersChange}
+            hosts={filterHosts}
+            shown={visible.length}
+            total={total}
+          />
+        </div>
+        <Group
+          gap="sm"
+          justify="space-between"
+          wrap="wrap"
+          className={styles.toolbarView}
+        >
           <Text size="sm" c="dimmed">
             {visible.length} homes
             {notLocated > 0 && ` · ${notLocated} not located`}
@@ -284,15 +315,7 @@ export function ListingsPanel({
             </Button>
           </Group>
         </Group>
-      </Flex>
-      <ListingFilterPanel
-        open={filtersOpen}
-        filters={filters}
-        onChange={onFiltersChange}
-        hosts={filterHosts}
-        shown={visible.length}
-        total={total}
-      />
+      </div>
       {!visible.length && (
         <Text>
           No homes here.
@@ -321,6 +344,17 @@ export function ListingsPanel({
         </div>
       ) : (
         <div className={styles.mapPanel}>
+          {/* The same view the Hidden homes filter sets, so the list and the map stay in step. */}
+          <Switch
+            label="Show hidden homes"
+            checked={filters.hidden !== 'not-hidden'}
+            onChange={(event) =>
+              onFiltersChange({
+                ...filters,
+                hidden: event.currentTarget.checked ? 'both' : 'not-hidden',
+              })
+            }
+          />
           {visible.length ? (
             <MapLoadBoundary>
               <Suspense fallback={<Text role="status">Loading map…</Text>}>
@@ -355,6 +389,18 @@ export function ListingsPanel({
                     selected ? (
                       <PinCard
                         listing={selected}
+                        favorite={selectedFavorite}
+                        hidden={hiddenIds.has(selected.id)}
+                        onFavorite={favoriteListing}
+                        onToggleHidden={(listingId) => {
+                          toggleHidden(listingId);
+                          // A home hidden out of the view takes its card with it, and stays closed when it returns.
+                          if (
+                            !hiddenIds.has(listingId) &&
+                            filters.hidden === 'not-hidden'
+                          )
+                            onSelectedIdChange(null);
+                        }}
                         onClose={() => onSelectedIdChange(null)}
                         onDetails={() => onDetailsOpenChange(true)}
                       />
@@ -375,8 +421,10 @@ export function ListingsPanel({
         opened={detailsOpen && selected !== null}
         stale={selected ? isListingStale(selected, snapshot.edition) : false}
         hidden={selected ? hiddenIds.has(selected.id) : false}
+        favorite={selectedFavorite}
         notes={notes}
         onToggleHidden={toggleHidden}
+        onFavorite={favoriteListing}
         onClose={() => onDetailsOpenChange(false)}
         onSeeOnMap={() => {
           onDetailsOpenChange(false);

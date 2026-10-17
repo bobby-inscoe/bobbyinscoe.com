@@ -47,14 +47,10 @@ async function authenticated() {
   return hook;
 }
 
-// Routes note RPCs to the supplied replies and everything else to the defaults.
-function answerNotes(handlers: {
-  notes?: () => Promise<Reply>;
-  save?: () => Promise<Reply>;
-}) {
+// Routes the note save to the supplied reply and everything else to the defaults.
+function answerNotes(handlers: { save?: () => Promise<Reply> }) {
   const defaults = sdk.rpc.getMockImplementation();
   sdk.rpc.mockImplementation(async (name, args) => {
-    if (name === 'hs_notes' && handlers.notes) return handlers.notes();
     if (name === 'hs_save_note' && handlers.save) return handlers.save();
     if (!defaults) throw new Error('Default RPC handler is missing.');
     return defaults(name, args);
@@ -62,10 +58,16 @@ function answerNotes(handlers: {
 }
 
 describe('House Scanner session notes', () => {
-  it('loads and saves notes for the active household', async () => {
-    answerNotes({
-      notes: async () => reply(savedNotes),
-      save: async () => reply({ revision: 2 }),
+  it('reads notes from the snapshot and saves them for the active household', async () => {
+    const defaults = sdk.rpc.getMockImplementation();
+    sdk.rpc.mockImplementation(async (name, args) => {
+      if (name === 'hs_snapshot')
+        return reply({
+          ...fixtureSnapshot(),
+          notes: savedNotes.map((note) => ({ ...note, listingId })),
+        });
+      if (name === 'hs_save_note') return reply({ revision: 2 });
+      return defaults ? defaults(name, args) : reply({ ok: true });
     });
     const hook = await authenticated();
     await expect(hook.result.current.onLoadNotes(listingId)).resolves.toEqual(
@@ -83,9 +85,8 @@ describe('House Scanner session notes', () => {
   });
 
   describe.each([
-    ['load', (hook: Hook) => hook.result.current.onLoadNotes(listingId)],
     ['save', (hook: Hook) => hook.result.current.onSaveNote(listingId, 'x', 1)],
-  ])('a pending %s', (kind, start) => {
+  ])('a pending %s', (_kind, start) => {
     const supersede: [string, (hook: Hook) => Promise<void> | void][] = [
       ['sign-out', (hook) => act(() => hook.result.current.signOut())],
       [
@@ -149,9 +150,7 @@ describe('House Scanner session notes', () => {
         sdk.rpc.mockClear();
         const failures = vi.fn();
         await act(async () => {
-          pending.resolve(
-            kind === 'load' ? reply(savedNotes) : reply({ revision: 2 }),
-          );
+          pending.resolve(reply({ revision: 2 }));
           await outcome.catch(failures);
         });
         await expect(outcome).resolves.toBeNull();
@@ -177,7 +176,11 @@ describe('House Scanner session notes', () => {
       hook.result.current.onSaveNote(listingId, 'draft', 1),
     ).rejects.toBeInstanceOf(NoteConflictError);
     expect(hook.result.current.state).toBe(before);
-    expect(sdk.rpc.mock.calls.map(([name]) => name)).toEqual(['hs_save_note']);
+    // The conflict brings in the newer note with one snapshot read, and the workspace stays as it was.
+    expect(sdk.rpc.mock.calls.map(([name]) => name)).toEqual([
+      'hs_save_note',
+      'hs_snapshot',
+    ]);
   });
 
   it('keeps the workspace on screen when a note request fails for another reason', async () => {
@@ -185,20 +188,13 @@ describe('House Scanner session notes', () => {
     const before = hook.result.current.state;
     sdk.rpc.mockClear();
     answerNotes({
-      notes: async () => ({ data: null, error: { message: 'synthetic' } }),
       save: async () => ({ data: null, error: { message: 'synthetic' } }),
     });
-    await expect(hook.result.current.onLoadNotes(listingId)).rejects.toThrow(
-      'The household request failed',
-    );
     await expect(
       hook.result.current.onSaveNote(listingId, 'draft', 0),
     ).rejects.toThrow('The household request failed');
     expect(hook.result.current.state).toBe(before);
-    expect(sdk.rpc.mock.calls.map(([name]) => name)).toEqual([
-      'hs_notes',
-      'hs_save_note',
-    ]);
+    expect(sdk.rpc.mock.calls.map(([name]) => name)).toEqual(['hs_save_note']);
   });
 
   it('rejects note requests without an authenticated household', async () => {

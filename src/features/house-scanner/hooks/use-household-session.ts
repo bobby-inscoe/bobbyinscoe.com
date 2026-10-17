@@ -7,7 +7,6 @@ import {
   clearOwnedSessionStorage,
   createHouseholdClient,
   householdSnapshot,
-  listingNotes,
   memberships,
   saveNote as saveNoteRequest,
   saveProfile,
@@ -21,6 +20,7 @@ import type {
   SearchProfile,
   Snapshot,
 } from '@/features/house-scanner/types/contracts';
+import { NoteConflictError } from '@/features/house-scanner/types/notes';
 
 const USERNAME_EMAIL_DOMAIN = 'house-scanner.bobbyinscoe.com';
 
@@ -60,14 +60,32 @@ export function useHouseholdSession() {
   const sessionGeneration = useRef(0);
   const signedOut = useRef(false);
   const mounted = useRef(false);
-  const fail = useCallback((message: string) => {
-    generation.current += 1;
-    sessionGeneration.current += 1;
-    userId.current = null;
-    householdId.current = null;
-    if (mounted.current) setState({ status: 'error', message });
+  // Everything the workspace shows comes from one load. These let later events and writes reuse it
+  // instead of asking again: the memberships, the snapshot on screen, and the load in flight.
+  const known = useRef<Member[] | null>(null);
+  const latest = useRef<Snapshot | null>(null);
+  const loaded = useRef(false);
+  const inflight = useRef<Promise<void> | null>(null);
+  // Whose session the load now running was announced for, so an announcement for someone else is not ignored.
+  const announced = useRef<string | null>(null);
+  const queued = useRef(false);
+  const forget = useCallback(() => {
+    known.current = null;
+    latest.current = null;
+    loaded.current = false;
   }, []);
-  const refresh = useCallback(async () => {
+  const fail = useCallback(
+    (message: string) => {
+      generation.current += 1;
+      sessionGeneration.current += 1;
+      userId.current = null;
+      householdId.current = null;
+      forget();
+      if (mounted.current) setState({ status: 'error', message });
+    },
+    [forget],
+  );
+  const load = useCallback(async () => {
     if (!client || signedOut.current) return;
     const ticket = ++generation.current;
     if (mounted.current)
@@ -85,6 +103,7 @@ export function useHouseholdSession() {
         sessionGeneration.current += 1;
         userId.current = null;
         householdId.current = null;
+        forget();
         if (mounted.current && ticket === generation.current)
           setState({ status: 'signed-out' });
         return;
@@ -93,6 +112,7 @@ export function useHouseholdSession() {
         sessionGeneration.current += 1;
         signedOut.current = true;
         householdId.current = null;
+        forget();
         setState({ status: 'loading' });
         clearOwnedSessionStorage();
         const { error: signOutError } = await client.auth.signOut({
@@ -109,12 +129,14 @@ export function useHouseholdSession() {
         throw new Error('Membership belongs to another account.');
       if (own.length === 0) {
         householdId.current = null;
+        forget();
         setState({ status: 'nonmember' });
         return;
       }
       if (!own.some((member) => member.householdId === householdId.current))
         householdId.current = null;
       if (!householdId.current && own.length > 1) {
+        forget();
         setState({ status: 'choose-household', memberships: own });
         return;
       }
@@ -126,8 +148,11 @@ export function useHouseholdSession() {
         data.user.id,
         own,
       );
-      if (mounted.current && ticket === generation.current)
-        // An unchanged poll keeps the old object, so the workspace does not re-render every card.
+      if (mounted.current && ticket === generation.current) {
+        known.current = own;
+        latest.current = snapshot;
+        loaded.current = true;
+        // An unchanged load keeps the old object, so the workspace does not re-render every card.
         setState((previous) =>
           previous.status === 'authenticated' &&
           previous.userId === data.user.id &&
@@ -135,11 +160,56 @@ export function useHouseholdSession() {
             ? previous
             : { status: 'authenticated', snapshot, userId: data.user.id },
         );
+      }
     } catch {
       if (mounted.current && ticket === generation.current)
         fail('Could not load your household. Retry or sign out.');
     }
-  }, [client, fail]);
+  }, [client, fail, forget]);
+  // The full load: who is signed in, which households, then the snapshot. It runs once per session
+  // and when the member asks again. A caller that finds one running waits for it instead.
+  const refresh = useCallback(() => {
+    const run = load();
+    inflight.current = run;
+    void run.finally(() => {
+      if (inflight.current === run) inflight.current = null;
+    });
+    return run;
+  }, [load]);
+  // After a write: only the snapshot, with the household and memberships already known. A quiet
+  // reload reports a failure to the caller and leaves the workspace on screen.
+  const reload = useCallback(
+    async (quiet = false) => {
+      const members = known.current;
+      const household = householdId.current;
+      const owner = userId.current;
+      if (!client || signedOut.current) return;
+      if (!members || !household || !owner) return;
+      const ticket = ++generation.current;
+      try {
+        const snapshot = await householdSnapshot(
+          client,
+          household,
+          owner,
+          members,
+        );
+        if (!mounted.current || ticket !== generation.current) return;
+        latest.current = snapshot;
+        setState((previous) =>
+          previous.status === 'authenticated' &&
+          previous.userId === owner &&
+          JSON.stringify(previous.snapshot) === JSON.stringify(snapshot)
+            ? previous
+            : { status: 'authenticated', snapshot, userId: owner },
+        );
+      } catch (error) {
+        if (quiet) throw error;
+        if (mounted.current && ticket === generation.current)
+          fail('Could not load your household. Retry or sign out.');
+      }
+    },
+    [client, fail],
+  );
   useEffect(() => {
     mounted.current = true;
     if (!client)
@@ -149,12 +219,16 @@ export function useHouseholdSession() {
     const {
       data: { subscription },
     } = client.auth.onAuthStateChange((event, session) => {
+      const who = session?.user.id ?? null;
+      const wanted = () =>
+        !loaded.current && (!inflight.current || announced.current !== who);
       if (event === 'SIGNED_OUT') {
         generation.current += 1;
         sessionGeneration.current += 1;
         signedOut.current = true;
         userId.current = null;
         householdId.current = null;
+        forget();
         if (mounted.current) setState({ status: 'signed-out' });
         try {
           clearOwnedSessionStorage();
@@ -172,6 +246,7 @@ export function useHouseholdSession() {
         sessionGeneration.current += 1;
         signedOut.current = true;
         householdId.current = null;
+        forget();
         if (mounted.current)
           setState((previous) =>
             previous.status === 'authenticated' &&
@@ -198,23 +273,29 @@ export function useHouseholdSession() {
         event === 'TOKEN_REFRESHED'
       ) {
         if (event === 'SIGNED_IN') signedOut.current = false;
-        queueMicrotask(() => {
-          if (mounted.current) void refresh();
-        });
+        // The SDK announces the session again whenever the tab becomes visible and after each token
+        // refresh. Those carry no new data, so only the first announcement of a session loads it.
+        if (wanted()) {
+          announced.current = who;
+          // Announcements that arrive together share one load.
+          if (!queued.current) {
+            queued.current = true;
+            queueMicrotask(() => {
+              queued.current = false;
+              if (mounted.current) void refresh();
+            });
+          }
+        }
       }
     });
-    // Data changes about once a day and own saves refresh themselves, so returning to the tab is enough; no timer polls.
-    const onFocus = () => {
-      if (document.visibilityState === 'visible') void refresh();
-    };
-    window.addEventListener('focus', onFocus);
+    // Listings change about once a day and the member's own saves re-read the snapshot, so nothing
+    // here polls or reloads on focus. Reloading the page fetches fresh data.
     return () => {
       mounted.current = false;
       generation.current += 1;
       subscription.unsubscribe();
-      window.removeEventListener('focus', onFocus);
     };
-  }, [client, refresh, fail]);
+  }, [client, refresh, fail, forget]);
   // The access code is the password the owner set for this member's user, so no email is sent.
   // A bare username signs in as <username>@USERNAME_EMAIL_DOMAIN, the address the owner gave that user.
   async function signInWithCode(
@@ -241,7 +322,7 @@ export function useHouseholdSession() {
     });
     if (error)
       throw new Error('The email, username or access code was not accepted.');
-    await refresh();
+    await (inflight.current ?? refresh());
   }
   async function signOut() {
     generation.current += 1;
@@ -249,6 +330,7 @@ export function useHouseholdSession() {
     signedOut.current = true;
     householdId.current = null;
     userId.current = null;
+    forget();
     setState({ status: client ? 'signed-out' : 'unconfigured' });
     try {
       if (client) {
@@ -295,28 +377,22 @@ export function useHouseholdSession() {
     const scope = beginActive();
     try {
       await action(scope.client, scope.householdId);
-      if (scope.active()) await refresh();
+      if (scope.active()) await reload();
     } catch (error) {
       if (scope.active())
         fail('The change could not be saved. Reload before trying again.');
       throw error;
     }
   }
-  // Notes are read and written outside mutate(): a failed or conflicting note
-  // request must leave the workspace on screen, so it never calls fail() or refresh().
+  // Notes arrive with the snapshot, so opening a listing's details asks for nothing. They are written
+  // outside mutate(): a failed or conflicting note request must leave the workspace on screen, so it
+  // never calls fail().
   async function loadNotes(listingId: string) {
     const scope = beginActive();
-    try {
-      const notes = await listingNotes(
-        scope.client,
-        scope.householdId,
-        listingId,
-      );
-      return scope.active() ? notes : null;
-    } catch (error) {
-      if (scope.active()) throw error;
-      return null;
-    }
+    if (!scope.active()) return null;
+    return (latest.current?.notes ?? [])
+      .filter((note) => note.listingId === listingId)
+      .map(({ listingId: _listingId, ...note }) => note);
   }
   async function saveNote(listingId: string, body: string, revision: number) {
     const scope = beginActive();
@@ -328,8 +404,13 @@ export function useHouseholdSession() {
         body,
         revision,
       );
+      // The snapshot carries the saved note, so the editor reads it from there.
+      if (scope.active()) await reload(true);
       return scope.active() ? saved.revision : null;
     } catch (error) {
+      // A conflict means someone else's version is newer; bring it in before the editor offers a choice.
+      if (error instanceof NoteConflictError && scope.active())
+        await reload(true).catch(() => {});
       if (scope.active()) throw error;
       return null;
     }

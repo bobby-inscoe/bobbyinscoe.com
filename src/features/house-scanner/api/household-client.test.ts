@@ -6,7 +6,6 @@ import {
   clearOwnedSessionStorage,
   createHouseholdClient,
   householdSnapshot,
-  listingNotes,
   memberships,
   privateBackendSettings,
   saveNote,
@@ -151,6 +150,13 @@ describe('House Scanner RPC boundaries', () => {
     ).rejects.toThrow('no longer active');
     expect(sdk.rpc).toHaveBeenCalledTimes(1);
   });
+  const noteRow = (listingId: string, userId: string) => ({
+    listingId,
+    userId,
+    body: 'sample',
+    revision: 1,
+    editedAt: '2026-10-17T10:00:00.000Z',
+  });
   const invalidSnapshots: [string, (snapshot: Snapshot) => void][] = [
     [
       'snapshot household',
@@ -210,6 +216,18 @@ describe('House Scanner RPC boundaries', () => {
       'duplicate member',
       (s) => {
         s.members.push(s.members[0]);
+      },
+    ],
+    [
+      'note on a listing that is not in the snapshot',
+      (s) => {
+        s.notes = [noteRow('00000000-0000-4000-8000-0000000000ff', USER_ID)];
+      },
+    ],
+    [
+      'note by someone who is not a member',
+      (s) => {
+        s.notes = [noteRow(s.listings[0].id, OTHER_HOUSEHOLD_ID)];
       },
     ],
     [
@@ -279,7 +297,6 @@ describe('House Scanner RPC boundaries', () => {
     ['another SQLSTATE on a note save', 'hs_save_note', '42501'],
     ['no SQLSTATE on a note save', 'hs_save_note', undefined],
     ['a conflict code on a profile save', 'hs_save_profile', '40001'],
-    ['a conflict code on a note read', 'hs_notes', '40001'],
   ])('keeps the generic message for %s', async (_label, name, code) => {
     sdk.rpc.mockResolvedValue({
       data: null,
@@ -289,9 +306,7 @@ describe('House Scanner RPC boundaries', () => {
     const call =
       name === 'hs_save_note'
         ? saveNote(client(), HOUSEHOLD_ID, listingId, 'draft', 1)
-        : name === 'hs_notes'
-          ? listingNotes(client(), HOUSEHOLD_ID, listingId)
-          : saveProfile(client(), HOUSEHOLD_ID, fixtureSnapshot().profiles[0]);
+        : saveProfile(client(), HOUSEHOLD_ID, fixtureSnapshot().profiles[0]);
     await expect(call).rejects.toThrow(
       'The household request failed. Reload and try again.',
     );
@@ -317,6 +332,18 @@ describe('House Scanner RPC boundaries', () => {
       p_listing_id: fixtureSnapshot().listings[0].id,
       p_saved: false,
     });
+  });
+  it('keeps a snapshot whose notes belong to its listings and members', async () => {
+    const snapshot = fixtureSnapshot();
+    snapshot.notes = [
+      noteRow(snapshot.listings[0].id, snapshot.members[0].userId),
+    ];
+    sdk.rpc
+      .mockResolvedValueOnce(reply([snapshot.members[0]]))
+      .mockResolvedValueOnce(reply(snapshot));
+    await expect(
+      householdSnapshot(client(), HOUSEHOLD_ID, USER_ID),
+    ).resolves.toMatchObject({ notes: [{ body: 'sample' }] });
   });
   it('keeps a snapshot whose hidden ids are all listed', async () => {
     const snapshot = fixtureSnapshot();
@@ -406,14 +433,6 @@ describe('House Scanner RPC boundaries', () => {
         fixtureSnapshot().listings[0].id,
         true,
       ),
-    ).rejects.toThrow('unsupported household response');
-    sdk.rpc.mockResolvedValue(
-      reply([
-        { userId: USER_ID, body: 'sample', revision: 0, editedAt: 'invalid' },
-      ]),
-    );
-    await expect(
-      listingNotes(client(), HOUSEHOLD_ID, fixtureSnapshot().listings[0].id),
     ).rejects.toThrow('unsupported household response');
     expect(() =>
       saveNote(

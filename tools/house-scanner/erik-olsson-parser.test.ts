@@ -14,7 +14,10 @@ import {
   HIDDEN,
   HOUSE,
   home,
+  IMAGE_ACCOUNT,
   listingPage,
+  PHOTO_ID,
+  PLAN_ID,
   search,
   VILLA,
 } from './erik-olsson-test-pages';
@@ -220,6 +223,7 @@ describe('Erik Olsson listing page', () => {
       rooms: 3,
       latitude: 57.7,
       longitude: 11.95,
+      photoPath: `${IMAGE_ACCOUNT}/${PHOTO_ID}`,
     });
   });
 
@@ -313,6 +317,25 @@ describe('Erik Olsson listing page', () => {
       askingPriceSek: null,
       livingAreaM2: null,
     });
+  });
+
+  it('names the first image that is not a floor plan, with the image account from the page', () => {
+    const photoPath = (images: unknown, imageHost = true) =>
+      detail(listingPage({ ...home(), images }, 3, imageHost)).photoPath;
+    const img = (id: string, plan = false) => ({
+      is_floor_plan: plan,
+      cloudflare_image_id: id,
+    });
+    expect(photoPath([img(PLAN_ID, true), img(PHOTO_ID)])).toBe(
+      `${IMAGE_ACCOUNT}/${PHOTO_ID}`,
+    );
+    // No image, only a floor plan, an unusable id, or no image address on the page gives no photo.
+    expect(photoPath([])).toBeUndefined();
+    expect(photoPath(undefined)).toBeUndefined();
+    expect(photoPath([img(PLAN_ID, true)])).toBeUndefined();
+    expect(photoPath([img('not-an-id')])).toBeUndefined();
+    expect(photoPath([img('x/../../y')])).toBeUndefined();
+    expect(photoPath([img(PHOTO_ID)], false)).toBeUndefined();
   });
 
   it('keeps no description, broker, image or nearby text', () => {

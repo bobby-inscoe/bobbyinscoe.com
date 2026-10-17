@@ -1,5 +1,6 @@
 import { Button, Drawer, Group, Stack } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
+import { FavoriteStar } from '@/features/house-scanner/components/favorite-star';
 import { HideButton } from '@/features/house-scanner/components/hide-button';
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import { ListingDetails } from '@/features/house-scanner/components/listing-details';
@@ -26,8 +27,11 @@ interface ListingDrawerProps {
   opened: boolean;
   stale?: boolean;
   hidden: boolean;
+  // The member's own favorite of this home.
+  favorite: { mine: boolean; canSave: boolean; busy: boolean };
   notes: ListingNotesController;
   onToggleHidden: (listingId: string) => void;
+  onFavorite: (listingId: string) => void;
   onClose: () => void;
   onSeeOnMap: () => void;
 }
@@ -40,8 +44,10 @@ export function ListingDrawer({
   opened,
   stale,
   hidden,
+  favorite,
   notes,
   onToggleHidden,
+  onFavorite,
   onClose,
   onSeeOnMap,
 }: ListingDrawerProps) {
@@ -63,18 +69,24 @@ export function ListingDrawer({
     >
       {listing && (
         <Stack gap="sm" className={styles.drawerBody}>
-          <ListingPhoto listing={listing} />
+          <div className={styles.photoWrap}>
+            <ListingPhoto listing={listing} />
+            <HideButton
+              listingId={listing.id}
+              hidden={hidden}
+              onToggle={onToggleHidden}
+            />
+            <FavoriteStar
+              {...favorite}
+              onToggle={() => onFavorite(listing.id)}
+            />
+          </div>
           <PriceLine listing={listing} />
           <FactsLine listing={listing} />
           <ReasonChips listing={listing} snapshot={snapshot} />
           <MatchLines listing={listing} snapshot={snapshot} details />
           <Group>
             <OriginalListingButton listing={listing} />
-            <HideButton
-              listingId={listing.id}
-              hidden={hidden}
-              onToggle={onToggleHidden}
-            />
             {hasPin(listing.coordinates) && (
               <Button size="xs" variant="default" onClick={onSeeOnMap}>
                 See on map

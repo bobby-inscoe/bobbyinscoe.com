@@ -1,11 +1,13 @@
-import { Button } from '@mantine/core';
+import { ActionIcon } from '@mantine/core';
 
-// An eye, struck through while the home is still showing.
-function EyeIcon({ struck }: { struck: boolean }) {
+import styles from '@/features/house-scanner/components/household-workspace.module.css';
+
+// Lucide's "eye-off": an eye with a slash through it.
+function EyeOffIcon() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="20"
+      height="20"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -14,9 +16,10 @@ function EyeIcon({ struck }: { struck: boolean }) {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" />
-      <circle cx="12" cy="12" r="3" />
-      {struck && <path d="M3 3l18 18" />}
+      <path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" />
+      <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+      <path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" />
+      <path d="m2 2 20 20" />
     </svg>
   );
 }
@@ -28,18 +31,21 @@ interface HideButtonProps {
   onToggle: (listingId: string) => void;
 }
 
+// Sits over the photo beside the star and lights up in the same green while the home is hidden.
 // Hiding is personal and only changes this member's view; it never touches favorites or notes.
 export function HideButton({ listingId, hidden, onToggle }: HideButtonProps) {
   return (
-    <Button
-      size="xs"
-      variant="subtle"
-      color="gray"
-      leftSection={<EyeIcon struck={!hidden} />}
+    <ActionIcon
+      className={styles.hide}
+      variant={hidden ? 'filled' : 'default'}
+      color="moss"
+      size="lg"
+      radius="xl"
       aria-label={hidden ? 'Unhide this home' : 'Hide this home'}
+      title={hidden ? 'Unhide this home' : 'Hide this home'}
       onClick={() => onToggle(listingId)}
     >
-      {hidden ? 'Unhide' : 'Hide'}
-    </Button>
+      <EyeOffIcon />
+    </ActionIcon>
   );
 }

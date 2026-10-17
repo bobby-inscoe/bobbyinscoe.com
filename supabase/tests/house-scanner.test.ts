@@ -670,6 +670,7 @@ beforeAll(async () => {
     '202610120001_house_scanner.sql',
     '202610120002_house_scanner_retention.sql',
     '202610170001_house_scanner_hidden.sql',
+    '202610170002_house_scanner_snapshot_notes.sql',
   ])
     await db.exec(
       await readFile(
@@ -3544,5 +3545,102 @@ describe('estimated coordinates', () => {
     expect(before.supplied).not.toHaveProperty('estimated');
     expect(await purge()).toEqual(NO_WORK);
     expect(await read()).toEqual(before);
+  });
+});
+
+describe('notes in the snapshot', () => {
+  const previous = snapshotSchema.omit({ notes: true });
+  const rawSnapshot = (userId = OWNER_A, householdId = HOUSE_A) =>
+    asRole('authenticated', userId, () =>
+      rpc('select public.hs_snapshot($1) as value', [householdId]),
+    );
+
+  it('leaves the field out when nobody has written a note, so the previous strict schema still parses', async () => {
+    await manual(HOUSE_A, OWNER_A, `${ORIGIN}/quiet`);
+    const state = await rawSnapshot();
+    expect(previous.safeParse(state).success).toBe(true);
+    expect((await snapshot()).notes).toBeUndefined();
+  });
+
+  it('carries every member’s note on a visible listing, with the revision a save needs', async () => {
+    const { listingId } = await manual(HOUSE_A, OWNER_A, `${ORIGIN}/noted`);
+    await saveNote(listingId, OWNER_A, 'Owner view', 0);
+    await saveNote(listingId, MEMBER_A, 'Member view', 0);
+    await saveNote(listingId, MEMBER_A, 'Member view, revised', 1);
+    const state = await snapshot(HOUSE_A, MEMBER_A);
+    expect(
+      state.notes?.map(({ userId, body, revision }) => ({
+        userId,
+        body,
+        revision,
+      })),
+    ).toEqual(
+      expect.arrayContaining([
+        { userId: OWNER_A, body: 'Owner view', revision: 1 },
+        { userId: MEMBER_A, body: 'Member view, revised', revision: 2 },
+      ]),
+    );
+    expect(state.notes).toHaveLength(2);
+    expect(state.notes?.every((note) => note.listingId === listingId)).toBe(
+      true,
+    );
+    // The same rows the per-listing call returns, so nothing the editor needs is missing.
+    const listed = await notes(listingId, MEMBER_A);
+    expect(
+      state.notes
+        ?.map((note) => [note.userId, note.body, note.revision])
+        .sort(),
+    ).toEqual(
+      listed.map((note) => [note.userId, note.body, note.revision]).sort(),
+    );
+    expect(previous.safeParse(await rawSnapshot()).success).toBe(false);
+  });
+
+  it('keeps a blank note, whose revision a later save must name', async () => {
+    const { listingId } = await manual(HOUSE_A, OWNER_A, `${ORIGIN}/emptied`);
+    await saveNote(listingId, OWNER_A, 'Soon gone', 0);
+    await saveNote(listingId, OWNER_A, '', 1);
+    expect((await snapshot()).notes).toMatchObject([
+      { userId: OWNER_A, body: '', revision: 2 },
+    ]);
+  });
+
+  it('never carries another household’s notes, and none for a listing the snapshot does not show', async () => {
+    const mine = await manual(HOUSE_A, OWNER_A, `${ORIGIN}/mine`);
+    const theirs = await manual(HOUSE_B, OWNER_B, `${ORIGIN}/theirs`);
+    await saveNote(theirs.listingId, OWNER_B, 'Private to B', 0, HOUSE_B);
+    expect((await snapshot()).notes).toBeUndefined();
+    await saveNote(mine.listingId, OWNER_A, 'Mine', 0);
+    expect((await snapshot()).notes?.map((note) => note.body)).toEqual([
+      'Mine',
+    ]);
+    // A source listing that stops being visible takes its notes out of the snapshot.
+    await publishOne(observation({ observedAt: aged(2) }));
+    const source = (await snapshot()).listings.find(
+      (listing) => listing.origin === 'source',
+    );
+    if (!source) throw new Error('Source listing missing');
+    await saveNote(source.id, MEMBER_A, 'On a source home', 0);
+    expect((await snapshot()).notes).toHaveLength(2);
+    await db.query(
+      'delete from hs.favorites where listing_id=$1 and household_id=$2',
+      [source.id, HOUSE_A],
+    );
+    await db.query('update hs.notes set body=$1 where listing_id=$2', [
+      '',
+      source.id,
+    ]);
+    await setPolicy({ retentionDays: 1 });
+    const hidden = await snapshot();
+    expect(hidden.listings.map((listing) => listing.id)).toEqual([
+      mine.listingId,
+    ]);
+    expect(hidden.notes?.map((note) => note.body)).toEqual(['Mine']);
+  });
+
+  it('is refused to outsiders like the rest of the snapshot', async () => {
+    await expect(rawSnapshot(OWNER_B, HOUSE_A)).rejects.toThrow(
+      'Household access denied',
+    );
   });
 });

@@ -10,6 +10,8 @@ export interface ReadContext {
   observedAt: Date;
   /** Items already received from earlier pages of the same partition. */
   receivedBefore: number;
+  /** The partition's municipality, for a source whose list covers more than it. */
+  municipality?: string;
 }
 
 export type MorePages =

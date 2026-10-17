@@ -457,23 +457,6 @@ describe('House Scanner session privacy', () => {
       snapshot: { householdId: OTHER_HOUSEHOLD_ID },
     });
   });
-  it('refreshes on focus only while the document is visible', async () => {
-    const hook = await authenticated();
-    sdk.auth.getUser.mockClear();
-    const visibility = vi
-      .spyOn(document, 'visibilityState', 'get')
-      .mockReturnValue('hidden');
-    await act(async () => {
-      window.dispatchEvent(new Event('focus'));
-    });
-    expect(sdk.auth.getUser).not.toHaveBeenCalled();
-    visibility.mockReturnValue('visible');
-    await act(async () => {
-      window.dispatchEvent(new Event('focus'));
-    });
-    expect(sdk.auth.getUser).toHaveBeenCalledTimes(1);
-    expect(hook.result.current.state.status).toBe('authenticated');
-  });
   it('does not poll while the tab stays open without focus changes', async () => {
     // Installed before mount so any interval the hook sets runs on this clock.
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -494,9 +477,7 @@ describe('House Scanner session privacy', () => {
     const hook = await authenticated();
     const first = hook.result.current.state;
     sdk.rpc.mockClear();
-    await act(async () => {
-      window.dispatchEvent(new Event('focus'));
-    });
+    await act(() => hook.result.current.refresh());
     await waitFor(() =>
       expect(sdk.rpc).toHaveBeenCalledWith('hs_snapshot', expect.any(Object)),
     );
@@ -512,9 +493,7 @@ describe('House Scanner session privacy', () => {
         ? reply([fixtureSnapshot().members[0]])
         : reply(changed),
     );
-    await act(async () => {
-      window.dispatchEvent(new Event('focus'));
-    });
+    await act(() => hook.result.current.refresh());
     await waitFor(() => expect(hook.result.current.state).not.toBe(first));
     const state = hook.result.current.state;
     expect(

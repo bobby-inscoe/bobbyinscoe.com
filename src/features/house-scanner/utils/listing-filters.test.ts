@@ -52,23 +52,27 @@ describe('applyListingFilters', () => {
     expect(applyListingFilters(all, emptyFilters)).toEqual(all);
   });
 
-  // The base home asks 2.8 MSEK, has 80 m2 and 3 rooms.
+  // The base home asks 2 800 000 SEK, has 80 m2 and 3 rooms.
   it.each([
-    ['min price below', { minPriceMsek: 2.7 }, true],
-    ['min price at the boundary', { minPriceMsek: 2.8 }, true],
-    ['min price above', { minPriceMsek: 2.9 }, false],
-    ['max price at the boundary', { maxPriceMsek: 2.8 }, true],
-    ['max price below', { maxPriceMsek: 2.7 }, false],
+    ['min price below', { minPriceSek: 2_700_000 }, true],
+    ['min price at the boundary', { minPriceSek: 2_800_000 }, true],
+    ['min price above', { minPriceSek: 2_900_000 }, false],
+    ['max price at the boundary', { maxPriceSek: 2_800_000 }, true],
+    ['max price below', { maxPriceSek: 2_700_000 }, false],
     ['min area at the boundary', { minAreaM2: 80 }, true],
     ['min area above', { minAreaM2: 81 }, false],
     ['max area at the boundary', { maxAreaM2: 80 }, true],
     ['max area below', { maxAreaM2: 79 }, false],
     ['min rooms at the boundary', { minRooms: 3 }, true],
     ['min rooms above', { minRooms: 3.5 }, false],
-    ['min above max', { minPriceMsek: 3, maxPriceMsek: 2 }, false],
-    ['NaN ignored', { minPriceMsek: Number.NaN, minAreaM2: Number.NaN }, true],
+    [
+      'min above max',
+      { minPriceSek: 3_000_000, maxPriceSek: 2_000_000 },
+      false,
+    ],
+    ['NaN ignored', { minPriceSek: Number.NaN, minAreaM2: Number.NaN }, true],
     ['Infinity ignored', { maxAreaM2: Number.POSITIVE_INFINITY }, true],
-    ['negative treated as unset', { minPriceMsek: -5, maxAreaM2: -1 }, true],
+    ['negative treated as unset', { minPriceSek: -5, maxAreaM2: -1 }, true],
   ] satisfies [string, Partial<ListingFilters>, boolean][])(
     '%s',
     (_name, filters, expected) => {
@@ -77,7 +81,7 @@ describe('applyListingFilters', () => {
   );
 
   it.each([
-    ['price', { askingPriceSek: null }, { minPriceMsek: 1 }],
+    ['price', { askingPriceSek: null }, { minPriceSek: 1_000_000 }],
     ['area', { livingAreaM2: null }, { minAreaM2: 50 }],
     ['rooms', { rooms: null }, { minRooms: 2 }],
   ] satisfies [string, Partial<Listing['facts']>, Partial<ListingFilters>][])(
@@ -94,7 +98,7 @@ describe('applyListingFilters', () => {
 
   it('treats a disputed price as unknown, even when it would match', () => {
     const disputed = home({}, { conflicts: ['askingPriceSek'] });
-    const filters = { minPriceMsek: 2, maxPriceMsek: 3 };
+    const filters = { minPriceSek: 2_000_000, maxPriceSek: 3_000_000 };
     expect(passes(disputed, { ...filters, includeUnknown: true })).toBe(true);
     expect(passes(disputed, { ...filters, includeUnknown: false })).toBe(false);
   });
@@ -149,8 +153,8 @@ describe('applyListingFilters', () => {
     expect(
       activeFilterCount({
         ...emptyFilters,
-        minPriceMsek: 1,
-        maxPriceMsek: 2,
+        minPriceSek: 1_000_000,
+        maxPriceSek: 2_000_000,
         minAreaM2: Number.NaN,
         outdoorOnly: true,
         includeUnknown: false,
