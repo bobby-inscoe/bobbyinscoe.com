@@ -120,6 +120,7 @@ export async function geocodeMissing(
             ? 'Estimated from the address (OpenStreetMap)'
             : 'Estimated from the street name (OpenStreetMap)',
         observedAt: observation.observedAt,
+        estimated: true,
       };
       stats.found += 1;
     }

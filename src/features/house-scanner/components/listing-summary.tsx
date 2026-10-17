@@ -5,6 +5,7 @@ import type {
   Snapshot,
 } from '@/features/house-scanner/types/contracts';
 import { formatPrice } from '@/features/house-scanner/utils/format';
+import { estimatedPositionLabel } from '@/features/house-scanner/utils/listing-position';
 import {
   listingMatches,
   reasonChips,
@@ -42,6 +43,7 @@ export function PriceLine({ listing }: { listing: Listing }) {
 }
 
 export function FactsLine({ listing }: { listing: Listing }) {
+  const estimated = estimatedPositionLabel(listing.coordinates);
   return (
     <Text size="sm" c="dimmed">
       {listing.facts.livingAreaM2 ?? 'Unknown'} m²
@@ -50,6 +52,7 @@ export function FactsLine({ listing }: { listing: Listing }) {
       {listing.conflicts.includes('rooms') && ' (disputed)'} ·{' '}
       {listing.facts.propertyType ?? 'Type unknown'}
       {listing.conflicts.includes('propertyType') && ' (disputed)'}
+      {estimated && ` · ${estimated}`}
     </Text>
   );
 }
