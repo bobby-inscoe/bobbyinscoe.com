@@ -1,4 +1,4 @@
-import type { MapPoint } from '@/features/house-scanner/map/household-map';
+import type { MapPoint } from '@/features/house-scanner/components/household-map';
 import type {
   Listing,
   Snapshot,

@@ -37,9 +37,11 @@ import { mapPoints } from '@/features/house-scanner/utils/listing-view';
 import { MATCH_CHOICES } from '@/features/house-scanner/utils/match-listing';
 
 const LazyMap = lazy(() =>
-  import('@/features/house-scanner/map/household-map').then((module) => ({
-    default: module.HouseholdMap,
-  })),
+  import('@/features/house-scanner/components/household-map').then(
+    (module) => ({
+      default: module.HouseholdMap,
+    }),
+  ),
 );
 
 class MapLoadBoundary extends Component<

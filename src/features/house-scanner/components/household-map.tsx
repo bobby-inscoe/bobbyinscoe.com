@@ -10,7 +10,7 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import styles from '@/features/house-scanner/map/household-map.module.css';
+import styles from '@/features/house-scanner/components/household-map.module.css';
 import type { Listing } from '@/features/house-scanner/types/contracts';
 
 // MapLibre resolves its default worker beside import.meta.url, which Vite rewrites.
