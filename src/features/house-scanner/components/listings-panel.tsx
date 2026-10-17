@@ -325,6 +325,7 @@ export function ListingsPanel({
                   }
                   selectedId={selected?.id ?? null}
                   onSelect={onSelectedIdChange}
+                  onDeselect={() => onSelectedIdChange(null)}
                   overlay={
                     selected ? (
                       <PinCard

@@ -780,6 +780,60 @@ async function seeDetachedHomeOnMap(page: import('@playwright/test').Page) {
   ).toBeVisible();
 }
 
+// A point on the bare map: the canvas, not a marker, control or the card.
+async function bareMapPoint(page: import('@playwright/test').Page) {
+  return page.evaluate(() => {
+    const box = document.querySelector('canvas')?.getBoundingClientRect();
+    if (!box) throw new Error('No map canvas');
+    for (let y = box.top + 20; y < box.bottom; y += 20)
+      for (let x = box.left + 20; x < box.right; x += 20)
+        if (document.elementFromPoint(x, y)?.tagName === 'CANVAS')
+          return { x, y };
+    throw new Error('No bare map point');
+  });
+}
+
+test('a click or tap on the bare map closes the selected home; markers, drags, the card and other keys do not', async ({
+  page,
+}) => {
+  await seeDetachedHomeOnMap(page);
+  const card = page.getByRole('article', { name: /^Selected home:/ });
+  const point = await bareMapPoint(page);
+  // A marker click stays a selection, so the map click it also raises must be ignored.
+  await page
+    .getByLabel('Listing map')
+    .locator('button[aria-pressed="true"]')
+    .click();
+  await expect(card).toBeVisible();
+  await card.getByRole('heading').click();
+  await expect(card).toBeVisible();
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.down();
+  await page.mouse.move(point.x + 30, point.y + 10, { steps: 5 });
+  await page.mouse.up();
+  await expect(card).toBeVisible();
+  await page.getByRole('button', { name: 'Map', exact: true }).focus();
+  await page.keyboard.press('Escape');
+  await expect(card).toBeVisible();
+  const bare = await bareMapPoint(page);
+  if (test.info().project.name === 'narrow')
+    await page.touchscreen.tap(bare.x, bare.y);
+  else await page.mouse.click(bare.x, bare.y);
+  await expect(card).toHaveCount(0);
+});
+
+test('Escape in the map area closes the selected home', async ({ page }) => {
+  await seeDetachedHomeOnMap(page);
+  await page
+    .getByLabel('Listing map')
+    .locator('button[aria-pressed="true"]')
+    .focus();
+  await page.keyboard.press('Escape');
+  await expect(
+    page.getByRole('article', { name: /^Selected home:/ }),
+  ).toHaveCount(0);
+});
+
 test('opening the map on a located home keeps the not-located marker inside the map', async ({
   page,
 }) => {
