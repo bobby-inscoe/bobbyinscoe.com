@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import {
   type ManualSubmission,
+  type Member,
   manualSubmissionSchema,
   memberSchema,
   profileSchema,
@@ -141,8 +142,10 @@ export async function householdSnapshot(
   client: SupabaseClient,
   householdId: string,
   userId: string,
+  // Memberships the caller fetched moments ago in the same refresh; hs_snapshot re-checks on the server.
+  fetched?: Member[],
 ) {
-  const current = await memberships(client);
+  const current = fetched ?? (await memberships(client));
   if (
     !current.some((m) => m.householdId === householdId && m.userId === userId)
   )
