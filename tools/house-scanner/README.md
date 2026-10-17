@@ -123,6 +123,17 @@ Fixtures under `fixtures/bjurfors/` are synthetic: fake addresses, values and id
 
 Tests use pages authored in `erik-olsson-test-pages.ts` (fictional streets and values in the same markup shape). The parser was also run once against the five pages fetched for the probe, which are not kept in the repository.
 
+## Stadshem reader (pending source)
+
+`stadshem-parser.ts` reads two JSON documents the site's own pages load. Nothing is parsed from HTML. Photos are hotlinked, and the policy allows images from `https://storage.googleapis.com` only.
+
+- List: `https://stadshem.se/api/estates?per_page=100&orderby=published&order=desc&status[]=till-salu&status[]=snart-till-salu-kommande&page=N`. It answers `{ total, page, num_pages, estates, filter }`. One answer held all 94 homes on 17 October, so a run is usually one request; the adapter's `pageUrl` hook changes `page=` when `num_pages` says there is more. The list covers all of Sweden, so the reader passes the partition's municipality (a new `municipality` field of the read context) and keeps only that one; Göteborg is the only one supported. The rest count as skipped.
+- Estate: `estateId` (letters, digits and sometimes an underscore) is the identity; `id` is `estate-<estateId>-<slug>`, and the public page is `https://stadshem.se/objekt/<estateId>-<slug>`, without a trailing slash (the slash form redirects, and the reader never follows redirects). Facts: `livingSpace`, `numberOfRooms`, `monthlyFee`, `price.startingPrice` (zero or `hidePrice` is unknown), `type` (`lägenhet` is an apartment, `radhus`, `hus` and similar are houses), `status.slug` (`till-salu` is available, `snart-till-salu-kommande` is upcoming) and the broker's `address.coordinates`, labelled address-level when the title has a house number.
+- Record: the adapter's `detailUrl` hook sends the per-home read to `/api/estates/<estateId>` while the observation keeps the public page address. It gives `floorAndElevator.floor` (the shared floor rule), `elevator` (only `Yes` is a fact) and `baseInformation.tenure`. Balcony and glazing have no structured field and stay unknown. Descriptions, agent and association text are read past.
+- Operator steps: `node .house-scanner-build/collector.mjs --print-policy-sql --source=stadshem --household=<uuid>`, then a credential for this source, as for the others.
+
+Tests use answers authored in `stadshem-test-pages.ts` (fictional streets and values in the same shape). The parser was also run once against the real list and record saved from the probe, which are not kept in the repository; that run found real ids with an underscore, now accepted.
+
 ### Estimated positions
 
 Kept homes with a house number in the title and no source position are looked up on OpenStreetMap's Nominatim (`geocoder.ts`): honest user agent, 1.5 seconds apart, at most 60 per run, stop on the first error. Answers are cached in `house-scanner.cache-geocode.json` (gitignored by the `house-scanner.cache*.json` pattern): hits for 90 days, misses for 7. The position is stored as `address` with a source that says it is estimated from the address or the street name.

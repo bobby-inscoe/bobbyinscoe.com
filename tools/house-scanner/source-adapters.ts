@@ -25,7 +25,14 @@ import {
   ERIK_OLSSON_ORIGIN,
   ERIK_OLSSON_SOURCE_ID,
   type SourceCapability,
+  STADSHEM_IMAGE_ORIGIN,
+  STADSHEM_ORIGIN,
+  STADSHEM_SOURCE_ID,
 } from '@house-scanner-tools/source-registry';
+import {
+  readStadshemDetailPage,
+  readStadshemSearchPage,
+} from '@house-scanner-tools/stadshem-parser';
 
 // Path segments proven from one public Goteborg district URL. The municipality
 // level path is derived by dropping the district segment and is unproven. A
@@ -151,12 +158,49 @@ export const erikOlssonAdapter: SourceAdapter = {
   readDetailPage: readErikOlssonDetailPage,
 };
 
+// One list of every estate, read for the one municipality proven so far.
+const STADSHEM_MUNICIPALITIES = ['göteborg'];
+const STADSHEM_LIST = `${STADSHEM_ORIGIN}/api/estates?per_page=100&orderby=published&order=desc&status[]=till-salu&status[]=snart-till-salu-kommande&page=1`;
+
+export const stadshemAdapter: SourceAdapter = {
+  sourceId: STADSHEM_SOURCE_ID,
+  executor: 'stadshem-personal-read',
+  origin: STADSHEM_ORIGIN,
+  // Photos are hotlinked from Google Cloud Storage and never fetched here.
+  imageOrigin: STADSHEM_IMAGE_ORIGIN,
+  headers: {
+    'user-agent': USER_AGENT,
+    // robots.txt is asked with the same headers, so plain text stays acceptable.
+    accept: 'application/json, text/plain;q=0.9',
+    'accept-language': 'sv-SE,sv;q=0.9,en;q=0.8',
+  },
+  coordinateSource: 'stadshem-estates',
+  detailLabel: 'Estate records',
+  notCovered: 'Not covered: other cities.',
+  partitionUrl(partition: LivePartitionInput) {
+    return STADSHEM_MUNICIPALITIES.includes(
+      partition.municipality.trim().toLowerCase(),
+    )
+      ? STADSHEM_LIST
+      : { unsupported: 'municipality-path-unproven' };
+  },
+  pageUrl: (base, page) => base.replace(/page=\d+$/, `page=${page}`),
+  // People open the public page; floor and lift are read from the estate's own record.
+  detailUrl: (observation) =>
+    `${STADSHEM_ORIGIN}/api/estates/${observation.sourceListingId}`,
+  readSearchPage: readStadshemSearchPage,
+  readDetailPage: readStadshemDetailPage,
+};
+
 /** The adapter for a capability, only when its policy names exactly this adapter's source and hosts. */
 export function adapterFor(capability: SourceCapability): SourceAdapter {
   const { policy } = capability;
-  const adapter = [boneoAdapter, bjurforsAdapter, erikOlssonAdapter].find(
-    (candidate) => candidate.executor === capability.executor,
-  );
+  const adapter = [
+    boneoAdapter,
+    bjurforsAdapter,
+    erikOlssonAdapter,
+    stadshemAdapter,
+  ].find((candidate) => candidate.executor === capability.executor);
   if (
     adapter === undefined ||
     policy.sourceId !== adapter.sourceId ||

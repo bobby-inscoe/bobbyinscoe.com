@@ -320,14 +320,7 @@ describe('Erik Olsson registry entry', () => {
   });
 
   it('leaves the other candidates without an executor', () => {
-    for (const id of [
-      'stadshem',
-      'alvhem',
-      'fastighetsbyran',
-      'booli',
-      'hemnet',
-      'norban',
-    ])
+    for (const id of ['alvhem', 'fastighetsbyran', 'booli', 'hemnet', 'norban'])
       expect(
         sourceRegistry().find((e) => e.policy.sourceId === id)?.executor,
       ).toBe('none');

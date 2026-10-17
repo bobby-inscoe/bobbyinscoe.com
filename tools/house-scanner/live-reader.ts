@@ -118,6 +118,8 @@ export interface SourceAdapter {
   notCovered: string;
   /** First page of a partition, or why the partition cannot be read. */
   partitionUrl(partition: LivePartitionInput): string | { unsupported: string };
+  /** Where a listing's extra facts are read, when that is not the page people open. */
+  detailUrl?(observation: Observation): string;
   /** The photo a listing page's facts point to, for a source whose photos sit on an image host. */
   photoFor?(facts: DetailFacts, observedAt: string): Observation['photo'];
   /** URL of a later page. Without it the page number is added as ?page=N. */
@@ -310,6 +312,7 @@ export async function runCollection(
         origin: adapter.origin,
         observedAt: new Date(deps.now()),
         receivedBefore: outcome.observations + outcome.skipped,
+        municipality: partition.municipality,
       });
       if (read.kind === 'failed') {
         // A page without usable data is failed coverage, never an empty result.
@@ -369,7 +372,8 @@ export async function runCollection(
   // whole run.
   const targets = selectKept(observations);
   for (const observation of targets) {
-    const url = new URL(observation.sourceUrl);
+    const detailUrl = adapter.detailUrl?.(observation) ?? observation.sourceUrl;
+    const url = new URL(detailUrl);
     if (!robotsAllows(robots, `${url.pathname}${url.search}`)) {
       detailSkipped += 1;
       continue;
@@ -387,7 +391,7 @@ export async function runCollection(
       detailSkipped += 1;
       continue;
     }
-    const fetched = await request(observation.sourceUrl);
+    const fetched = await request(detailUrl);
     if (!fetched.ok) {
       if (fetched.stop === 'request-cap') {
         detailSkipped += 1;
