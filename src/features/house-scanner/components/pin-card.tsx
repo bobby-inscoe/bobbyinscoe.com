@@ -4,6 +4,7 @@ import { FavoriteStar } from '@/features/house-scanner/components/favorite-star'
 import { HideButton } from '@/features/house-scanner/components/hide-button';
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
 import { ListingPhoto } from '@/features/house-scanner/components/listing-photo';
+import { KeyFacts } from '@/features/house-scanner/components/listing-summary';
 import type { Listing } from '@/features/house-scanner/types/contracts';
 import { formatPrice } from '@/features/house-scanner/utils/format';
 
@@ -50,10 +51,7 @@ export function PinCard({
         {formatPrice(listing.facts.askingPriceSek)}
         {listing.conflicts.includes('askingPriceSek') && ' (disputed)'}
       </Text>
-      <Text size="sm">
-        {listing.facts.livingAreaM2 ?? 'Unknown'} m² ·{' '}
-        {listing.facts.rooms ?? 'Unknown'} rooms
-      </Text>
+      <KeyFacts listing={listing} />
       <Group gap="xs">
         <Button
           component="a"

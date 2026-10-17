@@ -4,7 +4,7 @@ import type {
   Listing,
   Snapshot,
 } from '@/features/house-scanner/types/contracts';
-import { formatPrice } from '@/features/house-scanner/utils/format';
+import { formatFee, formatPrice } from '@/features/house-scanner/utils/format';
 import { estimatedPositionLabel } from '@/features/house-scanner/utils/listing-position';
 import {
   listingMatches,
@@ -42,18 +42,39 @@ export function PriceLine({ listing }: { listing: Listing }) {
   );
 }
 
+/** Area, rooms and the monthly fee, the three numbers that decide whether a home is worth a look. */
+export function KeyFacts({ listing }: { listing: Listing }) {
+  const { facts, conflicts } = listing;
+  const disputed = (key: 'livingAreaM2' | 'rooms' | 'baseFeeSek') =>
+    conflicts.includes(key) && ' (disputed)';
+  // A house has no monthly fee, so only a flat with none on record says so.
+  const fee =
+    facts.baseFeeSek !== null
+      ? formatFee(facts.baseFeeSek)
+      : facts.propertyType === 'house'
+        ? null
+        : 'Fee unknown';
+  return (
+    <Text size="sm" fw={600}>
+      {facts.livingAreaM2 ?? 'Unknown'} m²{disputed('livingAreaM2')} ·{' '}
+      {facts.rooms ?? 'Unknown'} rooms{disputed('rooms')}
+      {fee !== null && ` · ${fee}`}
+      {facts.baseFeeSek !== null && disputed('baseFeeSek')}
+    </Text>
+  );
+}
+
 export function FactsLine({ listing }: { listing: Listing }) {
   const estimated = estimatedPositionLabel(listing.coordinates);
   return (
-    <Text size="sm" c="dimmed">
-      {listing.facts.livingAreaM2 ?? 'Unknown'} m²
-      {listing.conflicts.includes('livingAreaM2') && ' (disputed)'} ·{' '}
-      {listing.facts.rooms ?? 'Unknown'} rooms
-      {listing.conflicts.includes('rooms') && ' (disputed)'} ·{' '}
-      {listing.facts.propertyType ?? 'Type unknown'}
-      {listing.conflicts.includes('propertyType') && ' (disputed)'}
-      {estimated && ` · ${estimated}`}
-    </Text>
+    <>
+      <KeyFacts listing={listing} />
+      <Text size="sm" c="dimmed">
+        {listing.facts.propertyType ?? 'Type unknown'}
+        {listing.conflicts.includes('propertyType') && ' (disputed)'}
+        {estimated && ` · ${estimated}`}
+      </Text>
+    </>
   );
 }
 
@@ -99,6 +120,7 @@ export function MatchLines({ listing, snapshot, details }: MatchLinesProps) {
           <Text size="sm" fw={600}>
             {matches.length > 1 && `${profile.name}: `}
             {SECTION_LABELS[result.section]}
+            {result.missing.length > 0 && `: ${result.missing.join(', ')}`}
           </Text>
           {details && (
             <>
