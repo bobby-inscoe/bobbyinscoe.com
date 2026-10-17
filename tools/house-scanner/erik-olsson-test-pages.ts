@@ -66,15 +66,23 @@ export const HIDDEN: CardInput = {
   ],
 };
 
+export const IMAGE_ACCOUNT = 'AccountHash_1234567890';
+export const PHOTO_ID = '11111111-2222-4333-8444-555555555555';
+export const PLAN_ID = '66666666-7777-4888-8999-000000000000';
+
 // The listing page streams its data as string chunks. The home object may be split across chunks.
-export function listingPage(home: unknown, split = 3) {
+// Its head names the image account in the address of the social preview image, as the real page does.
+export function listingPage(home: unknown, split = 3, imageHost = true) {
   const object = JSON.stringify({ home });
   const text = `8:["$","div",null,${object}]\n`;
   const size = Math.ceil(text.length / split);
   const chunks: string[] = [];
   for (let i = 0; i < text.length; i += size)
     chunks.push(text.slice(i, i + size));
-  return `<html><body>${chunks
+  const head = imageHost
+    ? `<head><meta property="og:image" content="https://imagedelivery.net/${IMAGE_ACCOUNT}/${PHOTO_ID}/w=1200,h=630,fit=cover,quality=90,format=auto"/></head>`
+    : '<head></head>';
+  return `<html>${head}<body>${chunks
     .map(
       (chunk) =>
         `<script>self.__next_f.push([1,${JSON.stringify(chunk)}])</script>`,
@@ -89,6 +97,10 @@ export function home(
   return {
     id: 9000001,
     status: { name: 'for_sale', title: 'Till salu' },
+    images: [
+      { is_floor_plan: true, cloudflare_image_id: PLAN_ID },
+      { is_floor_plan: false, cloudflare_image_id: PHOTO_ID },
+    ],
     provider_data: {
       advertiseOn: { hideAddress: false, hidePrice: false },
       baseInformation: {

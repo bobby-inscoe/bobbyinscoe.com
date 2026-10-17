@@ -311,6 +311,24 @@ function propertyTypeOf(label: unknown) {
 
 const record = (value: unknown): Rec => (isRecord(value) ? value : {});
 
+const IMAGE_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+// The image account is read from the page's own image addresses, so a change of account is followed.
+const IMAGE_ACCOUNT = /https:\/\/imagedelivery\.net\/([A-Za-z0-9_-]{10,40})\//;
+
+/** "<account>/<image id>" of the first image that is not a floor plan, or undefined. */
+function photoPathOf(html: string, home: Rec): string | undefined {
+  const account = IMAGE_ACCOUNT.exec(html)?.[1];
+  const images = Array.isArray(home.images) ? home.images : [];
+  const first = images.find(
+    (image) => isRecord(image) && image.is_floor_plan === false,
+  );
+  const id = isRecord(first) ? first.cloudflare_image_id : undefined;
+  return account !== undefined && typeof id === 'string' && IMAGE_ID.test(id)
+    ? `${account}/${id}`
+    : undefined;
+}
+
 export type ErikOlssonDetailRead =
   | { kind: 'detail'; facts: DetailFacts }
   | { kind: 'failed'; reason: PageFailure };
@@ -349,6 +367,7 @@ export function readErikOlssonDetailPage(html: string): ErikOlssonDetailRead {
   // for_sale is the one status name seen, with the title "Till salu".
   const status = record(found.home.status).name === 'for_sale';
 
+  const photoPath = photoPathOf(html, found.home);
   const facts: DetailFacts = {
     outdoor:
       balcony && patio
@@ -372,6 +391,7 @@ export function readErikOlssonDetailPage(html: string): ErikOlssonDetailRead {
     livingAreaM2: area(numberOf(base.livingSpace)),
     rooms: area(numberOf(record(data.interior).numberOfRooms), 100),
     ...(hasPoint ? { latitude, longitude } : {}),
+    ...(photoPath === undefined ? {} : { photoPath }),
   };
   return { kind: 'detail', facts };
 }

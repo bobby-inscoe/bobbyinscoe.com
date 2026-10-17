@@ -13,6 +13,8 @@ export const BONEO_IMAGE_ORIGIN = 'https://files.boneo.se';
 export const BJURFORS_SOURCE_ID = 'bjurfors';
 export const ERIK_OLSSON_SOURCE_ID = 'erik-olsson';
 export const ERIK_OLSSON_ORIGIN = 'https://www.erikolsson.se';
+// Cloudflare Images, shared by many sites; the account is in each image's path.
+export const ERIK_OLSSON_IMAGE_ORIGIN = 'https://imagedelivery.net';
 // Photos come from the same host as the listing pages.
 export const BJURFORS_ORIGIN = 'https://www.bjurfors.se';
 export const capabilitySchema = z.strictObject({
@@ -222,14 +224,13 @@ export function sourceRegistry(): SourceCapability[] {
         status: 'pending',
         retentionDays: 14,
         listingOrigins: [ERIK_OLSSON_ORIGIN],
-        // No photos: its terms limit copying and reproducing, and no image host was checked.
-        imageOrigins: [],
-        imageDisplay: false,
-        imageHotlink: false,
+        imageOrigins: [ERIK_OLSSON_IMAGE_ORIGIN],
+        imageDisplay: true,
+        imageHotlink: true,
         automatedCollection: false,
         privateDisplay: false,
         rightsBasis:
-          'Permission unresolved. The household owner chose to read public search pages for personal use at their own judgment. Its terms grant a personal, non-commercial licence and do not mention automated reading. Technical access is not a reuse license.',
+          'Permission unresolved. The household owner chose to read public search pages for personal use at their own judgment. Its terms grant a personal, non-commercial licence and do not mention automated reading, and limit copying and reproducing. Photos are loaded by the viewer browser from the broker image host, never copied. Technical access is not a reuse license.',
         allowedFactFields: [
           'propertyType',
           'tenure',
@@ -260,7 +261,7 @@ export function sourceRegistry(): SourceCapability[] {
             'Cards give type, area, rooms, fee and price. Balcony, patio, floor, lift, tenure, status and coordinates come from each kept home page, read up to the per-run cap.',
             'Balcony and patio are facts only when ticked; an unticked box stays unknown. Lift is a fact only when the page says yes. Only floor 2 or higher (or floor 0) is a floor fact. Glazing is not collected.',
             'Coordinates come from the broker and are used only when the address is not hidden. They are labelled address-level when the title has a house number; accuracy was not compared with an independent geocoder.',
-            'No photos are shown for this source.',
+            "Only the first photo is shown, hotlinked from the broker's Cloudflare Images address (imagedelivery.net, shared by other sites, with no robots.txt). The thumbnail variant loaded as a JPEG of about 39 kB on one sample. Nothing is copied or stored.",
             'Listing identity is the numeric id at the end of the page path and the episode never changes, so a relisting of the same home is not told apart.',
             'Known listings cannot be refreshed outside discovery.',
           ],

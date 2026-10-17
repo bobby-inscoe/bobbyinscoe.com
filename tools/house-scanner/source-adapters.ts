@@ -21,6 +21,7 @@ import {
   BONEO_IMAGE_ORIGIN,
   BONEO_ORIGIN,
   BONEO_SOURCE_ID,
+  ERIK_OLSSON_IMAGE_ORIGIN,
   ERIK_OLSSON_ORIGIN,
   ERIK_OLSSON_SOURCE_ID,
   type SourceCapability,
@@ -103,12 +104,17 @@ const ERIK_OLSSON_PATHS: Record<string, string> = {
   göteborg: 'goteborg-166',
 };
 
+// A thumbnail size of the image account's flexible variants; the site's own pages use the same family.
+const PHOTO_VARIANT = 'w=640,h=480,fit=cover,quality=80,format=auto';
+// The daily run refreshes the photo, so a week is ample before the app stops showing it.
+const PHOTO_VALID_MS = 7 * 24 * 60 * 60 * 1000;
+
 export const erikOlssonAdapter: SourceAdapter = {
   sourceId: ERIK_OLSSON_SOURCE_ID,
   executor: 'erik-olsson-personal-read',
   origin: ERIK_OLSSON_ORIGIN,
-  // No photos are shown for this source.
-  imageOrigin: null,
+  // Photos are the broker's Cloudflare Images address, shown by the viewer's browser and never fetched here.
+  imageOrigin: ERIK_OLSSON_IMAGE_ORIGIN,
   headers: {
     'user-agent': USER_AGENT,
     accept: 'text/html,application/xhtml+xml',
@@ -123,6 +129,21 @@ export const erikOlssonAdapter: SourceAdapter = {
     return path === undefined
       ? { unsupported: 'municipality-path-unproven' }
       : `${ERIK_OLSSON_ORIGIN}/municipalities/${path}?tab=homes`;
+  },
+  photoFor(facts, observedAt) {
+    if (facts.photoPath === undefined) return null;
+    return {
+      url: `${ERIK_OLSSON_IMAGE_ORIGIN}/${facts.photoPath}/${PHOTO_VARIANT}`,
+      attribution: 'Erik Olsson',
+      rightsBasis:
+        'Shown to the household owner for personal use, loaded from the broker image host and never copied or stored.',
+      expiresAt: new Date(
+        Date.parse(observedAt) + PHOTO_VALID_MS,
+      ).toISOString(),
+      observedAt,
+      displayAllowed: true,
+      hotlinkAllowed: true,
+    };
   },
   // The search address already carries a query.
   pageUrl: (base, page) => `${base}&page=${page}`,
@@ -142,8 +163,8 @@ export function adapterFor(capability: SourceCapability): SourceAdapter {
     policy.listingOrigins.length !== 1 ||
     policy.listingOrigins[0] !== adapter.origin ||
     // Photos are allowed from the one image host only, shown by the browser and never fetched here.
-    policy.imageOrigins.length !== (adapter.imageOrigin === null ? 0 : 1) ||
-    policy.imageOrigins[0] !== (adapter.imageOrigin ?? undefined)
+    policy.imageOrigins.length !== 1 ||
+    policy.imageOrigins[0] !== adapter.imageOrigin
   )
     throw new Error('No permitted executor for this source.');
   return adapter;

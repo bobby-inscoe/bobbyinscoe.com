@@ -109,8 +109,7 @@ export interface SourceAdapter {
   sourceId: string;
   executor: SourceCapability['executor'];
   origin: string;
-  // Null when the source shows no photos, so its policy names no image origin.
-  imageOrigin: string | null;
+  imageOrigin: string;
   headers: Record<string, string>;
   // Label for a coordinate this source's listing pages supply.
   coordinateSource: string;
@@ -119,6 +118,8 @@ export interface SourceAdapter {
   notCovered: string;
   /** First page of a partition, or why the partition cannot be read. */
   partitionUrl(partition: LivePartitionInput): string | { unsupported: string };
+  /** The photo a listing page's facts point to, for a source whose photos sit on an image host. */
+  photoFor?(facts: DetailFacts, observedAt: string): Observation['photo'];
   /** URL of a later page. Without it the page number is added as ?page=N. */
   pageUrl?(base: string, page: number): string;
   readSearchPage(html: string, context: ReadContext): PageRead;
@@ -133,8 +134,9 @@ export interface SourceAdapter {
 function applyDetail(
   adapter: SourceAdapter,
   observation: Observation,
-  { latitude, longitude, ...facts }: DetailFacts,
+  detail: DetailFacts,
 ) {
+  const { latitude, longitude, photoPath: _photoPath, ...facts } = detail;
   Object.assign(
     observation.facts,
     Object.fromEntries(
@@ -144,6 +146,8 @@ function applyDetail(
       ),
     ),
   );
+  const photo = adapter.photoFor?.(detail, observation.observedAt);
+  if (photo) observation.photo = photo;
   if (latitude === undefined || longitude === undefined) return;
   observation.coordinates = {
     latitude,

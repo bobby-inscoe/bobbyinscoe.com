@@ -34,6 +34,13 @@ export const detailFactsSchema = z.strictObject({
   rooms: shape.rooms.optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
+  // Where a source's image host holds the first photo: "<account>/<image id>". Erik Olsson only.
+  photoPath: z
+    .string()
+    .regex(
+      /^[A-Za-z0-9_-]{10,40}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    )
+    .optional(),
 });
 export type DetailFacts = z.infer<typeof detailFactsSchema>;
 
