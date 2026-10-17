@@ -60,9 +60,10 @@ Inside the feature:
 - `components/household-workspace.tsx` is the shell: tab state, status line, the
   shared list and map state, and the notes controller. Each tab body is a panel
   (`listings-panel.tsx`, `add-link-panel.tsx`, `sources-panel.tsx`,
-  `settings-panel.tsx`). Cards split into `listing-card.tsx` (collapsed),
-  `listing-details.tsx` and `listing-photo.tsx`. `household-map.tsx` is loaded
-  lazily so MapLibre stays in its own chunk.
+  `settings-panel.tsx`). A card (`listing-card.tsx`) and the details sheet
+  (`listing-drawer.tsx`, a side sheet on desktop and a bottom sheet on a phone)
+  share `listing-summary.tsx`, `listing-details.tsx` and `listing-photo.tsx`.
+  `household-map.tsx` is loaded lazily so MapLibre stays in its own chunk.
 - `utils/` holds the rules, each in one place: `match-listing.ts` (matching and
   the section wording), `listing-position.ts` (which homes get a pin),
   `listing-filters.ts` (personal filters), `listing-view.ts` (what a tab shows
