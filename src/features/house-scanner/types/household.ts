@@ -22,3 +22,10 @@ export interface Household extends HouseholdActions {
   snapshot: Snapshot;
   userId: string;
 }
+
+export type WorkspaceTab =
+  | 'suggestions'
+  | 'favorites'
+  | 'manual'
+  | 'sources'
+  | 'settings';
