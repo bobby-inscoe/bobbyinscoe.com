@@ -556,3 +556,76 @@ test('pressing a map marker keeps keyboard focus on it and marks it pressed', as
   await expect(marker).toBeFocused();
   await expect(marker).toHaveAttribute('aria-pressed', 'true');
 });
+
+async function seeDetachedHomeOnMap(page: import('@playwright/test').Page) {
+  await page.route('https://tiles.openfreemap.org/styles/liberty', (route) =>
+    route.fulfill({ json: LOCAL_STREET_STYLE }),
+  );
+  await routeImagery(page);
+  await openDemo(page);
+  await page
+    .getByRole('article', { name: 'Example detached home', exact: true })
+    .getByRole('button', { name: 'See on map', exact: true })
+    .click();
+  await expect(
+    page.getByRole('article', {
+      name: 'Selected home: Example detached home',
+      exact: true,
+    }),
+  ).toBeVisible();
+}
+
+test('opening the map on a located home keeps the not-located marker inside the map', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name !== 'desktop');
+  await seeDetachedHomeOnMap(page);
+  const unlocated = page.getByRole('button', {
+    name: '3 homes with no known position',
+    exact: true,
+  });
+  await expect(unlocated).toBeVisible();
+  await expect
+    .poll(async () => {
+      const mapBox = await page.getByLabel('Listing map').boundingBox();
+      const box = await unlocated.boundingBox();
+      if (!box || !mapBox) return false;
+      return (
+        box.x >= mapBox.x &&
+        box.y >= mapBox.y &&
+        box.x + box.width <= mapBox.x + mapBox.width &&
+        box.y + box.height <= mapBox.y + mapBox.height
+      );
+    })
+    .toBe(true);
+});
+
+test('on a phone the selected home card does not cover the selected pin', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name !== 'narrow');
+  await seeDetachedHomeOnMap(page);
+  const pin = page
+    .getByLabel('Listing map')
+    .locator('button[aria-pressed="true"]');
+  const card = page.getByRole('article', {
+    name: 'Selected home: Example detached home',
+    exact: true,
+  });
+  await expect(pin).toBeVisible();
+  await expect
+    .poll(async () => {
+      const [pinBox, cardBox] = await Promise.all([
+        pin.boundingBox(),
+        card.boundingBox(),
+      ]);
+      if (!pinBox || !cardBox) return true;
+      return !(
+        pinBox.x < cardBox.x + cardBox.width &&
+        pinBox.x + pinBox.width > cardBox.x &&
+        pinBox.y < cardBox.y + cardBox.height &&
+        pinBox.y + pinBox.height > cardBox.y
+      );
+    })
+    .toBe(true);
+});

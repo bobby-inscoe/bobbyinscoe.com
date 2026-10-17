@@ -17,6 +17,9 @@ import type { MapPoint } from '@/features/house-scanner/utils/listing-view';
 setWorkerUrl(workerUrl);
 
 const MAX_STACK_BUTTONS = 6;
+// Room kept around a pin so its marker is not clipped, and between the card and the map edge.
+const MARKER_MARGIN = 24;
+const CARD_GAP = 24;
 
 const SATELLITE_STYLE: StyleSpecification = {
   version: 8,
@@ -74,6 +77,7 @@ export function HouseholdMap({
   const [stack, setStack] = useState<string[]>([]);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const overlayRef = useRef<HTMLDivElement>(null);
   const markers = useRef<MarkerEntry[]>([]);
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
@@ -108,7 +112,8 @@ export function HouseholdMap({
         center: [centerLongitude, centerLatitude],
         zoom: 11,
         bounds,
-        fitBoundsOptions: { padding: 40, maxZoom: 14 },
+        // Wider than half the not-located marker, so that marker is not clipped at the edge.
+        fitBoundsOptions: { padding: 56, maxZoom: 14 },
         attributionControl: { compact: false },
       });
       map.current = instance;
@@ -186,10 +191,28 @@ export function HouseholdMap({
   }, [selectedId]);
   useEffect(() => {
     const point = points.find((candidate) => candidate.id === selectedId);
-    if (point && loaded && !error)
-      map.current?.jumpTo({
-        center: [point.coordinates.longitude, point.coordinates.latitude],
-      });
+    const instance = map.current;
+    if (!point || !instance || !loaded || error) return;
+    const center: [number, number] = [
+      point.coordinates.longitude,
+      point.coordinates.latitude,
+    ];
+    const { clientWidth, clientHeight } = instance.getContainer();
+    // The card sits over the bottom of the map, so the free area ends above it.
+    const cardHeight =
+      overlayRef.current?.firstElementChild?.getBoundingClientRect().height ??
+      0;
+    const inset = cardHeight
+      ? Math.min(cardHeight + CARD_GAP, clientHeight - 2 * MARKER_MARGIN)
+      : 0;
+    const { x, y } = instance.project(center);
+    const inFreeArea =
+      x >= MARKER_MARGIN &&
+      x <= clientWidth - MARKER_MARGIN &&
+      y >= MARKER_MARGIN &&
+      y <= clientHeight - inset - MARKER_MARGIN;
+    // Keep the first view, which frames every marker, when the pin is already in sight.
+    if (!inFreeArea) instance.jumpTo({ center, padding: { bottom: inset } });
   }, [points, selectedId, loaded, error]);
   const provider = satellite ? 'Esri' : 'OpenFreeMap';
   const availableStack = stack.filter((id) =>
@@ -210,7 +233,8 @@ export function HouseholdMap({
               className={styles.map}
               aria-label="Listing map"
             />
-            {overlay}
+            {/* Measured for the card height; the card keeps its own absolute position. */}
+            <div ref={overlayRef}>{overlay}</div>
           </div>
         </>
       )}
