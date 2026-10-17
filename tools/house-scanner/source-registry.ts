@@ -15,6 +15,9 @@ export const STADSHEM_SOURCE_ID = 'stadshem';
 export const STADSHEM_ORIGIN = 'https://stadshem.se';
 // Google Cloud Storage, shared by many sites; the bucket is in each image's path.
 export const STADSHEM_IMAGE_ORIGIN = 'https://storage.googleapis.com';
+export const LUNDIN_SOURCE_ID = 'lundin';
+// Photos come from the same host as the listing pages.
+export const LUNDIN_ORIGIN = 'https://www.lundin.se';
 export const ERIK_OLSSON_SOURCE_ID = 'erik-olsson';
 export const ERIK_OLSSON_ORIGIN = 'https://www.erikolsson.se';
 // Cloudflare Images, shared by many sites; the account is in each image's path.
@@ -29,6 +32,7 @@ export const capabilitySchema = z.strictObject({
     'bjurfors-personal-read',
     'erik-olsson-personal-read',
     'stadshem-personal-read',
+    'lundin-personal-read',
     'none',
   ]),
   nativeNumericFiltersVerified: z.boolean(),
@@ -325,6 +329,56 @@ export function sourceRegistry(): SourceCapability[] {
         },
       },
       executor: 'stadshem-personal-read',
+      nativeNumericFiltersVerified: false,
+      geographicPartitioning: 'unverified',
+    }),
+    capabilitySchema.parse({
+      policy: {
+        ...common,
+        sourceId: LUNDIN_SOURCE_ID,
+        // Pending is not approved: the operator sets approval in the database.
+        status: 'pending',
+        retentionDays: 14,
+        listingOrigins: [LUNDIN_ORIGIN],
+        imageOrigins: [LUNDIN_ORIGIN],
+        imageDisplay: true,
+        imageHotlink: true,
+        automatedCollection: false,
+        privateDisplay: false,
+        rightsBasis:
+          "Permission unresolved. The household owner chose to read the broker's public list for personal use at their own judgment. The site publishes only a privacy policy and no terms of use, and its robots.txt disallows file paths only. Technical access is not a reuse license.",
+        allowedFactFields: [
+          'propertyType',
+          'tenure',
+          'purchase',
+          'livingAreaM2',
+          'rooms',
+          'askingPriceSek',
+          'municipality',
+          'baseFeeSek',
+          'status',
+        ],
+        capabilities: {
+          discovery: true,
+          knownListingRefresh: false,
+          unknownPrice: false,
+          upcoming: false,
+          pagination: false,
+          resultCap: null,
+          coverageGaps: [
+            'Permission is unresolved and the source is not approved.',
+            'Göteborg and Mölndal are supported. The list covers every place the broker sells in; the municipality is worked out from the city and district fields, and homes in other places or in unrecognised districts are skipped.',
+            'The data is the JSON list that the site page loads (api/list). It is not a documented public API and can change without notice.',
+            'The whole list is one request, so no home page is read: floor, lift, balcony and glazing stay unknown. Viewing times are not in the list.',
+            'Coming-soon homes are read too and marked upcoming; many have no asking price. Sold homes, plots and new production are skipped.',
+            'The list has no coordinates, so a position is estimated from the street address for the homes that are kept.',
+            "Only the primary photo is shown, hotlinked from the broker's own image address. Nothing is copied or stored.",
+            'Listing identity is the object id and the episode never changes, so a relisting of the same home is not told apart.',
+            'Known listings cannot be refreshed outside discovery.',
+          ],
+        },
+      },
+      executor: 'lundin-personal-read',
       nativeNumericFiltersVerified: false,
       geographicPartitioning: 'unverified',
     }),

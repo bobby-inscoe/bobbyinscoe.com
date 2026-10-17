@@ -118,6 +118,8 @@ export interface SourceAdapter {
   notCovered: string;
   /** First page of a partition, or why the partition cannot be read. */
   partitionUrl(partition: LivePartitionInput): string | { unsupported: string };
+  /** Set when the search page already carries everything the source can give, so no home page is read. */
+  listOnly?: boolean;
   /** Where a listing's extra facts are read, when that is not the page people open. */
   detailUrl?(observation: Observation): string;
   /** The photo a listing page's facts point to, for a source whose photos sit on an image host. */
@@ -370,7 +372,7 @@ export async function runCollection(
   // holds a recent read. A failed page leaves that listing's outdoor and glazed
   // unknown and is never remembered; 403, 429 and network errors still stop the
   // whole run.
-  const targets = selectKept(observations);
+  const targets = adapter.listOnly ? [] : selectKept(observations);
   for (const observation of targets) {
     const detailUrl = adapter.detailUrl?.(observation) ?? observation.sourceUrl;
     const url = new URL(detailUrl);

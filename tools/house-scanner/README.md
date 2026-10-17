@@ -134,6 +134,18 @@ Tests use pages authored in `erik-olsson-test-pages.ts` (fictional streets and v
 
 Tests use answers authored in `stadshem-test-pages.ts` (fictional streets and values in the same shape). The parser was also run once against the real list and record saved from the probe, which are not kept in the repository; that run found real ids with an underscore, now accepted.
 
+## Lundin reader (pending source)
+
+`lundin-parser.ts` reads one JSON document: `https://www.lundin.se/api/list?id=1`, the list the site's own page loads. It is one array of every object the broker has (245 on 17 October 2026). Nothing is parsed from HTML. Photos are hotlinked from the same host (`/dc/<image id>.jpg`), and the policy allows that origin only.
+
+- A run is two requests: `robots.txt` and the list. The adapter sets `listOnly`, so no home page is read and floor, lift, balcony and glazing stay unknown.
+- Identity is `Guid`; the public page is `DescrUrl`, which must be `/beskrivning/<Guid>/<slug>`. Facts: `Price` (zero is unknown), `Rent` (the monthly fee), `Area`, `Rooms`, `Type` (`CMBoLgh` in any letter case is a tenant-owner apartment, `CMVilla` and `CMFritidshus` are houses; plots and new production are skipped), `Status` (`Till salu` is available, `Snart till salu` is upcoming; `Såld` is skipped).
+- The list has no municipality. `City` and `ParentLocation` place a home in Göteborg (city Göteborg, or a district such as Innerstaden or Västra Göteborg) or Mölndal (city Mölndal, or `Mölndals kommun`). Anything else is skipped rather than guessed. Run against the saved answer: 90 Göteborg and 13 Mölndal homes kept.
+- There are no coordinates, so the geocoder estimates a position for the homes that are kept.
+- Operator steps as for the others: `--print-policy-sql --source=lundin --household=<uuid>`, then a credential for this source.
+
+Tests use answers authored in `lundin-test-pages.ts` (fictional streets and values in the same shape); the parser was also run once against the saved real answer, which is not kept in the repository.
+
 ### Estimated positions
 
 Kept homes with a house number in the title and no source position are looked up on OpenStreetMap's Nominatim (`geocoder.ts`): honest user agent, 1.5 seconds apart, at most 60 per run, stop on the first error. Answers are cached in `house-scanner.cache-geocode.json` (gitignored by the `house-scanner.cache*.json` pattern): hits for 90 days, misses for 7. The position is stored as `address` with a source that says it is estimated from the address or the street name.

@@ -15,6 +15,7 @@ import {
   type SourceAdapter,
   USER_AGENT,
 } from '@house-scanner-tools/live-reader';
+import { readLundinSearchPage } from '@house-scanner-tools/lundin-parser';
 import {
   BJURFORS_ORIGIN,
   BJURFORS_SOURCE_ID,
@@ -24,6 +25,8 @@ import {
   ERIK_OLSSON_IMAGE_ORIGIN,
   ERIK_OLSSON_ORIGIN,
   ERIK_OLSSON_SOURCE_ID,
+  LUNDIN_ORIGIN,
+  LUNDIN_SOURCE_ID,
   type SourceCapability,
   STADSHEM_IMAGE_ORIGIN,
   STADSHEM_ORIGIN,
@@ -192,6 +195,38 @@ export const stadshemAdapter: SourceAdapter = {
   readDetailPage: readStadshemDetailPage,
 };
 
+// One list of everything the broker sells, read for the two municipalities its fields can place.
+const LUNDIN_MUNICIPALITIES = ['göteborg', 'mölndal'];
+
+export const lundinAdapter: SourceAdapter = {
+  sourceId: LUNDIN_SOURCE_ID,
+  executor: 'lundin-personal-read',
+  origin: LUNDIN_ORIGIN,
+  // Photos are the broker's own image address, shown by the viewer's browser and never fetched here.
+  imageOrigin: LUNDIN_ORIGIN,
+  headers: {
+    'user-agent': USER_AGENT,
+    // robots.txt is asked with the same headers, so plain text stays acceptable.
+    accept: 'application/json, text/plain;q=0.9',
+    'accept-language': 'sv-SE,sv;q=0.9,en;q=0.8',
+  },
+  coordinateSource: 'lundin-list',
+  detailLabel: 'Home pages',
+  notCovered: 'Not covered: other cities, floor, lift and balcony.',
+  // The list already holds everything, so the run is one request.
+  listOnly: true,
+  partitionUrl(partition: LivePartitionInput) {
+    return LUNDIN_MUNICIPALITIES.includes(
+      partition.municipality.trim().toLowerCase(),
+    )
+      ? `${LUNDIN_ORIGIN}/api/list?id=1`
+      : { unsupported: 'municipality-path-unproven' };
+  },
+  readSearchPage: readLundinSearchPage,
+  // Never called: the run reads no home pages.
+  readDetailPage: () => ({ kind: 'failed', reason: 'unexpected-shape' }),
+};
+
 /** The adapter for a capability, only when its policy names exactly this adapter's source and hosts. */
 export function adapterFor(capability: SourceCapability): SourceAdapter {
   const { policy } = capability;
@@ -200,6 +235,7 @@ export function adapterFor(capability: SourceCapability): SourceAdapter {
     bjurforsAdapter,
     erikOlssonAdapter,
     stadshemAdapter,
+    lundinAdapter,
   ].find((candidate) => candidate.executor === capability.executor);
   if (
     adapter === undefined ||
