@@ -48,6 +48,13 @@ trigger down is what makes that happen.
 
 <!-- Add new entries directly below this line, newest first. -->
 
+## 2026-10-17 House Scanner refreshes on focus only, without a timer
+**Decision.** The app reloads household data when the window regains focus and after the member's own saves, and no longer polls every 60 seconds.
+**Why.** Listings change about once a day, when the owner runs the collector, and own saves already refresh themselves. The poll cost four requests a minute per open tab, mostly returning identical data. The owner does not want automatic polling that cannot justify itself.
+**Instead of.** The spec's 60-second poll while visible, which only helps when two members watch the same open tab while the other saves. A realtime subscription, which the spec already ruled out.
+**Costs.** A member who keeps the tab focused does not see another member's new favorite or note until they switch away and back, or reload.
+**Revisit if.** Members edit at the same time often enough to miss each other's changes, or collection becomes frequent enough that a stale tab misleads.
+
 ## 2026-10-17 House Scanner estimates missing positions from the street address
 **Decision.** After the profile filter, the collector looks up each kept home that has a house number in its title and no source position, through OpenStreetMap's public Nominatim service, and stores the result as an `address` position whose source says it is estimated from the address or only the street name. Results are cached in `house-scanner.cache-geocode.json` (90 days for a hit, 7 for a miss). At most 60 lookups run per run, 1.5 seconds apart, with the reader's honest user agent, and the first refusal or network error ends the lookups. Homes that still have no position share one dashed "not located" marker in the water off Gothenburg, where the member steps through them with Previous and Next.
 **Why.** 39 of 261 homes were Bjurfors listings with a full street address but no coordinates, so they never appeared on the map the household uses most. The street address is already public and is what a person would type into a map.

@@ -55,7 +55,7 @@ Start the next session from this file. It already carries what the private spec 
 
 Done and merged: every step of the structure plan (R1 to R8, F1 to F3, D1 to D6), the attribution fix, a filled and ringed selected pin, one membership request per refresh instead of two, and no re-render when a refresh brings back identical data. The work record in `docs/house-scanner.md` lists the evidence.
 
-Network calls the owner saw, explained: a refresh is `getUser`, `hs_memberships` and `hs_snapshot`. It runs on window focus (including clicking back into the page from DevTools) and every 60 seconds, as the spec asks. `hs_notes` runs when Details opens a home; an empty array means nobody has written a note on it.
+Network calls the owner saw, explained: a refresh is `getUser`, `hs_memberships` and `hs_snapshot`. It runs on window focus (including clicking back into the page from DevTools) and after the member's own saves. The spec's 60-second poll was removed on 17 October; see decisions.md. `hs_notes` runs when Details opens a home; an empty array means nobody has written a note on it.
 
 Where the next features land:
 - Click outside the map card (backlog 2): a background-click callback on `components/household-map.tsx`, cleared in `components/listings-panel.tsx`. Markers are no longer rebuilt on selection, so a map click can be told apart from a marker click.

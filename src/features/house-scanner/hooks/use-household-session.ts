@@ -202,17 +202,16 @@ export function useHouseholdSession() {
         });
       }
     });
+    // Data changes about once a day and own saves refresh themselves, so returning to the tab is enough; no timer polls.
     const onFocus = () => {
       if (document.visibilityState === 'visible') void refresh();
     };
     window.addEventListener('focus', onFocus);
-    const timer = window.setInterval(onFocus, 60000);
     return () => {
       mounted.current = false;
       generation.current += 1;
       subscription.unsubscribe();
       window.removeEventListener('focus', onFocus);
-      window.clearInterval(timer);
     };
   }, [client, refresh, fail]);
   // The access code is the password the owner set for this member's user, so no email is sent.

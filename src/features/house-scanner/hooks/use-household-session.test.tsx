@@ -452,6 +452,22 @@ describe('House Scanner session privacy', () => {
     expect(sdk.auth.getUser).toHaveBeenCalledTimes(1);
     expect(hook.result.current.state.status).toBe('authenticated');
   });
+  it('does not poll while the tab stays open without focus changes', async () => {
+    // Installed before mount so any interval the hook sets runs on this clock.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await authenticated();
+      sdk.auth.getUser.mockClear();
+      sdk.rpc.mockClear();
+      await act(async () => {
+        vi.advanceTimersByTime(5 * 60_000);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(sdk.auth.getUser).not.toHaveBeenCalled();
+    expect(sdk.rpc).not.toHaveBeenCalled();
+  });
   it('asks for memberships once per refresh and keeps an unchanged snapshot object', async () => {
     const hook = await authenticated();
     const first = hook.result.current.state;
