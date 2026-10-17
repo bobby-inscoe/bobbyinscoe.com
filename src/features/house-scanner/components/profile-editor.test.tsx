@@ -216,6 +216,16 @@ describe('places and the search circle', () => {
   });
 });
 
+describe('nature and transit preferences', () => {
+  it('are not shown, since nothing uses them, and are saved as they were', async () => {
+    const onSave = show(demo);
+    expect(screen.queryByText(/greenery|walk to|journey/i)).toBeNull();
+    const saved = await save(onSave);
+    expect(saved.nature).toEqual(demo.criteria.nature);
+    expect(saved.transit).toEqual(demo.criteria.transit);
+  });
+});
+
 describe('who can edit', () => {
   it('disables every dropdown for someone who is not an owner', () => {
     show(demo, false);
