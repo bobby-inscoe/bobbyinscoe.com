@@ -18,6 +18,10 @@ export const STADSHEM_IMAGE_ORIGIN = 'https://storage.googleapis.com';
 export const LUNDIN_SOURCE_ID = 'lundin';
 // Photos come from the same host as the listing pages.
 export const LUNDIN_ORIGIN = 'https://www.lundin.se';
+export const HUSMAN_HAGBERG_SOURCE_ID = 'husman-hagberg';
+export const HUSMAN_HAGBERG_ORIGIN = 'https://www.husmanhagberg.se';
+// Photos come from the broker's media host.
+export const HUSMAN_HAGBERG_IMAGE_ORIGIN = 'https://media.husmanhagberg.se';
 export const ERIK_OLSSON_SOURCE_ID = 'erik-olsson';
 export const ERIK_OLSSON_ORIGIN = 'https://www.erikolsson.se';
 // Cloudflare Images, shared by many sites; the account is in each image's path.
@@ -33,6 +37,7 @@ export const capabilitySchema = z.strictObject({
     'erik-olsson-personal-read',
     'stadshem-personal-read',
     'lundin-personal-read',
+    'husman-hagberg-personal-read',
     'none',
   ]),
   nativeNumericFiltersVerified: z.boolean(),
@@ -391,6 +396,59 @@ export function sourceRegistry(): SourceCapability[] {
         },
       },
       executor: 'lundin-personal-read',
+      nativeNumericFiltersVerified: false,
+      geographicPartitioning: 'unverified',
+    }),
+    capabilitySchema.parse({
+      policy: {
+        ...common,
+        sourceId: HUSMAN_HAGBERG_SOURCE_ID,
+        // Pending is not approved: the operator sets approval in the database.
+        status: 'pending',
+        retentionDays: 14,
+        listingOrigins: [HUSMAN_HAGBERG_ORIGIN],
+        imageOrigins: [HUSMAN_HAGBERG_IMAGE_ORIGIN],
+        imageDisplay: true,
+        imageHotlink: true,
+        automatedCollection: false,
+        privateDisplay: false,
+        rightsBasis:
+          "Permission unresolved. The household owner chose to read the broker's public list for personal use at their own judgment. The terms of use (checked 17 October 2026) say nothing about automated reading and bar copying and spreading protected texts and images without consent, and robots.txt allows everything. Technical access is not a reuse license.",
+        allowedFactFields: [
+          'propertyType',
+          'tenure',
+          'purchase',
+          'livingAreaM2',
+          'rooms',
+          'askingPriceSek',
+          'municipality',
+          'baseFeeSek',
+          'status',
+          'groundFloor',
+        ],
+        capabilities: {
+          discovery: true,
+          knownListingRefresh: false,
+          unknownPrice: false,
+          upcoming: false,
+          pagination: false,
+          resultCap: null,
+          coverageGaps: [
+            'Permission is unresolved and the source is not approved.',
+            'Only Göteborg is supported. The list is a text search on the name Göteborg, so a home in the municipality whose address never says Göteborg may be missed: the broker counted 206 for Göteborg and the search returned 143, and the reason for the gap was not checked.',
+            'The data is the JSON list that the site pages load from api.husmanhagberg.se (object/api/objects). It is not a documented public API and can change without notice. That host serves no robots.txt (404), so the run reads the robots.txt of www.husmanhagberg.se.',
+            'The answer holds every match when asked for 200 a page (143 on 17 October) and reports a total, so a list shorter than its total is detected and reported as truncated. A paging parameter was not found.',
+            'Coming-soon homes (taken in and shown as coming) are read too and marked upcoming; most have no asking price. Whether every coming-soon home is listed is unproven.',
+            'The list gives no tenure for houses, so it stays unknown. Holiday homes, commercial property and any other type are skipped.',
+            'The floor of an apartment comes from the list: floor 2 or higher, or floor 0, is a floor fact. Lift, balcony and glazing are not in the list and stay unknown. Viewing times are in the list and are not read yet.',
+            'Coordinates come from the broker and are labelled address-level when the title has a house number. They were not compared with an independent geocoder. A hidden address gets no position.',
+            'Only the primary photo is shown, hotlinked from the broker media host. Nothing is copied or stored.',
+            'Listing identity is the object reference and the episode never changes, so a relisting of the same home is not told apart.',
+            'Known listings cannot be refreshed outside discovery.',
+          ],
+        },
+      },
+      executor: 'husman-hagberg-personal-read',
       nativeNumericFiltersVerified: false,
       geographicPartitioning: 'unverified',
     }),

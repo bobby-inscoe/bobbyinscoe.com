@@ -146,6 +146,21 @@ Tests use answers authored in `stadshem-test-pages.ts` (fictional streets and va
 
 Tests use answers authored in `lundin-test-pages.ts` (fictional streets and values in the same shape); the parser was also run once against the saved real answer, which is not kept in the repository.
 
+## Husman Hagberg reader (pending source)
+
+`husman-hagberg-parser.ts` reads one JSON document: `https://api.husmanhagberg.se/object/api/objects?ps=200&regX=G%C3%B6teborg`, the list the site's own search pages load. It answers `{ estates, count }`; `ps` is the page size and `regX` a text match on the name. One answer held all 143 matches on 17 October 2026 (485 kB). Nothing is parsed from HTML. Photos are hotlinked from `https://media.husmanhagberg.se`, and the policy allows that origin only.
+
+- A run is two requests: `robots.txt` of `www.husmanhagberg.se` and the list. The adapter sets `listOnly`, so no home page is read. The API host has no robots.txt (404), so the guard applies the site's rules to the list path. The site's robots.txt allows everything; its terms of use have no clause on automated reading and bar copying and spreading protected texts and images without consent.
+- Identity is `objectReference`; the public page is `https://www.husmanhagberg.se/estate/<objectReference>/` (the `/sv/estate/<ref>/` form redirects to it). Facts: `startingPrice` (zero, missing or `details.advertiseOn.hidePrice` is unknown), `monthlyFee`, `livingSpace`, `numberOfRooms`, `address.municipality`, `estateType` (`HousingCooperative` is a tenant-owner apartment, `House` is a house with unknown tenure; `Cottage`, `CommercialProperty` and anything else are skipped), `statusId` with `showAsComing` (`ForSale` is available, a shown `TakenIn` is upcoming, anything else is skipped).
+- Floor comes from `details.floorAndElevator.floor` for apartments, through the shared floor rule. Lift, balcony and glazing are not in the list and stay unknown.
+- Position is the broker's `address.latitude` and `longitude` (strings), dropped when the address is hidden (`details.advertiseOn.hideAddress`), and labelled address-level when the title has a house number. A hidden address also falls back to the area name as the title.
+- Paging: no parameter was found. If the answer holds fewer homes than its `count`, the partition is reported truncated (`empty-page-before-total`), never complete.
+- Only Göteborg is supported. The match is on text, and the broker's own municipality list counted 206 for Göteborg against 143 returned, so some homes may be missed; the reason was not checked.
+- Run against the saved real answer: 141 of 143 kept (63 available, 78 upcoming), 134 apartments and 7 houses; 81 with a price, 134 with a fee, 139 with a position, 93 with a floor above ground.
+- Operator steps as for the others: `--print-policy-sql --source=husman-hagberg --household=<uuid>`, then a credential for this source.
+
+Tests use answers authored in `husman-hagberg-test-pages.ts` (fictional streets and values in the same shape).
+
 ### Estimated positions
 
 Kept homes with a house number in the title and no source position are looked up on OpenStreetMap's Nominatim (`geocoder.ts`): honest user agent, 1.5 seconds apart, at most 60 per run, stop on the first error. Answers are cached in `house-scanner.cache-geocode.json` (gitignored by the `house-scanner.cache*.json` pattern): hits for 90 days, misses for 7. The position is stored as `address` with a source that says it is estimated from the address or the street name.
