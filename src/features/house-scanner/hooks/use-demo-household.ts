@@ -10,7 +10,7 @@ import type {
   SearchProfile,
   Snapshot,
 } from '@/features/house-scanner/types/contracts';
-import { normalizeManualUrl } from '@/features/house-scanner/utils/workspace-view';
+import { normalizeManualUrl } from '@/features/house-scanner/utils/manual-url';
 
 export function useDemoHousehold() {
   const [snapshot, setSnapshot] = useState<Snapshot>(() =>

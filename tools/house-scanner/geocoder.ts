@@ -1,8 +1,8 @@
 import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { type LiveDeps, USER_AGENT } from '@house-scanner-tools/live-reader';
+import { positionPrecision } from '@house-scanner-tools/page-read';
 import { z } from 'zod';
 import type { Observation } from '@/features/house-scanner/types/contracts';
-import type { LiveDeps } from './live-reader';
-import { USER_AGENT } from './live-reader';
 
 // OpenStreetMap's public Nominatim allows one request a second and asks for caching.
 export const GEOCODE_GAP_MS = 1500;
@@ -41,7 +41,6 @@ export function saveGeocodeCache(path: string, cache: GeocodeCache) {
   }
 }
 
-const hasHouseNumber = (title: string) => /\d/.test(title);
 const cacheKey = (title: string, municipality: string) =>
   `${title}|${municipality}`.toLowerCase();
 
@@ -60,7 +59,11 @@ export async function geocodeMissing(
   for (const observation of observations) {
     const { title } = observation;
     const municipality = observation.facts.municipality;
-    if (observation.coordinates || !municipality || !hasHouseNumber(title))
+    if (
+      observation.coordinates ||
+      !municipality ||
+      positionPrecision(title) !== 'address'
+    )
       continue;
     const key = cacheKey(title, municipality);
     let entry = cache[key];

@@ -1,6 +1,6 @@
 # House Scanner implementation
 
-For continuation, read the [12 October 2026 handoff](house-scanner-handoff-2026-10-12.md) alongside the canonical private specifications and this work record.
+For continuation, read the [17 October 2026 handoff](house-scanner-handoff-2026-10-17.md) and the [structure plan](house-scanner-structure-plan.md) alongside the canonical private specifications and this work record. The [12 October handoff](house-scanner-handoff-2026-10-12.md) holds the earlier history.
 
 This guide is public-safe. The canonical private product plan remains outside this repository. Do not add household preferences, identities, reference properties, real listing snapshots or credentials here.
 
@@ -66,7 +66,7 @@ Foundation evidence: npm run check, npm run typecheck and npm run build passed a
 
 The public route defaults to the configured private-access state and offers an explicit synthetic demo. The same workspace renders suggestions, an attributed union of favorites, manual bookmarks and existing editable owner profiles. Profile saves use revision checks. Polling refreshes private data without deliberately resetting a same-user workspace. Identity changes remount the workspace and clear its private UI state.
 
-The map loads after Open map, uses the same filtered listings as the list and groups homes sharing an exact coordinate. Approximate and unknown coordinates remain list only. Zoom-based clustering, richer photo overlays and licensed geography/transit enrichment remain future work. No nature or journey estimates are inferred from map coloring.
+The map loads when the member switches to Map, uses the same filtered listings as the list and groups homes sharing an exact coordinate. Homes with an approximate or unknown position share one dashed "not located" marker instead of a pin. Zoom-based clustering, richer photo overlays and licensed geography/transit enrichment remain future work. No nature or journey estimates are inferred from map coloring.
 
 The collector has one synthetic fixture executor, bounded requests and explicit replay inputs. It prepares begin/stage/publish requests in memory. No sender, real adapter, daily workflow or digest is active. The schema and signed endpoint are local source, not a provisioned service.
 
@@ -274,3 +274,15 @@ A claude-sonnet-5-5 high worker added Bjurfors as the second source (commit a4cc
 Floor now sets `groundFloor` for both sources: 2 or higher is false, an explicit marker is true, and 1 or missing is unknown. Boneo is policy revision 4 and Bjurfors starts at revision 1, so both need approval. The gap between requests is a random 2 to 4 seconds, so a first full Bjurfors run takes about 9 minutes and later runs far less. Verification on the worker's branch: 974 tests, check, typechecks and the fixture run passed; 29 of 30 deliberate breakages failed the suite and the survivor got a new test. Unproven: relisting identity (the page has no object id), swapped house numbers, and the status mapping inferred from two pages.
 
 The memory file now holds coordinates and a street-naming listing path for Bjurfors, so keep it out of version control (the ignore pattern already covers `house-scanner.cache*.json`). Use a separate cache file per source, for example `--cache house-scanner.cache.bjurfors.json`, so the six hour guard does not block the second source.
+
+## Structure and design pass (17 October 2026)
+
+The owner approved the plan in [house-scanner-structure-plan.md](house-scanner-structure-plan.md) and all of its steps. The coordinator (claude-opus-5-5) did the shared-rules foundation, reviews and merges; claude-sonnet-5-5 workers did the collector split, the workspace split, the map fixes and the design changes, each in its own commits. Nothing was pushed. No live collector run took place; only the offline fixture mode ran.
+
+Refactor without behavior change: one home each for the pin rule (`listing-position.ts`), match wording (`match-listing.ts`), formatting and household action types; the workspace shell split into four panels, a favorite hook and a tested `listing-view.ts`; the card split into card, details and photo; the map moved into `components/`; the collector gained `page-read.ts`, `robots.ts` and `live-run.ts`, which removed an import cycle and the Bjurfors parser's dependence on Boneo's; eight Bjurfors tests that repeated shared guard tests were removed.
+
+Fixes, each with a regression test watched failing first: pressing a map marker keeps keyboard focus (markers are no longer rebuilt on selection); the not-located marker stays in the first view and the selected pin lands above the card; the demo status line is no longer red; the tile attribution stays visible above the phone sheet.
+
+Design: 44 px touch targets on coarse pointers; capped form widths; cards lead with the price and drop the always-on status badge and filled button; a shorter first screen with one row of tabs and one row of list controls; the basemap toggle inside the map; a bottom sheet for the selected home on phone maps with two-finger panning; details open in a side or bottom sheet instead of expanding the card, and Details from a map pin no longer switches to the list.
+
+Evidence on 251a2f4: `npm test` 31 files, 1029 tests; `npm run test:browser` 48 passed and 4 project-gated skips; `check`, `typecheck`, `test:typecheck`, `house-scanner:typecheck`, `build` and the fixture run passed. Not verified: real photos in the new card, drawer and sheet sizes (the demo has none), a real two-finger drag, and the signed-in app with live data.

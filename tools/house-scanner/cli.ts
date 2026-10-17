@@ -10,8 +10,8 @@ import {
 import {
   defaultLiveDeps,
   type LiveEvent,
-  prepareLiveRun,
 } from '@house-scanner-tools/live-reader';
+import { prepareLiveRun } from '@house-scanner-tools/live-run';
 import { queryPlanInputSchema } from '@house-scanner-tools/query-plan';
 import {
   DEFAULT_CACHE_PATH,

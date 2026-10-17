@@ -2,20 +2,20 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
-  assertAdapterOutput,
   type LiveEvent,
-  MAX_DETAIL_PAGES_PER_RUN,
-  MAX_REQUESTS_PER_RUN,
-  parseRobots,
-  prepareLiveRun,
-  robotsAllows,
   runCollection,
+  USER_AGENT,
 } from '@house-scanner-tools/live-reader';
+import {
+  assertAdapterOutput,
+  prepareLiveRun,
+} from '@house-scanner-tools/live-run';
 import {
   deps,
   fakeFetch,
   type Reply,
 } from '@house-scanner-tools/live-test-helpers';
+import { parseRobots, robotsAllows } from '@house-scanner-tools/robots';
 import {
   emptyMemory,
   type RunMemory,
@@ -25,7 +25,6 @@ import {
   adapterFor,
   bjurforsAdapter,
   boneoAdapter,
-  USER_AGENT,
 } from '@house-scanner-tools/source-adapters';
 import {
   approvedPolicy,
@@ -206,19 +205,6 @@ describe('Bjurfors guarded run', () => {
     });
   });
 
-  it('reads at most 40 pages per partition', async () => {
-    const { impl, calls } = fakeFetch(
-      robotsOr(generatedSite(5000, 2, () => ({}))),
-    );
-    const result = await run(goteborg, deps(impl));
-    expect(calls.filter((c) => isSearch(c.url))).toHaveLength(40);
-    expect(result.partitions[0]).toMatchObject({
-      status: 'truncated',
-      reason: 'page-cap',
-      pages: 40,
-    });
-  });
-
   it('supports only the municipality it knows and any property type', async () => {
     const { impl, calls } = fakeFetch(robotsOr(() => ({ body: '' })));
     const result = await run(
@@ -281,13 +267,6 @@ describe('Bjurfors guarded run', () => {
     expect(robotsAllows(rules, '/contentassets/abc/photo.jpg')).toBe(true);
   });
 
-  it('refuses to run when robots.txt cannot be read', async () => {
-    const { impl, calls } = fakeFetch(() => ({ status: 404 }));
-    const result = await run(goteborg, deps(impl));
-    expect(result.stopped).toBe('robots-unavailable');
-    expect(calls).toHaveLength(1);
-  });
-
   it.each([
     [403, 'http-403'],
     [429, 'http-429'],
@@ -313,39 +292,6 @@ describe('Bjurfors guarded run', () => {
       expect((await run(goteborg, deps(impl))).stopped).toBe(reason);
     },
   );
-
-  it('stops at 250 requests per run including robots.txt', async () => {
-    expect(MAX_REQUESTS_PER_RUN).toBe(250);
-    let id = 0;
-    const { impl, calls } = fakeFetch(
-      robotsOr(() => ({ body: generated([++id], 5000) })),
-    );
-    const many = Array.from({ length: 8 }, (_v, index) => ({
-      ...goteborg[0],
-      id: `municipality-${index + 1}`,
-    }));
-    const result = await run(many, deps(impl));
-    expect(calls).toHaveLength(250);
-    expect(result.stopped).toBe('request-cap');
-  });
-
-  it('logs counts, statuses and partition names only', async () => {
-    const events: LiveEvent[] = [];
-    const { impl } = fakeFetch(fixtureSite());
-    await run(goteborg, deps(impl, events), keepAll);
-    const text = JSON.stringify(events);
-    for (const value of [
-      'Exempel',
-      'bjurfors',
-      'https://',
-      'Göteborg',
-      '3250000',
-    ])
-      expect(text).not.toContain(value);
-    expect(events.some((event) => event.partition === 'municipality-1')).toBe(
-      true,
-    );
-  });
 });
 
 describe('Bjurfors listing pages', () => {
@@ -448,59 +394,6 @@ describe('Bjurfors listing pages', () => {
     expect(detailCalls(calls)).toHaveLength(0);
   });
 
-  it('skips listing pages that robots.txt disallows without failing the run', async () => {
-    const { impl, calls } = fakeFetch((url) =>
-      url.endsWith('/robots.txt')
-        ? {
-            body: `User-agent: *\nAllow: /\nDisallow: ${BASE}/exempelomrade/\n`,
-            type: 'text/plain',
-          }
-        : fixtureSite()(url, 0),
-    );
-    const result = await run(goteborg, deps(impl), keepAll);
-    expect(detailCalls(calls)).toHaveLength(0);
-    expect(result).toMatchObject({
-      detailRead: 0,
-      detailSkipped: 9,
-      stopped: null,
-    });
-  });
-
-  it('reads at most 150 listing pages per run and counts the rest as skipped', async () => {
-    expect(MAX_DETAIL_PAGES_PER_RUN).toBe(150);
-    const { impl, calls } = fakeFetch(
-      robotsOr(generatedSite(160, 25, () => ({ body: FULL }))),
-    );
-    const result = await run(goteborg, deps(impl), keepAll);
-    expect(detailCalls(calls)).toHaveLength(150);
-    expect(result).toMatchObject({
-      detailRead: 150,
-      detailSkipped: 10,
-      stopped: null,
-    });
-    expect(result.requestCount).toBeLessThanOrEqual(MAX_REQUESTS_PER_RUN);
-  });
-
-  it('shares the 250 request cap with search pages', async () => {
-    let id = 0;
-    const { impl, calls } = fakeFetch(
-      robotsOr((url) =>
-        isDetail(url) ? { body: FULL } : { body: generated([++id], 5000) },
-      ),
-    );
-    const four = Array.from({ length: 4 }, (_v, index) => ({
-      ...goteborg[0],
-      id: `municipality-${index + 1}`,
-    }));
-    const result = await run(four, deps(impl), keepAll);
-    expect(calls).toHaveLength(250);
-    expect(result).toMatchObject({
-      requestCount: 250,
-      detailRead: 89,
-      detailSkipped: 71,
-    });
-  });
-
   it('counts a failed listing page, including an empty one, and carries on', async () => {
     const replies: Reply[] = [
       { status: 500 },
@@ -587,30 +480,6 @@ describe('Bjurfors run memory', () => {
       detailFailed: 0,
     });
     expect(two.observations).toEqual(one.observations);
-  });
-
-  it('reads an entry older than seven days again', async () => {
-    const stale = new Date(NOW - 8 * DAY).toISOString();
-    const memory = memoryOf({
-      'vastra-gotaland/goteborg/exempelomrade/exempelgatan-1': {
-        outdoor: null,
-        glazed: null,
-        readAt: stale,
-      },
-    });
-    const { impl, calls } = fakeFetch(fixtureSite());
-    const result = await run(
-      goteborg,
-      deps(impl),
-      (all) => all.slice(0, 1),
-      memory,
-    );
-    expect(detailCalls(calls)).toHaveLength(1);
-    expect(result.detailRead).toBe(1);
-    expect(
-      memory.details['vastra-gotaland/goteborg/exempelomrade/exempelgatan-1']
-        .outdoor,
-    ).toBe('balcony');
   });
 
   it('writes ids, small enums and numbers only', async () => {

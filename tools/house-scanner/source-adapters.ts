@@ -6,9 +6,10 @@ import {
   readBoneoDetailPage,
   readBoneoSearchPage,
 } from '@house-scanner-tools/boneo-parser';
-import type {
-  LivePartitionInput,
-  SourceAdapter,
+import {
+  type LivePartitionInput,
+  type SourceAdapter,
+  USER_AGENT,
 } from '@house-scanner-tools/live-reader';
 import {
   BJURFORS_ORIGIN,
@@ -18,9 +19,6 @@ import {
   BONEO_SOURCE_ID,
   type SourceCapability,
 } from '@house-scanner-tools/source-registry';
-
-export const USER_AGENT =
-  'HouseScannerPersonalReader/0.1 (private household tool)';
 
 // Path segments proven from one public Goteborg district URL. The municipality
 // level path is derived by dropping the district segment and is unproven. A

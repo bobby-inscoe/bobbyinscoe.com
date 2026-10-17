@@ -1,50 +1,38 @@
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { readBoneoSearchPage } from '@house-scanner-tools/boneo-parser';
+import { join } from 'node:path';
 import {
-  assertAdapterOutput,
   defaultLiveDeps,
   type LiveEvent,
   MAX_DETAIL_PAGES_PER_RUN,
   MAX_INTERVAL_MS,
   MAX_REQUESTS_PER_RUN,
   MIN_INTERVAL_MS,
-  parseRobots,
-  prepareLiveRun,
-  robotsAllows,
   runCollection,
+  USER_AGENT,
 } from '@house-scanner-tools/live-reader';
 import {
+  boneoFixture,
+  boneoRobotsOr,
   deps,
   fakeFetch,
+  nextPage,
   type Reply,
 } from '@house-scanner-tools/live-test-helpers';
-import { planQueries } from '@house-scanner-tools/query-plan';
 import {
   emptyMemory,
   type RunMemory,
   saveMemory,
 } from '@house-scanner-tools/run-memory';
-import {
-  boneoAdapter,
-  partitionUrl,
-  USER_AGENT,
-} from '@house-scanner-tools/source-adapters';
-import { sourceRegistry } from '@house-scanner-tools/source-registry';
+import { boneoAdapter } from '@house-scanner-tools/source-adapters';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SYNTHETIC_SNAPSHOT } from '@/features/house-scanner/mock/synthetic-household';
 import type { Observation } from '@/features/house-scanner/types/contracts';
-import { assertSourceAllowed } from '@/features/house-scanner/utils/source-policy';
 
 const runBoneoCollection = (
   ...args: Parameters<typeof runCollection> extends [unknown, ...infer Rest]
     ? Rest
     : never
 ) => runCollection(boneoAdapter, ...args);
-const fixture = (name: string) =>
-  readFileSync(resolve('tools/house-scanner/fixtures/boneo', name), 'utf8');
-const ROBOTS = fixture('robots.txt');
 const goteborg = [
   {
     id: 'municipality-1',
@@ -53,62 +41,12 @@ const goteborg = [
   },
 ];
 
-function nextPage(ids: number[], count: number) {
-  const items = ids.map((id) => ({
-    property_id: id,
-    slug: `https://www.boneo.se/bostad/fixture-${id}`,
-    title_field: `Fixturegatan ${id}`,
-    created_date: '2026-09-30T08:00:00.000Z',
-    field_status_id: 'Till salu',
-    is_active: true,
-    field_property_price: 3_000_000,
-  }));
-  return `<script id="__NEXT_DATA__">${JSON.stringify({
-    props: { pageProps: { listData: { pData: items, count } } },
-  })}</script>`;
-}
-
-const robotsOr =
-  (page: (url: string, n: number) => Reply) =>
-  (url: string, n: number): Reply =>
-    url.endsWith('/robots.txt')
-      ? { body: ROBOTS, type: 'text/plain' }
-      : page(url, n);
-
 afterEach(() => vi.useRealTimers());
-
-describe('robots rules', () => {
-  it('applies the longest match and lets allow win ties', () => {
-    const rules = parseRobots(
-      'User-agent: *\nDisallow: /sv/\nAllow: /sv/till_salu/\nDisallow: /*.json$\n',
-    );
-    expect(robotsAllows(rules, '/sv/till_salu/x')).toBe(true);
-    expect(robotsAllows(rules, '/sv/andra')).toBe(false);
-    expect(robotsAllows(rules, '/data.json')).toBe(false);
-    expect(robotsAllows(rules, '/data.json?x=1')).toBe(true);
-  });
-
-  it('prefers a group naming this reader over the wildcard group', () => {
-    const rules = parseRobots(
-      'User-agent: *\nAllow: /\n\nUser-agent: HouseScannerPersonalReader\nDisallow: /sv/\n',
-    );
-    expect(robotsAllows(rules, '/sv/till_salu')).toBe(false);
-  });
-
-  it('allows the partition path and rejects unknown municipalities', () => {
-    const url = new URL(partitionUrl('Göteborg') ?? '');
-    expect(url.pathname).toBe(
-      '/sv/till_salu/l%C3%A4genhet/v%C3%A4stra%20g%C3%B6talands/g%C3%B6teborg',
-    );
-    expect(robotsAllows(parseRobots(ROBOTS), url.pathname)).toBe(true);
-    expect(partitionUrl('Malmö')).toBeNull();
-  });
-});
 
 describe('guarded run', () => {
   it('sends an honest user agent and no cookies, credentials or redirects', async () => {
     const { impl, calls } = fakeFetch(
-      robotsOr(() => ({ body: nextPage([1], 1) })),
+      boneoRobotsOr(() => ({ body: nextPage([1], 1) })),
     );
     await runBoneoCollection(goteborg, deps(impl));
     expect(calls).toHaveLength(2);
@@ -153,7 +91,7 @@ describe('guarded run', () => {
   it('waits the two second minimum when the random draw is zero', async () => {
     vi.useFakeTimers();
     const { impl, spy } = fakeFetch(
-      robotsOr((_url, n) => ({ body: nextPage([n], 9) })),
+      boneoRobotsOr((_url, n) => ({ body: nextPage([n], 9) })),
     );
     const run = runBoneoCollection(goteborg, {
       ...defaultLiveDeps(() => undefined),
@@ -178,7 +116,9 @@ describe('guarded run', () => {
     expect([MIN_INTERVAL_MS, MAX_INTERVAL_MS]).toEqual([2000, 4000]);
     const draws = [0, 1, 0.5, 0.25, 0.999, 0.0001];
     const stamps: number[] = [];
-    const fake = fakeFetch(robotsOr((_url, n) => ({ body: nextPage([n], 9) })));
+    const fake = fakeFetch(
+      boneoRobotsOr((_url, n) => ({ body: nextPage([n], 9) })),
+    );
     let index = 0;
     const base = deps(fake.impl, [], () => draws[index++ % draws.length]);
     await runBoneoCollection(goteborg, {
@@ -205,7 +145,7 @@ describe('guarded run', () => {
     async (draw) => {
       const stamps: number[] = [];
       const fake = fakeFetch(
-        robotsOr((_url, n) => ({ body: nextPage([n], 5) })),
+        boneoRobotsOr((_url, n) => ({ body: nextPage([n], 5) })),
       );
       const base = deps(fake.impl, [], () => draw);
       await runBoneoCollection(
@@ -229,7 +169,7 @@ describe('guarded run', () => {
   it('stops at forty pages per partition and reports truncation', async () => {
     let id = 0;
     const { impl, calls } = fakeFetch(
-      robotsOr(() => ({ body: nextPage([++id, ++id], 500) })),
+      boneoRobotsOr(() => ({ body: nextPage([++id, ++id], 500) })),
     );
     const result = await runBoneoCollection(goteborg, deps(impl));
     expect(calls.filter((c) => !c.url.endsWith('robots.txt'))).toHaveLength(40);
@@ -245,7 +185,7 @@ describe('guarded run', () => {
   it('stops at one thousand observations per run and reports truncation', async () => {
     let id = 0;
     const { impl, calls } = fakeFetch(
-      robotsOr(() => ({
+      boneoRobotsOr(() => ({
         body: nextPage(
           Array.from({ length: 30 }, () => ++id),
           5000,
@@ -266,7 +206,7 @@ describe('guarded run', () => {
   it('stops at 250 requests per run including robots.txt', async () => {
     let id = 0;
     const { impl, calls } = fakeFetch(
-      robotsOr(() => ({ body: nextPage([++id], 500) })),
+      boneoRobotsOr(() => ({ body: nextPage([++id], 500) })),
     );
     const many = Array.from({ length: 8 }, (_v, index) => ({
       ...goteborg[0],
@@ -285,7 +225,7 @@ describe('guarded run', () => {
     [403, 'http-403'],
     [429, 'http-429'],
   ])('stops on status %i without retrying', async (status, reason) => {
-    const { impl, calls } = fakeFetch(robotsOr(() => ({ status })));
+    const { impl, calls } = fakeFetch(boneoRobotsOr(() => ({ status })));
     const result = await runBoneoCollection(goteborg, deps(impl));
     expect(result.stopped).toBe(reason);
     expect(calls).toHaveLength(2);
@@ -298,7 +238,7 @@ describe('guarded run', () => {
       [new DOMException('late', 'TimeoutError'), 'timeout'],
     ];
     for (const [error, reason] of cases) {
-      const { impl } = fakeFetch(robotsOr(() => error));
+      const { impl } = fakeFetch(boneoRobotsOr(() => error));
       const result = await runBoneoCollection(goteborg, deps(impl));
       expect(result.stopped).toBe(reason);
     }
@@ -306,7 +246,7 @@ describe('guarded run', () => {
 
   it('treats a page without embedded data as failed coverage, not empty', async () => {
     const { impl } = fakeFetch(
-      robotsOr(() => ({ body: fixture('blocked-page.html') })),
+      boneoRobotsOr(() => ({ body: boneoFixture('blocked-page.html') })),
     );
     const result = await runBoneoCollection(goteborg, deps(impl));
     expect(result.stopped).toBe('no-embedded-data');
@@ -319,7 +259,7 @@ describe('guarded run', () => {
 
   it('reads several pages and de-duplicates across them', async () => {
     const { impl } = fakeFetch(
-      robotsOr((url) => ({
+      boneoRobotsOr((url) => ({
         body: url.includes('page=2')
           ? nextPage([2, 3], 4)
           : nextPage([1, 2], 4),
@@ -335,7 +275,7 @@ describe('guarded run', () => {
   });
 
   it('marks unsupported municipalities without requesting them', async () => {
-    const { impl, calls } = fakeFetch(robotsOr(() => ({ body: '' })));
+    const { impl, calls } = fakeFetch(boneoRobotsOr(() => ({ body: '' })));
     const result = await runBoneoCollection(
       [
         {
@@ -353,7 +293,7 @@ describe('guarded run', () => {
   it('logs counts, statuses and partition names only', async () => {
     const events: LiveEvent[] = [];
     const { impl } = fakeFetch(
-      robotsOr(() => ({ body: fixture('search-page.html') })),
+      boneoRobotsOr(() => ({ body: boneoFixture('search-page.html') })),
     );
     await runBoneoCollection(goteborg, deps(impl, events));
     const text = JSON.stringify(events);
@@ -369,321 +309,6 @@ describe('guarded run', () => {
     expect(events.some((event) => event.partition === 'municipality-1')).toBe(
       true,
     );
-  });
-});
-
-describe('prepared run', () => {
-  const capability = sourceRegistry().find(
-    (entry) => entry.policy.sourceId === 'boneo',
-  );
-  if (!capability) throw new Error('boneo missing');
-  const profile = SYNTHETIC_SNAPSHOT.profiles[0];
-  const planning = {
-    profiles: [
-      {
-        id: profile.id,
-        revision: profile.revision,
-        enabled: true,
-        criteria: {
-          ...profile.criteria,
-          minAreaM2: 20,
-          minRooms: 1,
-          stretchPriceSek: 10_000_000,
-          geography: {
-            ...profile.criteria.geography,
-            municipalities: ['Göteborg'],
-          },
-        },
-      },
-    ],
-    collectionPriceCapSek: null,
-    maxPartitions: 5,
-  };
-
-  it('registers boneo as pending with honest capabilities', () => {
-    expect(capability.policy).toMatchObject({
-      status: 'pending',
-      automatedCollection: false,
-      imageDisplay: true,
-      imageHotlink: true,
-      imageOrigins: ['https://files.boneo.se'],
-      retentionDays: 14,
-      revision: 4,
-      capabilities: {
-        upcoming: false,
-        unknownPrice: false,
-        pagination: false,
-      },
-    });
-    expect(capability.policy.capabilities.coverageGaps.length).toBeGreaterThan(
-      3,
-    );
-    expect(capability.policy.allowedFactFields).toEqual(
-      expect.arrayContaining(['outdoor', 'glazed', 'groundFloor']),
-    );
-    const gaps = capability.policy.capabilities.coverageGaps.join(' ');
-    expect(gaps).not.toContain('not structured fields');
-    expect(gaps).toContain('Lift and build year are not collected');
-    expect(() =>
-      assertSourceAllowed(capability.policy, new Date('2026-10-13T00:00:00Z')),
-    ).toThrow();
-    const plan = planQueries({ ...planning, capability });
-    expect(plan.permission).toBe('denied-no-permission');
-    expect(plan.partitions.map((p) => p.municipality)).toEqual(['Göteborg']);
-  });
-
-  it('builds valid requests and never reports success', async () => {
-    const { impl } = fakeFetch(
-      robotsOr(() => ({ body: fixture('search-page.html') })),
-    );
-    const prepared = await prepareLiveRun(
-      {
-        runId: '00000000-0000-4000-8000-000000000201',
-        batchId: '00000000-0000-4000-8000-000000000202',
-        capability,
-        planning,
-      },
-      deps(impl),
-    );
-    expect(prepared.requests.map((r) => r.action)).toEqual([
-      'begin',
-      'stage',
-      'publish',
-    ]);
-    const publish = prepared.requests[2];
-    expect(publish.action === 'publish' && publish.results[0]).toMatchObject({
-      sourceId: 'boneo',
-      status: 'partial',
-      cursor: null,
-    });
-    expect(prepared.result.observations).toHaveLength(8);
-  });
-
-  it('reads the page of each kept listing and stages outdoor and glazed', async () => {
-    const { impl, calls } = fakeFetch(
-      robotsOr((url) => ({
-        body: url.includes('/bostad/')
-          ? fixture('detail-glazed.html')
-          : fixture('search-page.html'),
-      })),
-    );
-    const prepared = await prepareLiveRun({ capability, planning }, deps(impl));
-    const pages = calls.filter((call) => call.url.includes('/bostad/'));
-    expect(pages.length).toBeGreaterThan(0);
-    expect(prepared.result.detailRead).toBe(pages.length);
-    expect(prepared.prefilter.kept).toBe(pages.length);
-    const stage = prepared.requests[1];
-    expect(
-      stage.action === 'stage' && stage.observations[0].facts,
-    ).toMatchObject({ outdoor: 'balcony', glazed: true });
-    const publish = prepared.requests.at(-1);
-    expect(
-      publish?.action === 'publish' && publish.results[0].coverageNote,
-    ).toContain(
-      `Balcony and glazing: ${pages.length} read, 0 reused, 0 failed, 0 skipped.`,
-    );
-  });
-
-  it('never reads the page of a listing the pre-filter drops', async () => {
-    const { impl, calls } = fakeFetch(
-      robotsOr((url) => ({
-        body: url.includes('/bostad/')
-          ? fixture('detail-both.html')
-          : fixture('search-page.html'),
-      })),
-    );
-    const strict = {
-      ...planning,
-      profiles: [
-        {
-          ...planning.profiles[0],
-          criteria: {
-            ...planning.profiles[0].criteria,
-            minAreaM2: 5000,
-            maxAreaM2: null,
-          },
-        },
-      ],
-    };
-    const prepared = await prepareLiveRun(
-      { capability, planning: strict },
-      deps(impl),
-    );
-    expect(prepared.prefilter.kept).toBe(0);
-    expect(calls.filter((call) => call.url.includes('/bostad/'))).toEqual([]);
-    expect(prepared.result).toMatchObject({
-      detailRead: 0,
-      detailFailed: 0,
-      detailSkipped: 0,
-    });
-  });
-
-  it('reuses remembered listing pages on a second run and reports it', async () => {
-    const serveAll = () =>
-      fakeFetch(
-        robotsOr((url) => ({
-          body: url.includes('/bostad/')
-            ? fixture('detail-glazed.html')
-            : fixture('search-page.html'),
-        })),
-      );
-    const memory = { memory: emptyMemory(), reset: true };
-    const one = await prepareLiveRun(
-      { capability, planning, memory },
-      deps(serveAll().impl),
-    );
-    const kept = one.prefilter.kept;
-    expect(one.cacheReset).toBe(true);
-    expect(Object.keys(memory.memory.details)).toHaveLength(kept);
-    // The fake clock restarts for each run, so age the entries by a day instead.
-    for (const entry of Object.values(memory.memory.details))
-      entry.readAt = new Date(
-        Date.parse(entry.readAt) - 86_400_000,
-      ).toISOString();
-    const second = serveAll();
-    const two = await prepareLiveRun(
-      { capability, planning, memory: { ...memory, reset: false } },
-      deps(second.impl),
-    );
-    expect(second.calls.filter((c) => c.url.includes('/bostad/'))).toEqual([]);
-    expect(two.result).toMatchObject({ detailRead: 0, detailCached: kept });
-    expect(two.cacheReset).toBe(false);
-    const note = (run: typeof one) => {
-      const publish = run.requests.at(-1);
-      return publish?.action === 'publish'
-        ? publish.results[0].coverageNote
-        : '';
-    };
-    expect(note(one)).toContain('Run memory was unreadable and was reset.');
-    expect(note(two)).toContain(`${kept} reused, 0 failed, 0 skipped`);
-    expect(note(two)).not.toContain('reset');
-    const stage = two.requests[1];
-    expect(
-      stage.action === 'stage' && stage.observations[0].facts,
-    ).toMatchObject({ outdoor: 'balcony', glazed: true });
-  });
-
-  it('rejects outdoor and glazed unless the policy allows them', () => {
-    const read = readBoneoSearchPage(fixture('search-page.html'), {
-      origin: 'https://www.boneo.se',
-      observedAt: new Date('2026-10-13T09:00:00.000Z'),
-      receivedBefore: 0,
-    });
-    if (read.kind !== 'page') throw new Error('fixture failed');
-    const observation = read.observations[0];
-    observation.facts.outdoor = 'balcony';
-    expect(() =>
-      assertAdapterOutput(capability.policy, observation),
-    ).not.toThrow();
-    const narrowed = {
-      ...capability.policy,
-      allowedFactFields: capability.policy.allowedFactFields.filter(
-        (field) => field !== 'outdoor',
-      ),
-    };
-    expect(() => assertAdapterOutput(narrowed, observation)).toThrow(
-      'unapproved fact field',
-    );
-  });
-
-  it('drops confirmed misfits, counts them by reason and still publishes partial', async () => {
-    const { impl } = fakeFetch(
-      robotsOr(() => ({ body: fixture('search-page.html') })),
-    );
-    const strict = {
-      ...planning,
-      profiles: [
-        {
-          ...planning.profiles[0],
-          criteria: {
-            ...planning.profiles[0].criteria,
-            minAreaM2: 5000,
-            maxAreaM2: null,
-          },
-        },
-      ],
-    };
-    const prepared = await prepareLiveRun(
-      { capability, planning: strict },
-      deps(impl),
-    );
-    expect(prepared.result.observations).toHaveLength(8);
-    expect(prepared.prefilter.kept).toBe(0);
-    expect(
-      Object.values(prepared.prefilter.dropped).reduce((a, b) => a + b, 0),
-    ).toBe(8);
-    expect(prepared.requests.map((r) => r.action)).toEqual([
-      'begin',
-      'publish',
-    ]);
-    const publish = prepared.requests[1];
-    expect(publish.action === 'publish' && publish.results[0]).toMatchObject({
-      status: 'partial',
-    });
-    expect(
-      publish.action === 'publish' && publish.results[0].coverageNote,
-    ).toContain('kept 0 that fit your profile and dropped 8');
-  });
-
-  it('splits kept observations into stage requests of at most one hundred', async () => {
-    const { impl } = fakeFetch(
-      robotsOr((url) => {
-        const page = Number(new URL(url).searchParams.get('page') ?? '1');
-        return {
-          body: nextPage(
-            Array.from({ length: 25 }, (_v, i) => page * 100 + i),
-            250,
-          ),
-        };
-      }),
-    );
-    const prepared = await prepareLiveRun(
-      {
-        batchId: '00000000-0000-4000-8000-000000000202',
-        capability,
-        planning,
-      },
-      deps(impl),
-    );
-    expect(prepared.requests.map((r) => r.action)).toEqual([
-      'begin',
-      'stage',
-      'stage',
-      'stage',
-      'publish',
-    ]);
-    const stages = prepared.requests.flatMap((r) =>
-      r.action === 'stage' ? [r] : [],
-    );
-    expect(stages.map((s) => s.observations.length)).toEqual([100, 100, 50]);
-    expect(stages[0].batchId).toBe('00000000-0000-4000-8000-000000000202');
-    expect(new Set(stages.map((s) => s.batchId)).size).toBe(3);
-    expect(
-      new Set(
-        stages.flatMap((s) => s.observations.map((o) => o.sourceListingId)),
-      ).size,
-    ).toBe(250);
-  });
-
-  it('publishes failed coverage and no stage when the first page lacks data', async () => {
-    const { impl } = fakeFetch(
-      robotsOr(() => ({ body: fixture('blocked-page.html') })),
-    );
-    const prepared = await prepareLiveRun({ capability, planning }, deps(impl));
-    expect(prepared.publishStatus).toBe('failed');
-    expect(prepared.requests.map((r) => r.action)).toEqual([
-      'begin',
-      'publish',
-    ]);
-  });
-
-  it('refuses a capability whose executor is not this adapter', async () => {
-    const demo = sourceRegistry()[0];
-    const { impl, calls } = fakeFetch(() => ({ body: '' }));
-    await expect(
-      prepareLiveRun({ capability: demo, planning }, deps(impl)),
-    ).rejects.toThrow('No permitted executor');
-    expect(calls).toHaveLength(0);
   });
 });
 
@@ -704,7 +329,7 @@ describe('listing pages', () => {
       isDetail(url) ? detail(listingId(url)) : searchReply(url, total);
   const detailCalls = (calls: { url: string }[]) =>
     calls.filter((call) => isDetail(call.url));
-  const BALCONY = fixture('detail-balcony.html');
+  const BALCONY = boneoFixture('detail-balcony.html');
   const keepAll = (all: Observation[]) => all;
 
   it('reads each kept listing page once and merges only outdoor and glazed', async () => {
@@ -714,7 +339,7 @@ describe('listing pages', () => {
       'detail-glazed.html',
     ];
     const { impl, calls } = fakeFetch(
-      robotsOr(serve(3, (id) => ({ body: fixture(files[id - 1]) }))),
+      boneoRobotsOr(serve(3, (id) => ({ body: boneoFixture(files[id - 1]) }))),
     );
     const result = await runBoneoCollection(goteborg, deps(impl), keepAll);
     expect(
@@ -749,7 +374,7 @@ describe('listing pages', () => {
 
   it('reads no listing page unless the caller keeps the observation', async () => {
     const { impl, calls } = fakeFetch(
-      robotsOr(serve(3, () => ({ body: BALCONY }))),
+      boneoRobotsOr(serve(3, () => ({ body: BALCONY }))),
     );
     const result = await runBoneoCollection(goteborg, deps(impl), (all) =>
       all.filter((o) => o.sourceListingId === '2'),
@@ -762,7 +387,7 @@ describe('listing pages', () => {
       'balcony',
       null,
     ]);
-    const plain = fakeFetch(robotsOr(serve(3, () => ({ body: BALCONY }))));
+    const plain = fakeFetch(boneoRobotsOr(serve(3, () => ({ body: BALCONY }))));
     await runBoneoCollection(goteborg, deps(plain.impl));
     expect(detailCalls(plain.calls)).toHaveLength(0);
   });
@@ -770,7 +395,7 @@ describe('listing pages', () => {
   it('waits at least two seconds before every listing page', async () => {
     vi.useFakeTimers();
     const { impl, spy } = fakeFetch(
-      robotsOr(serve(2, () => ({ body: BALCONY }))),
+      boneoRobotsOr(serve(2, () => ({ body: BALCONY }))),
     );
     const run = runBoneoCollection(
       goteborg,
@@ -811,7 +436,7 @@ describe('listing pages', () => {
   it('reads at most 150 listing pages per run and counts the rest as skipped', async () => {
     expect(MAX_DETAIL_PAGES_PER_RUN).toBe(150);
     const { impl, calls } = fakeFetch(
-      robotsOr(serve(160, () => ({ body: BALCONY }))),
+      boneoRobotsOr(serve(160, () => ({ body: BALCONY }))),
     );
     const result = await runBoneoCollection(goteborg, deps(impl), keepAll);
     expect(detailCalls(calls)).toHaveLength(150);
@@ -831,7 +456,7 @@ describe('listing pages', () => {
     expect(MAX_REQUESTS_PER_RUN).toBe(250);
     let id = 0;
     const { impl, calls } = fakeFetch(
-      robotsOr((url) =>
+      boneoRobotsOr((url) =>
         isDetail(url) ? { body: BALCONY } : { body: nextPage([++id], 500) },
       ),
     );
@@ -854,13 +479,13 @@ describe('listing pages', () => {
     const replies: Reply[] = [
       { status: 500 },
       { status: 404 },
-      { body: fixture('blocked-page.html') },
-      { body: fixture('detail-wrong-shape.html') },
+      { body: boneoFixture('blocked-page.html') },
+      { body: boneoFixture('detail-wrong-shape.html') },
       { body: BALCONY },
     ];
     const events: LiveEvent[] = [];
     const { impl, calls } = fakeFetch(
-      robotsOr(serve(5, (id) => replies[id - 1])),
+      boneoRobotsOr(serve(5, (id) => replies[id - 1])),
     );
     const result = await runBoneoCollection(
       goteborg,
@@ -901,7 +526,7 @@ describe('listing pages', () => {
     'stops the whole run on listing page failure %#',
     async (stop, reason) => {
       const { impl, calls } = fakeFetch(
-        robotsOr(serve(4, (id) => (id === 2 ? stop : { body: BALCONY }))),
+        boneoRobotsOr(serve(4, (id) => (id === 2 ? stop : { body: BALCONY }))),
       );
       const result = await runBoneoCollection(goteborg, deps(impl), keepAll);
       expect(result.stopped).toBe(reason);
@@ -945,7 +570,7 @@ describe('listing pages', () => {
       const memory = rememberedIds(3);
       const before = structuredClone(memory);
       const { impl, calls } = fakeFetch(
-        robotsOr(serve(3, () => ({ body: BALCONY }))),
+        boneoRobotsOr(serve(3, () => ({ body: BALCONY }))),
       );
       const result = await runBoneoCollection(
         goteborg,
@@ -978,7 +603,7 @@ describe('listing pages', () => {
         '2': remembered(DAY),
       });
       const { impl, calls } = fakeFetch(
-        robotsOr(serve(2, () => ({ body: BALCONY }))),
+        boneoRobotsOr(serve(2, () => ({ body: BALCONY }))),
       );
       const result = await runBoneoCollection(
         goteborg,
@@ -1007,11 +632,13 @@ describe('listing pages', () => {
     it('stores nothing for pages that failed', async () => {
       const replies: Reply[] = [
         { status: 500 },
-        { body: fixture('detail-wrong-shape.html') },
+        { body: boneoFixture('detail-wrong-shape.html') },
         { body: BALCONY },
       ];
       const memory = memoryOf({});
-      const { impl } = fakeFetch(robotsOr(serve(3, (id) => replies[id - 1])));
+      const { impl } = fakeFetch(
+        boneoRobotsOr(serve(3, (id) => replies[id - 1])),
+      );
       const result = await runBoneoCollection(
         goteborg,
         deps(impl),
@@ -1024,7 +651,9 @@ describe('listing pages', () => {
 
     it('keeps an old entry when the refresh stops the run', async () => {
       const memory = memoryOf({ '1': remembered(8 * DAY) });
-      const { impl } = fakeFetch(robotsOr(serve(2, () => ({ status: 403 }))));
+      const { impl } = fakeFetch(
+        boneoRobotsOr(serve(2, () => ({ status: 403 }))),
+      );
       const result = await runBoneoCollection(
         goteborg,
         deps(impl),
@@ -1038,7 +667,7 @@ describe('listing pages', () => {
     it('does not count remembered pages toward the 150 page cap', async () => {
       const memory = rememberedIds(100);
       const { impl, calls } = fakeFetch(
-        robotsOr(serve(160, () => ({ body: BALCONY }))),
+        boneoRobotsOr(serve(160, () => ({ body: BALCONY }))),
       );
       const result = await runBoneoCollection(
         goteborg,
@@ -1059,7 +688,7 @@ describe('listing pages', () => {
       const memory = rememberedIds(160);
       let id = 0;
       const { impl, calls } = fakeFetch(
-        robotsOr((url) =>
+        boneoRobotsOr((url) =>
           isDetail(url) ? { body: BALCONY } : { body: nextPage([++id], 500) },
         ),
       );
@@ -1106,7 +735,9 @@ describe('listing pages', () => {
     it('saves listing ids and the listing page facts only', async () => {
       const memory = memoryOf({});
       const { impl } = fakeFetch(
-        robotsOr(serve(3, () => ({ body: fixture('detail-glazed.html') }))),
+        boneoRobotsOr(
+          serve(3, () => ({ body: boneoFixture('detail-glazed.html') })),
+        ),
       );
       await runBoneoCollection(goteborg, deps(impl), keepAll, memory);
       const path = join(mkdtempSync(join(tmpdir(), 'hs-saved-')), 'c.json');

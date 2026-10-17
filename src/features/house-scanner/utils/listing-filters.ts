@@ -1,4 +1,5 @@
 import type { Listing } from '@/features/house-scanner/types/contracts';
+import { hasPin } from '@/features/house-scanner/utils/listing-position';
 
 export const MANUAL_HOST = 'Added by household';
 export const ALL_HOSTS = 'all';
@@ -34,14 +35,6 @@ function clean(value: number | null): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
     ? value
     : null;
-}
-
-/** A home gets a pin only when it has a position more precise than an area. */
-export function isOnMap(listing: Listing): boolean {
-  return (
-    listing.coordinates !== null &&
-    listing.coordinates.precision !== 'approximate_area'
-  );
 }
 
 export function listingHost(listing: Listing): string {
@@ -102,7 +95,7 @@ export function applyListingFilters(
         facts.outdoor === 'terrace' ||
         facts.outdoor === 'both') &&
       (!filters.aboveGroundOnly || facts.groundFloor === false) &&
-      (!filters.notOnMapOnly || !isOnMap(listing))
+      (!filters.notOnMapOnly || !hasPin(listing.coordinates))
     );
   });
 }

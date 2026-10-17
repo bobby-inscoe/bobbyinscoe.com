@@ -6,7 +6,7 @@ import {
   readBoneoDetailPage,
   readBoneoSearchPage,
 } from '@house-scanner-tools/boneo-parser';
-import { assertAdapterOutput } from '@house-scanner-tools/live-reader';
+import { assertAdapterOutput } from '@house-scanner-tools/live-run';
 import {
   BONEO_ORIGIN,
   sourceRegistry,

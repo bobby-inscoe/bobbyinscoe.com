@@ -10,13 +10,18 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import styles from '@/features/house-scanner/map/household-map.module.css';
-import type { Listing } from '@/features/house-scanner/types/contracts';
+import styles from '@/features/house-scanner/components/household-map.module.css';
+import type { MapPoint } from '@/features/house-scanner/utils/listing-view';
 
 // MapLibre resolves its default worker beside import.meta.url, which Vite rewrites.
 setWorkerUrl(workerUrl);
 
 const MAX_STACK_BUTTONS = 6;
+// Room kept around a pin so its marker is not clipped, and between the card and the map edge.
+const MARKER_MARGIN = 24;
+const CARD_GAP = 24;
+// The tallest marker, on coarse pointers.
+const MARKER_SIZE = 44;
 
 const SATELLITE_STYLE: StyleSpecification = {
   version: 8,
@@ -34,17 +39,26 @@ const SATELLITE_STYLE: StyleSpecification = {
   layers: [{ id: 'imagery', type: 'raster', source: 'imagery' }],
 };
 
-export interface MapPoint {
-  id: string;
-  label: string;
-  markerText: string;
-  coordinates: Pick<
-    NonNullable<Listing['coordinates']>,
-    'longitude' | 'latitude'
-  >;
-  // Homes with no usable position share one marker, drawn differently.
-  unlocated?: boolean;
+// Rows kept clear at the top so the corner controls never hide a marker.
+function controlsInset(element: HTMLElement | null) {
+  return element ? element.offsetTop + element.offsetHeight + MARKER_MARGIN : 0;
 }
+
+interface MarkerEntry {
+  marker: Marker;
+  button: HTMLButtonElement;
+  // The homes sharing this marker.
+  ids: string[];
+}
+
+function markPressed(entries: MarkerEntry[], selectedId: string | null) {
+  for (const { button, ids } of entries)
+    button.setAttribute(
+      'aria-pressed',
+      String(selectedId !== null && ids.includes(selectedId)),
+    );
+}
+
 interface HouseholdMapProps {
   points: MapPoint[];
   selectedId: string | null;
@@ -53,6 +67,8 @@ interface HouseholdMapProps {
   satellite?: boolean;
   // Drawn over the map, for the selected home's card.
   overlay?: ReactNode;
+  // Small controls in the map's top-left corner, clear of MapLibre's own top-right ones.
+  controls?: ReactNode;
 }
 
 export function HouseholdMap({
@@ -62,6 +78,7 @@ export function HouseholdMap({
   styleUrl = 'https://tiles.openfreemap.org/styles/liberty',
   satellite = false,
   overlay,
+  controls,
 }: HouseholdMapProps) {
   const container = useRef<HTMLElement>(null);
   const map = useRef<MapLibreMap | null>(null);
@@ -70,6 +87,12 @@ export function HouseholdMap({
   const [stack, setStack] = useState<string[]>([]);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const stageRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const markers = useRef<MarkerEntry[]>([]);
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
   const satelliteRef = useRef(satellite);
   satelliteRef.current = satellite;
   const appliedSatellite = useRef(satellite);
@@ -101,8 +124,19 @@ export function HouseholdMap({
         center: [centerLongitude, centerLatitude],
         zoom: 11,
         bounds,
-        fitBoundsOptions: { padding: 40, maxZoom: 14 },
+        // Wider than half the not-located marker, so that marker is not clipped at the edge.
+        fitBoundsOptions: {
+          padding: {
+            top: Math.max(56, controlsInset(controlsRef.current)),
+            right: 56,
+            bottom: 56,
+            left: 56,
+          },
+          maxZoom: 14,
+        },
         attributionControl: { compact: false },
+        // On a touchscreen one finger scrolls the page past the map and two fingers pan it.
+        cooperativeGestures: window.matchMedia('(pointer: coarse)').matches,
       });
       map.current = instance;
       appliedSatellite.current = satelliteRef.current;
@@ -136,7 +170,7 @@ export function HouseholdMap({
       const key = `${point.coordinates.longitude},${point.coordinates.latitude}`;
       groups.set(key, [...(groups.get(key) ?? []), point]);
     }
-    const markers = [...groups.values()].map((group) => {
+    const created = [...groups.values()].map((group) => {
       const button = document.createElement('button');
       button.type = 'button';
       const unlocated = group[0].unlocated === true;
@@ -154,32 +188,80 @@ export function HouseholdMap({
             ? group[0].label
             : `${group.length} homes at this point`,
       );
-      button.setAttribute(
-        'aria-pressed',
-        String(group.some((point) => point.id === selectedId)),
-      );
       button.addEventListener('click', () => {
         setStack(group.map((point) => point.id));
         onSelectRef.current(group[0].id);
       });
-      return new Marker({ element: button })
+      const marker = new Marker({ element: button })
         .setLngLat([
           group[0].coordinates.longitude,
           group[0].coordinates.latitude,
         ])
         .addTo(instance);
+      return { marker, button, ids: group.map((point) => point.id) };
     });
+    markers.current = created;
+    markPressed(created, selectedIdRef.current);
     return () => {
-      for (const marker of markers) marker.remove();
+      for (const { marker } of created) marker.remove();
+      markers.current = [];
     };
-  }, [points, selectedId, loaded, error]);
+  }, [points, loaded, error]);
+  // Only the pressed state changes on selection, so a focused marker stays focused.
+  useEffect(() => {
+    markPressed(markers.current, selectedId);
+  }, [selectedId]);
   useEffect(() => {
     const point = points.find((candidate) => candidate.id === selectedId);
-    if (point && loaded && !error)
-      map.current?.jumpTo({
-        center: [point.coordinates.longitude, point.coordinates.latitude],
-      });
+    const instance = map.current;
+    if (!point || !instance || !loaded || error) return;
+    const center: [number, number] = [
+      point.coordinates.longitude,
+      point.coordinates.latitude,
+    ];
+    const { clientWidth, clientHeight } = instance.getContainer();
+    // The card sits over the bottom of the map, so the free area ends above it.
+    const cardHeight =
+      overlayRef.current?.firstElementChild?.getBoundingClientRect().height ??
+      0;
+    const cardInset = cardHeight ? cardHeight + CARD_GAP : 0;
+    // Clear the corner controls only while a whole marker still fits between them and the card.
+    const top = Math.min(
+      controlsInset(controlsRef.current),
+      Math.max(0, clientHeight - cardInset - 2 * MARKER_MARGIN - MARKER_SIZE),
+    );
+    const freeTop = Math.max(top, MARKER_MARGIN);
+    const inset = cardInset
+      ? Math.min(cardInset, clientHeight - freeTop - MARKER_MARGIN)
+      : 0;
+    const { x, y } = instance.project(center);
+    const inFreeArea =
+      x >= MARKER_MARGIN &&
+      x <= clientWidth - MARKER_MARGIN &&
+      y >= freeTop &&
+      y <= clientHeight - inset - MARKER_MARGIN;
+    // Keep the first view, which frames every marker, when the pin is already in sight.
+    if (!inFreeArea)
+      instance.jumpTo({ center, padding: { top, bottom: inset } });
   }, [points, selectedId, loaded, error]);
+  const hasOverlay = overlay != null;
+  // The phone sheet covers the bottom edge, so the tile attribution rides above it.
+  useEffect(() => {
+    const stage = stageRef.current;
+    const card = overlayRef.current?.firstElementChild;
+    if (!hasOverlay || !stage || !card) return;
+    const observer = new ResizeObserver(() =>
+      stage.style.setProperty(
+        '--card-height',
+        `${card.getBoundingClientRect().height}px`,
+      ),
+    );
+    observer.observe(card);
+    return () => {
+      observer.disconnect();
+      stage.style.removeProperty('--card-height');
+    };
+  }, [hasOverlay]);
   const provider = satellite ? 'Esri' : 'OpenFreeMap';
   const availableStack = stack.filter((id) =>
     points.some((point) => point.id === id),
@@ -193,13 +275,19 @@ export function HouseholdMap({
       ) : (
         <>
           {!loaded && <Text role="status">Loading map…</Text>}
-          <div className={styles.stage}>
+          <div ref={stageRef} className={styles.stage}>
             <section
               ref={container}
               className={styles.map}
               aria-label="Listing map"
             />
-            {overlay}
+            {controls && (
+              <div ref={controlsRef} className={styles.controls}>
+                {controls}
+              </div>
+            )}
+            {/* Measured for the card height; the card keeps its own absolute position. */}
+            <div ref={overlayRef}>{overlay}</div>
           </div>
         </>
       )}

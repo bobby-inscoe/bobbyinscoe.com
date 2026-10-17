@@ -4,7 +4,7 @@ import {
   readBjurforsDetailPage,
   readBjurforsSearchPage,
 } from '@house-scanner-tools/bjurfors-parser';
-import { assertAdapterOutput } from '@house-scanner-tools/live-reader';
+import { assertAdapterOutput } from '@house-scanner-tools/live-run';
 import {
   BJURFORS_ORIGIN,
   sourceRegistry,

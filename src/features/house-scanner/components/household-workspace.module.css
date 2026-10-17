@@ -25,7 +25,7 @@
 .list {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: stretch;
   gap: var(--mantine-spacing-md);
   min-width: 0;
 }
@@ -43,14 +43,13 @@
   max-width: 480px;
   min-width: 0;
 }
+/* Pushes the actions row to the bottom so cards in a row share a height. */
+.grow {
+  flex-grow: 1;
+}
 .selected {
   border-color: var(--scanner-accent);
   outline: 1px solid var(--scanner-accent);
-}
-/* The expanded card takes the whole row; the others reflow beneath it. */
-.list > .selected {
-  flex-basis: 100%;
-  max-width: none;
 }
 /* 3:2 matches the source thumbnails, so nothing is cropped and the card does not jump while loading. */
 .photoLink {
@@ -66,9 +65,6 @@
   top: 8px;
   right: 8px;
   z-index: 1;
-}
-.selected .photoLink {
-  max-width: 440px;
 }
 .photo {
   display: block;
@@ -115,4 +111,99 @@
 /* A wider, shorter photo keeps the card from covering most of the map. */
 .pinCard .photo {
   aspect-ratio: 16 / 9;
+}
+/* On a phone the selected home is a sheet on the map's lower edge instead of a floating card. */
+@media (max-width: 36em) {
+  .pinCard {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 100%;
+    border-bottom: 0;
+    border-radius: var(--mantine-radius-md) var(--mantine-radius-md) 0 0;
+    animation: sheetUp 250ms ease-out;
+  }
+  .pinCard .photo {
+    aspect-ratio: auto;
+    height: 120px;
+    object-fit: cover;
+  }
+}
+@media (max-width: 36em) and (prefers-reduced-motion: reduce) {
+  .pinCard {
+    animation-name: sheetFade;
+  }
+}
+@keyframes sheetUp {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes sheetFade {
+  from {
+    opacity: 0;
+  }
+}
+/* Fingers need 44 px; the page root carries this class so the demo and sign-in controls count too. */
+@media (pointer: coarse) {
+  .touch :global(.mantine-Button-root),
+  .touch :global(.mantine-ActionIcon-root),
+  .touch :global(.mantine-CloseButton-root),
+  .touch :global(.mantine-Input-input) {
+    min-height: 44px;
+  }
+  .touch :global(.mantine-ActionIcon-root),
+  .touch :global(.mantine-CloseButton-root) {
+    min-width: 44px;
+  }
+  /* The stepper arrows cannot reach 44 px inside a 44 px field; touch users type the number. */
+  .touch :global(.mantine-NumberInput-controls) {
+    display: none;
+  }
+}
+/* One row that never wraps; on a narrow screen it scrolls sideways. */
+.tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+.tabs > * {
+  flex-shrink: 0;
+}
+/* Stays in the accessibility tree while the active tab already names the view. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* The workshop stylesheet sets an unlayered, page-wide h1 size that beats Mantine's layered size prop. */
+.pageTitle {
+  font-size: var(--title-fz);
+  line-height: var(--title-lh);
+  letter-spacing: normal;
+}
+/* A full-width photo in a wide sheet would fill most of its height. */
+.drawerBody .photo {
+  max-height: 320px;
+}
+/* Out of a portal the fixed sheet would start at its static position, so pin it to the viewport edge. */
+/* Takes the empty root out of the flex flow, where it would add a gap; the z-index keeps the sheet above the map. */
+.drawerRoot {
+  position: fixed;
+  z-index: var(--mb-z-index);
+}
+.drawerInner {
+  left: 0;
+}
+.drawerTitle {
+  font-family: var(--mantine-font-family-headings);
+  font-size: var(--mantine-h4-font-size);
 }

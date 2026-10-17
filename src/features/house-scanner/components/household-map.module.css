@@ -1,6 +1,23 @@
 .stage {
   position: relative;
 }
+.controls {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  padding: var(--mantine-spacing-xs);
+  background: color-mix(in srgb, var(--mantine-color-flax-0) 80%, transparent);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--scanner-line);
+  border-radius: var(--mantine-radius-sm);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .controls {
+    background: var(--mantine-color-flax-0);
+    backdrop-filter: none;
+  }
+}
 .map {
   /* Tall enough that the selected-home card does not cover most of it. */
   height: clamp(430px, 70vh, 680px);
@@ -16,6 +33,26 @@
   min-height: 36px;
   font: 500 var(--mantine-font-size-xs) / 1.4 var(--mantine-font-family);
   cursor: pointer;
+}
+/* The bottom sheet takes about 330 px, so a phone map needs more height to leave the pin in sight. */
+@media (max-width: 36em) {
+  .map {
+    height: clamp(430px, 80svh, 680px);
+  }
+  /* The selected-home sheet spans the bottom edge; keep the attribution visible above it. */
+  .map :global(.maplibregl-ctrl-bottom-right) {
+    bottom: var(--card-height, 0px);
+  }
+}
+@media (pointer: coarse) {
+  .marker {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .map :global(.maplibregl-ctrl-group button) {
+    width: 44px;
+    height: 44px;
+  }
 }
 /* A different shape and a dashed edge keep the catch-all from passing for a real home. */
 .unlocated {

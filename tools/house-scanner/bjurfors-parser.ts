@@ -1,3 +1,4 @@
+import { groundFloorOf } from '@house-scanner-tools/floor';
 import {
   area,
   MAX_HTML_CHARS,
@@ -8,8 +9,7 @@ import {
   type PageRead,
   positiveInt,
   type ReadContext,
-} from '@house-scanner-tools/boneo-parser';
-import { groundFloorOf } from '@house-scanner-tools/floor';
+} from '@house-scanner-tools/page-read';
 import type { DetailFacts } from '@house-scanner-tools/run-memory';
 import {
   type Observation,

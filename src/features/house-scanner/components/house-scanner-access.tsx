@@ -11,30 +11,12 @@ import {
 import { type ReactNode, useState } from 'react';
 
 import { useHouseholdSession } from '@/features/house-scanner/hooks/use-household-session';
-import type {
-  LoadNotes,
-  SaveNote,
-} from '@/features/house-scanner/hooks/use-listing-notes';
-import type {
-  ManualSubmission,
-  SearchProfile,
-  Snapshot,
-} from '@/features/house-scanner/types/contracts';
+import type { Household } from '@/features/house-scanner/types/household';
 
-export interface AuthenticatedHousehold {
-  snapshot: Snapshot;
-  userId: string;
-  onSaveFavorite: (listingId: string) => Promise<void>;
-  onRemoveFavorite: (listingId: string) => Promise<void>;
-  onAddManual: (submission: ManualSubmission) => Promise<void>;
-  onSaveProfile: (profile: SearchProfile) => Promise<void>;
-  onLoadNotes: LoadNotes;
-  onSaveNote: SaveNote;
-}
 export function HouseScannerAccess({
   children,
 }: {
-  children: (household: AuthenticatedHousehold) => ReactNode;
+  children: (household: Household) => ReactNode;
 }) {
   const session = useHouseholdSession();
   const [email, setEmail] = useState('');
@@ -104,6 +86,8 @@ export function HouseScannerAccess({
             <Title order={2}>Sign in with your access code</Title>
             <TextInput
               label="Email or username"
+              w="100%"
+              maw="22rem"
               autoComplete="username"
               autoCapitalize="none"
               required
@@ -113,6 +97,8 @@ export function HouseScannerAccess({
             />
             <TextInput
               label="Access code"
+              w="100%"
+              maw="22rem"
               type="password"
               autoComplete="current-password"
               required

@@ -1,38 +1,23 @@
-import { randomUUID } from 'node:crypto';
-import type { PageRead, ReadContext } from '@house-scanner-tools/boneo-parser';
 import {
-  MAX_BATCH_OBSERVATIONS,
   MAX_RUN_OBSERVATIONS,
   sourceIdentity,
 } from '@house-scanner-tools/collector';
 import {
-  type GeocodeCache,
-  geocodeMissing,
-} from '@house-scanner-tools/geocoder';
-import { prefilterObservations } from '@house-scanner-tools/prefilter';
-import {
-  planQueries,
-  type queryPlanInputSchema,
-} from '@house-scanner-tools/query-plan';
+  type PageRead,
+  positionPrecision,
+  type ReadContext,
+} from '@house-scanner-tools/page-read';
+import { parseRobots, robotsAllows } from '@house-scanner-tools/robots';
 import {
   type DetailFacts,
   freshDetail,
-  type LoadedMemory,
   type RunMemory,
 } from '@house-scanner-tools/run-memory';
-import { adapterFor } from '@house-scanner-tools/source-adapters';
 import type { SourceCapability } from '@house-scanner-tools/source-registry';
-import type { z } from 'zod';
-import {
-  CONTRACT_VERSION,
-  ingestRequestSchema,
-  type Observation,
-  observationSchema,
-} from '@/features/house-scanner/types/contracts';
+import type { Observation } from '@/features/house-scanner/types/contracts';
 
 export const USER_AGENT =
   'HouseScannerPersonalReader/0.1 (private household tool)';
-const ROBOTS_TOKEN = 'housescannerpersonalreader';
 // Each gap is drawn per request between these, so requests do not land in lockstep.
 export const MIN_INTERVAL_MS = 2000;
 export const MAX_INTERVAL_MS = 4000;
@@ -49,72 +34,6 @@ const STOPS_RUN: StopReason[] = [
   'network-error',
   'timeout',
 ];
-
-export interface RobotsRules {
-  rules: { allow: boolean; pattern: RegExp; length: number }[];
-}
-
-export function parseRobots(body: string): RobotsRules {
-  type Group = { agents: string[]; rules: [boolean, string][] };
-  const groups: Group[] = [];
-  let current: Group | null = null;
-  let lastWasAgent = false;
-  for (const rawLine of body.split(/\r?\n/)) {
-    const line = rawLine.replace(/#.*$/, '').trim();
-    const separator = line.indexOf(':');
-    if (separator < 0) continue;
-    const field = line.slice(0, separator).trim().toLowerCase();
-    const value = line.slice(separator + 1).trim();
-    if (field === 'user-agent') {
-      if (!lastWasAgent || current === null) {
-        current = { agents: [], rules: [] };
-        groups.push(current);
-      }
-      current.agents.push(value.toLowerCase());
-      lastWasAgent = true;
-      continue;
-    }
-    lastWasAgent = false;
-    if ((field === 'allow' || field === 'disallow') && current && value !== '')
-      current.rules.push([field === 'allow', value]);
-  }
-  const named = groups.filter((group) =>
-    group.agents.some((agent) => agent !== '*' && ROBOTS_TOKEN.includes(agent)),
-  );
-  const chosen = named.length
-    ? named
-    : groups.filter((group) => group.agents.includes('*'));
-  return {
-    rules: chosen.flatMap((group) =>
-      group.rules.map(([allow, raw]) => {
-        const anchored = raw.endsWith('$');
-        const source = (anchored ? raw.slice(0, -1) : raw)
-          .split('*')
-          .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
-          .join('.*');
-        return {
-          allow,
-          pattern: new RegExp(`^${source}${anchored ? '$' : ''}`),
-          length: raw.replace(/\*/g, '').length,
-        };
-      }),
-    ),
-  };
-}
-
-export function robotsAllows(robots: RobotsRules, pathAndQuery: string) {
-  let best: { allow: boolean; length: number } | null = null;
-  for (const rule of robots.rules) {
-    if (!rule.pattern.test(pathAndQuery)) continue;
-    if (
-      best === null ||
-      rule.length > best.length ||
-      (rule.length === best.length && rule.allow)
-    )
-      best = rule;
-  }
-  return best === null || best.allow;
-}
 
 export type StopReason =
   | 'robots-unavailable'
@@ -226,8 +145,7 @@ function applyDetail(
   observation.coordinates = {
     latitude,
     longitude,
-    // A title with a house number is a street address; Bjurfors points sat within 12 m of an independent geocoder on four of four.
-    precision: /\d/.test(observation.title) ? 'address' : 'approximate_area',
+    precision: positionPrecision(observation.title),
     source: adapter.coordinateSource,
     observedAt: observation.observedAt,
   };
@@ -489,143 +407,4 @@ export async function runCollection(
     detailRead += 1;
   }
   return finish(null);
-}
-
-export interface LiveRunOptions {
-  runId?: string;
-  batchId?: string;
-  capability: SourceCapability;
-  planning: Omit<z.input<typeof queryPlanInputSchema>, 'capability'>;
-  // Updated in place with the listing pages this run reads.
-  memory?: LoadedMemory;
-  // Estimated positions for kept homes the source gave none for; updated in place.
-  geocodeCache?: GeocodeCache;
-}
-
-/**
- * Narrower than assertObservationAllowed: it skips the approval status, which
- * is the operator's database step, and checks what this reader controls.
- */
-export function assertAdapterOutput(
-  policy: SourceCapability['policy'],
-  observation: Observation,
-): void {
-  observationSchema.parse(observation);
-  const photoAllowed =
-    observation.photo === null ||
-    (policy.imageDisplay &&
-      policy.imageHotlink &&
-      policy.imageOrigins.includes(new URL(observation.photo.url).origin));
-  if (
-    !photoAllowed ||
-    observation.evidence.length > 0 ||
-    !policy.listingOrigins.includes(new URL(observation.sourceUrl).origin)
-  )
-    throw new Error('Adapter output is outside the source policy.');
-  for (const [key, value] of Object.entries(observation.facts)) {
-    if (
-      value !== null &&
-      value !== 'unknown' &&
-      !policy.allowedFactFields.some((field) => field === key)
-    )
-      throw new Error('Adapter output includes an unapproved fact field.');
-  }
-}
-
-export async function prepareLiveRun(options: LiveRunOptions, deps: LiveDeps) {
-  const adapter = adapterFor(options.capability);
-  const queryPlan = planQueries({
-    ...options.planning,
-    capability: options.capability,
-  });
-  const prefilter = (observations: Observation[]) =>
-    prefilterObservations(
-      observations,
-      options.planning.profiles
-        .filter((profile) => profile.enabled)
-        .map((profile) => profile.criteria),
-    );
-  const result = await runCollection(
-    adapter,
-    queryPlan.partitions.map(({ id, municipality, propertyTypes }) => ({
-      id,
-      municipality,
-      propertyTypes,
-    })),
-    deps,
-    (all) => prefilter(all).kept,
-    options.memory?.memory ?? null,
-  );
-  for (const observation of result.observations)
-    assertAdapterOutput(options.capability.policy, observation);
-  // ponytail: the run ceiling counts collected observations, so a run that hits
-  // it can lose matching listings to non-matching ones. Move this filter into
-  // the page loop if runs ever approach the ceiling.
-  const { kept, dropped } = prefilter(result.observations);
-  const geocoded = options.geocodeCache
-    ? await geocodeMissing(kept, options.geocodeCache, deps)
-    : null;
-  const droppedCount = Object.values(dropped).reduce((a, b) => a + b, 0);
-
-  const pages = result.partitions.reduce((sum, p) => sum + p.pages, 0);
-  const runId = options.runId ?? randomUUID();
-  const common = { contractVersion: CONTRACT_VERSION, runId };
-  const failed = result.stopped !== null && result.observations.length === 0;
-  // Never "success": upcoming and unknown-price views are not queried and
-  // pagination is unproven.
-  // Plain sentences for people. The database prefixes the source and status and appends the
-  // policy's gap list, which the app strips when it shows this.
-  const coverageNote = [
-    `Read ${result.observations.length} homes across ${pages} pages; kept ${kept.length} that fit your profile and dropped ${droppedCount}.`,
-    `${adapter.detailLabel}: ${result.detailRead} read, ${result.detailCached} reused, ${result.detailFailed} failed, ${result.detailSkipped} skipped.`,
-    geocoded
-      ? `Positions estimated from addresses: ${geocoded.found} found (${geocoded.cached} reused).`
-      : '',
-    options.memory?.reset ? 'Run memory was unreadable and was reset.' : '',
-    result.stopped ? `Stopped early: ${result.stopped}.` : '',
-    adapter.notCovered,
-  ]
-    .filter(Boolean)
-    .join(' ');
-  const stages = [];
-  for (let at = 0; at < kept.length; at += MAX_BATCH_OBSERVATIONS)
-    stages.push(
-      ingestRequestSchema.parse({
-        ...common,
-        action: 'stage',
-        batchId: (at === 0 && options.batchId) || randomUUID(),
-        sourceId: adapter.sourceId,
-        observations: kept.slice(at, at + MAX_BATCH_OBSERVATIONS),
-      }),
-    );
-  const requests = [
-    ingestRequestSchema.parse({
-      ...common,
-      action: 'begin',
-      profileVersions: queryPlan.profileVersions,
-      sourceIds: [adapter.sourceId],
-    }),
-    ...stages,
-    ingestRequestSchema.parse({
-      ...common,
-      action: 'publish',
-      results: [
-        {
-          sourceId: adapter.sourceId,
-          status: failed ? 'failed' : 'partial',
-          cursor: null,
-          coverageNote,
-        },
-      ],
-    }),
-  ];
-  return {
-    mode: 'live-read' as const,
-    requests,
-    queryPlan,
-    result,
-    prefilter: { kept: kept.length, dropped },
-    publishStatus: failed ? ('failed' as const) : ('partial' as const),
-    cacheReset: options.memory?.reset ?? false,
-  };
 }
