@@ -1,6 +1,6 @@
 # House Scanner implementation
 
-For continuation, read the [12 October 2026 handoff](house-scanner-handoff-2026-10-12.md) alongside the canonical private specifications and this work record.
+For continuation, read the [17 October 2026 handoff](house-scanner-handoff-2026-10-17.md) and the [structure plan](house-scanner-structure-plan.md) alongside the canonical private specifications and this work record. The [12 October handoff](house-scanner-handoff-2026-10-12.md) holds the earlier history.
 
 This guide is public-safe. The canonical private product plan remains outside this repository. Do not add household preferences, identities, reference properties, real listing snapshots or credentials here.
 
@@ -66,7 +66,7 @@ Foundation evidence: npm run check, npm run typecheck and npm run build passed a
 
 The public route defaults to the configured private-access state and offers an explicit synthetic demo. The same workspace renders suggestions, an attributed union of favorites, manual bookmarks and existing editable owner profiles. Profile saves use revision checks. Polling refreshes private data without deliberately resetting a same-user workspace. Identity changes remount the workspace and clear its private UI state.
 
-The map loads after Open map, uses the same filtered listings as the list and groups homes sharing an exact coordinate. Approximate and unknown coordinates remain list only. Zoom-based clustering, richer photo overlays and licensed geography/transit enrichment remain future work. No nature or journey estimates are inferred from map coloring.
+The map loads when the member switches to Map, uses the same filtered listings as the list and groups homes sharing an exact coordinate. Homes with an approximate or unknown position share one dashed "not located" marker instead of a pin. Zoom-based clustering, richer photo overlays and licensed geography/transit enrichment remain future work. No nature or journey estimates are inferred from map coloring.
 
 The collector has one synthetic fixture executor, bounded requests and explicit replay inputs. It prepares begin/stage/publish requests in memory. No sender, real adapter, daily workflow or digest is active. The schema and signed endpoint are local source, not a provisioned service.
 

@@ -40,25 +40,47 @@ is required. The browser fetches font files from the site's own built assets.
 
 ## Checks and deployment
 
-Run `npm run check`, `npm run typecheck`, and `npm run build` before delivery.
-There is no project test runner yet; browser verification covers the interactive
-flows. GitHub Pages deployment runs only for pushes to main or manual dispatch.
-The build's index is copied to `404.html` to support direct client-route visits.
+Run `npm run check`, `npm run typecheck`, `npm run test:typecheck`, `npm test`,
+`npm run test:browser` and `npm run build` before delivery. Vitest runs unit,
+hook and PostgreSQL (PGlite) tests; Playwright runs the House Scanner flows in
+installed Edge at desktop and phone sizes. GitHub Pages deployment runs only for
+pushes to main or manual dispatch. The build's index is copied to `404.html` to
+support direct client-route visits.
 
 ## House Scanner
 
-House Scanner lives in src/features/house-scanner and owns a lazy route tree at
-/projects/house-scanner. The app composes that tree beside workshop and Duck Feed.
-The workshop's data-only works list and folio provide its public entry point.
-Its page and scoped styles inherit the single app Mantine provider, moss/flax
-palette and Libron headings from main's textile workshop.
+House Scanner lives in `src/features/house-scanner` and owns a lazy route tree at
+`/projects/house-scanner`. The app composes that tree beside workshop and Duck
+Feed, and the workshop's folio is its public entry point. Its page and scoped
+styles inherit the single Mantine provider, moss and flax palette and Libron
+headings.
 
-The explicit demo uses fictional in-memory data. Private session and household
-state belong to the feature's hooks and API module; snapshots are never persisted
-in browser storage or public assets. Supabase schema and signed ingestion source
-live under supabase. No live service is provisioned. Collector tooling is a
-separate Node build under tools/house-scanner, with only a synthetic executor.
+Inside the feature:
 
-Runtime privacy, SQL publication and retention cleanup require verification
-before activation. See docs/house-scanner.md for the implementation record and
-remaining source, account and behavior prerequisites.
+- `components/household-workspace.tsx` is the shell: tab state, status line, the
+  shared list and map state, and the notes controller. Each tab body is a panel
+  (`listings-panel.tsx`, `add-link-panel.tsx`, `sources-panel.tsx`,
+  `settings-panel.tsx`). Cards split into `listing-card.tsx` (collapsed),
+  `listing-details.tsx` and `listing-photo.tsx`. `household-map.tsx` is loaded
+  lazily so MapLibre stays in its own chunk.
+- `utils/` holds the rules, each in one place: `match-listing.ts` (matching and
+  the section wording), `listing-position.ts` (which homes get a pin),
+  `listing-filters.ts` (personal filters), `listing-view.ts` (what a tab shows
+  and the map points), `format.ts`, `manual-url.ts`, `listing-staleness.ts`,
+  `scan-summary.ts` and `source-policy.ts`. List and map read the same filtered
+  array, so a new view filter reaches both.
+- `hooks/` owns session, demo and notes state; `api/household-client.ts` is the
+  only module that talks to Supabase; `types/contracts.ts` is the contract shared
+  with the database and the collector.
+
+The demo uses fictional in-memory data. Snapshots are never persisted in browser
+storage or public assets. The schema, retention purge, operator functions and
+signed ingest function live under `supabase/`, with their PostgreSQL tests in
+`supabase/tests`.
+
+The collector is a separate Node build under `tools/house-scanner`, never
+imported by the app. `live-reader.ts` holds the guards every source shares,
+`robots.ts` and `page-read.ts` the shared parsing pieces, `live-run.ts` the
+request building, and each source adds a parser plus an entry in
+`source-adapters.ts` and `source-registry.ts`. `docs/house-scanner.md` is the
+work record and operator runbook.
