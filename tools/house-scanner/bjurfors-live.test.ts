@@ -2,20 +2,22 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
-  assertAdapterOutput,
   type LiveEvent,
   MAX_DETAIL_PAGES_PER_RUN,
   MAX_REQUESTS_PER_RUN,
-  parseRobots,
-  prepareLiveRun,
-  robotsAllows,
   runCollection,
+  USER_AGENT,
 } from '@house-scanner-tools/live-reader';
+import {
+  assertAdapterOutput,
+  prepareLiveRun,
+} from '@house-scanner-tools/live-run';
 import {
   deps,
   fakeFetch,
   type Reply,
 } from '@house-scanner-tools/live-test-helpers';
+import { parseRobots, robotsAllows } from '@house-scanner-tools/robots';
 import {
   emptyMemory,
   type RunMemory,
@@ -25,7 +27,6 @@ import {
   adapterFor,
   bjurforsAdapter,
   boneoAdapter,
-  USER_AGENT,
 } from '@house-scanner-tools/source-adapters';
 import {
   approvedPolicy,

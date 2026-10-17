@@ -1,4 +1,16 @@
 import { groundFloorOf } from '@house-scanner-tools/floor';
+import {
+  area,
+  MAX_HTML_CHARS,
+  MAX_ITEMS_PER_PAGE,
+  type MorePages,
+  numberOf,
+  type PageFailure,
+  type PageRead,
+  positionPrecision,
+  positiveInt,
+  type ReadContext,
+} from '@house-scanner-tools/page-read';
 import { BONEO_IMAGE_ORIGIN } from '@house-scanner-tools/source-registry';
 import {
   type Observation,
@@ -7,44 +19,6 @@ import {
 
 // Field meanings below come from one structure-only inspection of a public
 // search page on 13 October 2026. Items marked "inferred" were not proven.
-
-export const MAX_HTML_CHARS = 3_000_000;
-export const MAX_ITEMS_PER_PAGE = 100;
-
-export interface ReadContext {
-  /** Canonical origin; item links must resolve to exactly this origin. */
-  origin: string;
-  /** Fetch time. Becomes observedAt on every observation. */
-  observedAt: Date;
-  /** Items already received from earlier pages of the same partition. */
-  receivedBefore: number;
-}
-
-export type MorePages =
-  | { kind: 'none' }
-  | { kind: 'more'; remaining: number }
-  | { kind: 'unknown'; reason: 'no-total' | 'empty-page-before-total' };
-
-export type PageFailure =
-  | 'no-embedded-data'
-  // A page without the results list, including an empty body. Bjurfors only.
-  | 'no-results-list'
-  | 'invalid-embedded-data'
-  | 'unexpected-shape'
-  | 'inconsistent-count'
-  | 'too-large';
-
-export type PageRead =
-  | {
-      kind: 'page';
-      observations: Observation[];
-      itemCount: number;
-      skipped: number;
-      /** listData.count. Page two of a five-result search kept count 5 with no items, so it is the total. */
-      total: number | null;
-      more: MorePages;
-    }
-  | { kind: 'failed'; reason: PageFailure };
 
 type Facts = Observation['facts'];
 type FactKey = keyof Facts;
@@ -59,32 +33,11 @@ function text(value: unknown): string | null {
   return trimmed === '' ? null : trimmed;
 }
 
-export function numberOf(value: unknown): number | null {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value === 'string' && /^-?\d+([.,]\d+)?$/.test(value.trim()))
-    return Number(value.trim().replace(',', '.'));
-  return null;
-}
-
 function isoOf(value: unknown): string | null {
   const raw = text(value);
   if (raw === null || raw.length > 40) return null;
   const time = Date.parse(raw);
   return Number.isNaN(time) ? null : new Date(time).toISOString();
-}
-
-export function positiveInt(value: unknown, max: number): number | null {
-  const number = numberOf(value);
-  return number !== null && Number.isInteger(number) && number > 0
-    ? number <= max
-      ? number
-      : null
-    : null;
-}
-
-export function area(value: unknown, max = 10_000): number | null {
-  const number = numberOf(value);
-  return number !== null && number > 0 && number <= max ? number : null;
 }
 
 export function extractNextData(html: string): unknown {
@@ -152,7 +105,6 @@ function photo(item: Rec, observedAt: string) {
     hotlinkAllowed: true,
   };
 }
-// A title with a house number is a street address, and the source's points matched an independent geocoder within about 25 m on a sample of eight. A title without one (an area listing) stays approximate.
 function coordinates(item: Rec, observedAt: string, title: string) {
   const value = item.field_coordinates;
   if (!isRecord(value)) return null;
@@ -169,9 +121,7 @@ function coordinates(item: Rec, observedAt: string, title: string) {
   return {
     longitude,
     latitude,
-    precision: /\d/.test(title)
-      ? ('address' as const)
-      : ('approximate_area' as const),
+    precision: positionPrecision(title),
     source: 'boneo-search-data',
     observedAt,
   };
