@@ -385,6 +385,7 @@ const TABLES = [
   'editions',
   'favorites',
   'notes',
+  'hidden_listings',
 ] as const;
 const purgeSchema = z.strictObject({
   observationsDeleted: z.number().int(),
@@ -668,6 +669,7 @@ beforeAll(async () => {
   for (const migration of [
     '202610120001_house_scanner.sql',
     '202610120002_house_scanner_retention.sql',
+    '202610170001_house_scanner_hidden.sql',
   ])
     await db.exec(
       await readFile(
@@ -752,7 +754,7 @@ describe('actual migration and private RPC grants', () => {
       from pg_class c join pg_namespace n on n.oid=c.relnamespace
       where n.nspname='hs' and c.relkind='r'
     `);
-    expect(result.rows).toHaveLength(15);
+    expect(result.rows).toHaveLength(16);
     for (const row of result.rows)
       expect(row).toMatchObject({
         relrowsecurity: true,
@@ -783,7 +785,7 @@ describe('actual migration and private RPC grants', () => {
       from pg_proc p join pg_namespace n on n.oid=p.pronamespace
       where n.nspname='public' and p.proname like 'hs_%'
     `);
-    expect(result.rows).toHaveLength(12);
+    expect(result.rows).toHaveLength(13);
     const serviceFunctions = [
       'hs_ingest_credential',
       'hs_consume_nonce',
@@ -3244,7 +3246,7 @@ describe('bounded retention purge', () => {
       from pg_class c join pg_namespace n on n.oid=c.relnamespace,unnest(array['anon','authenticated','service_role']) r
       where n.nspname='hs' and c.relkind='r'
     `);
-    expect(tables.rows).toHaveLength(45);
+    expect(tables.rows).toHaveLength(48);
     expect(tables.rows.every((row) => !row.granted)).toBe(true);
   });
 
@@ -3276,5 +3278,271 @@ describe('bounded retention purge', () => {
           ]),
         ),
       ).rejects.toThrow('permission denied for schema hs');
+  });
+});
+
+describe('personal hide', () => {
+  const idList = (ids: string[]) => `{${ids.join(',')}}`;
+
+  async function setHidden(
+    listingIds: string[],
+    hidden: boolean | null,
+    userId = OWNER_A,
+    householdId = HOUSE_A,
+  ) {
+    return asRole('authenticated', userId, () =>
+      rpc('select public.hs_set_hidden($1,$2::uuid[],$3) as value', [
+        householdId,
+        idList(listingIds),
+        hidden,
+      ]),
+    );
+  }
+
+  async function rawSnapshot(userId = OWNER_A, householdId = HOUSE_A) {
+    return asRole('authenticated', userId, () =>
+      rpc('select public.hs_snapshot($1) as value', [householdId]),
+    );
+  }
+
+  const hiddenRows = (householdId = HOUSE_A) =>
+    count(
+      'select count(*)::int count from hs.hidden_listings where household_id=$1',
+      [householdId],
+    );
+
+  async function lockMarker(householdId: string) {
+    const result = await db.query<{ marker: string }>(
+      'select xmax::text marker from hs.households where id=$1',
+      [householdId],
+    );
+    return result.rows[0].marker;
+  }
+
+  async function twoListings() {
+    const first = await manual(HOUSE_A, OWNER_A, `${ORIGIN}/first`);
+    const second = await manual(HOUSE_A, OWNER_A, `${ORIGIN}/second`);
+    return [first.listingId, second.listingId];
+  }
+
+  it('hides and unhides for the calling member only', async () => {
+    const [first, second] = await twoListings();
+    expect(await setHidden([first], true, MEMBER_A)).toEqual({ ok: true });
+    expect((await snapshot(HOUSE_A, MEMBER_A)).hiddenListingIds).toEqual([
+      first,
+    ]);
+    expect((await snapshot(HOUSE_A, OWNER_A)).hiddenListingIds).toBeUndefined();
+    // The owner's own hide does not touch the member's.
+    await setHidden([second], true, OWNER_A);
+    expect((await snapshot(HOUSE_A, MEMBER_A)).hiddenListingIds).toEqual([
+      first,
+    ]);
+    expect((await snapshot(HOUSE_A, OWNER_A)).hiddenListingIds).toEqual([
+      second,
+    ]);
+    // Unhiding removes only the caller's row.
+    await setHidden([first], false, OWNER_A);
+    expect(await hiddenRows()).toBe(2);
+    expect(await setHidden([first], false, MEMBER_A)).toEqual({ ok: true });
+    expect(
+      (await snapshot(HOUSE_A, MEMBER_A)).hiddenListingIds,
+    ).toBeUndefined();
+    expect(await hiddenRows()).toBe(1);
+  });
+
+  it('accepts several ids and repeats without changing anything', async () => {
+    const [first, second] = await twoListings();
+    await setHidden([first, second, first], true);
+    const stamp = () =>
+      db.query<{ at: string }>(
+        'select min(hidden_at)::text at from hs.hidden_listings',
+      );
+    const before = await stamp();
+    expect(await hiddenRows()).toBe(2);
+    await setHidden([first, second], true);
+    expect(await stamp()).toEqual(before);
+    expect(await hiddenRows()).toBe(2);
+    await setHidden([first, second], false);
+    expect(await hiddenRows()).toBe(0);
+    await setHidden([first, second], false);
+  });
+
+  it('refuses outsiders, deactivated members, foreign listings and bad arguments', async () => {
+    const [first] = await twoListings();
+    const foreign = await manual(HOUSE_B, OWNER_B, `${ORIGIN}/foreign`);
+    await expect(setHidden([first], true, OWNER_B)).rejects.toThrow(
+      'Household access denied',
+    );
+    await expect(
+      asRole('anon', null, () =>
+        rpc('select public.hs_set_hidden($1,$2::uuid[],$3) as value', [
+          HOUSE_A,
+          idList([first]),
+          true,
+        ]),
+      ),
+    ).rejects.toThrow('permission denied for function hs_set_hidden');
+    await expect(setHidden([foreign.listingId], true, OWNER_A)).rejects.toThrow(
+      'Listing unavailable',
+    );
+    await expect(setHidden([first, randomUUID()], true)).rejects.toThrow(
+      'Listing unavailable',
+    );
+    await expect(setHidden([first], null)).rejects.toThrow(
+      'Invalid hide request',
+    );
+    await expect(setHidden([], true)).rejects.toThrow('Invalid hide request');
+    await expect(
+      setHidden(
+        Array.from({ length: 501 }, () => randomUUID()),
+        true,
+      ),
+    ).rejects.toThrow('Invalid hide request');
+    expect(await hiddenRows()).toBe(0);
+    await db.query(
+      'update hs.members set active=false where household_id=$1 and user_id=$2',
+      [HOUSE_A, MEMBER_A],
+    );
+    await expect(setHidden([first], true, MEMBER_A)).rejects.toThrow(
+      'Household access denied',
+    );
+  });
+
+  it('takes the household lock after the first access check', async () => {
+    const [first] = await twoListings();
+    const before = await lockMarker(HOUSE_A);
+    const otherBefore = await lockMarker(HOUSE_B);
+    await setHidden([first], true);
+    expect(await lockMarker(HOUSE_A)).not.toBe(before);
+    expect(await lockMarker(HOUSE_B)).toBe(otherBefore);
+    const after = await lockMarker(HOUSE_A);
+    await expect(setHidden([first], true, OWNER_B)).rejects.toThrow(
+      'Household access denied',
+    );
+    expect(await lockMarker(HOUSE_A)).toBe(after);
+  });
+
+  it('leaves the field out when nothing is hidden, so the previous strict schema still parses', async () => {
+    const [first] = await twoListings();
+    const previous = snapshotSchema.omit({ hiddenListingIds: true });
+    expect(previous.safeParse(await rawSnapshot()).success).toBe(true);
+    await setHidden([first], true);
+    expect(previous.safeParse(await rawSnapshot()).success).toBe(false);
+    await setHidden([first], false);
+    expect(previous.safeParse(await rawSnapshot()).success).toBe(true);
+  });
+
+  it('lists only hides of listings the snapshot still shows', async () => {
+    await publishOne(observation({ observedAt: aged(2) }));
+    const [listing] = (await snapshot()).listings;
+    await setHidden([listing.id], true);
+    expect((await snapshot()).hiddenListingIds).toEqual([listing.id]);
+    await setPolicy({ retentionDays: 1 });
+    const after = await snapshot();
+    expect(after.listings).toEqual([]);
+    expect(after.hiddenListingIds).toBeUndefined();
+    expect(await hiddenRows()).toBe(1);
+  });
+
+  it('shows a member only their own rows through the table policy', async () => {
+    const [first] = await twoListings();
+    await setHidden([first], true, OWNER_A);
+    await setHidden([first], true, MEMBER_A);
+    expect(await hiddenRows()).toBe(2);
+    // No role has table grants, so grant briefly to exercise the policy itself.
+    await db.exec(`
+      grant usage on schema hs to authenticated;
+      grant select on hs.hidden_listings to authenticated;
+      grant execute on function hs.is_member(uuid) to authenticated;
+    `);
+    try {
+      const rows = await asRole('authenticated', MEMBER_A, () =>
+        db.query<{ user_id: string }>('select user_id from hs.hidden_listings'),
+      );
+      expect(rows.rows).toEqual([{ user_id: MEMBER_A }]);
+      const outsider = await asRole('authenticated', OWNER_B, () =>
+        db.query('select user_id from hs.hidden_listings'),
+      );
+      expect(outsider.rows).toEqual([]);
+    } finally {
+      await db.exec(`
+        revoke execute on function hs.is_member(uuid) from authenticated;
+        revoke select on hs.hidden_listings from authenticated;
+        revoke usage on schema hs from authenticated;
+      `);
+    }
+  });
+
+  it('does not pin a listing against the purge and goes with it, unlike a favorite', async () => {
+    await publishOne(
+      observation({ sourceListingId: 'plain', sourceUrl: `${ORIGIN}/plain` }),
+    );
+    await publishOne(
+      observation({ sourceListingId: 'kept', sourceUrl: `${ORIGIN}/kept` }),
+    );
+    const plain = (await listingByUrl('plain')).id;
+    const kept = (await listingByUrl('kept')).id;
+    await setHidden([plain, kept], true, MEMBER_A);
+    await favorite(kept, true, OWNER_A);
+    // Age both listings and their history past the one-day retention.
+    await setPolicy({ retentionDays: 1 });
+    await db.query(
+      "update hs.listings set observed_at=$1::timestamptz,value=jsonb_set(value,'{observedAt}',to_jsonb($1::text)) where id=any($2::uuid[])",
+      [aged(2), idList([plain, kept])],
+    );
+    await db.query(
+      "update hs.observations set value=jsonb_set(value,'{observedAt}',to_jsonb($1::text))",
+      [aged(2)],
+    );
+    expect(await purge({ dryRun: true })).toMatchObject({
+      listingsDeleted: 1,
+    });
+    expect(await hiddenRows()).toBe(2);
+    expect(await purge()).toMatchObject({ listingsDeleted: 1 });
+    const left = await db.query<{ listing_id: string }>(
+      'select listing_id from hs.hidden_listings',
+    );
+    expect(left.rows).toEqual([{ listing_id: kept }]);
+    expect(
+      await count('select count(*)::int count from hs.listings where id=$1', [
+        plain,
+      ]),
+    ).toBe(0);
+  });
+});
+
+describe('estimated coordinates', () => {
+  it('carries the flag through ingest, the snapshot and the retention scrub, and leaves it out when absent', async () => {
+    const at = new Date(baseTime).toISOString();
+    await publishOne(
+      observation({
+        sourceListingId: 'estimated',
+        sourceUrl: `${ORIGIN}/estimated`,
+        coordinates: { ...coordinateItem(at), estimated: true },
+      }),
+    );
+    await publishOne(
+      observation({
+        sourceListingId: 'supplied',
+        sourceUrl: `${ORIGIN}/supplied`,
+        coordinates: coordinateItem(at),
+      }),
+    );
+    const read = async () => {
+      const { listings } = await snapshot();
+      const coordinates = (path: string) =>
+        listings.find(
+          (listing) => listing.sourceUrls[0] === `${ORIGIN}/${path}`,
+        )?.coordinates;
+      return {
+        estimated: coordinates('estimated'),
+        supplied: coordinates('supplied'),
+      };
+    };
+    const before = await read();
+    expect(before.estimated).toMatchObject({ estimated: true });
+    expect(before.supplied).not.toHaveProperty('estimated');
+    expect(await purge()).toEqual(NO_WORK);
+    expect(await read()).toEqual(before);
   });
 });

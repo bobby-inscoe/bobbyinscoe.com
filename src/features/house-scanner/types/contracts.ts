@@ -126,6 +126,9 @@ export const coordinateSchema = z.strictObject({
   ]),
   source: z.string().min(1).max(120),
   observedAt: timestamp,
+  // Set only for a position the geocoder worked out from a street address. Absent means false, so
+  // values stored before this field keep their content fingerprint.
+  estimated: z.boolean().optional(),
 });
 export const factsSchema = z.strictObject({
   propertyType: z.enum(['apartment', 'house']).nullable(),
@@ -242,6 +245,9 @@ export const snapshotSchema = z.strictObject({
   profiles: z.array(profileSchema).max(20),
   listings: z.array(listingSchema).max(500),
   favorites: z.array(favoriteSchema).max(5000),
+  // The signed-in member's own hidden listings. The database leaves the key out when there are none,
+  // so an app built before it still parses the snapshot. Absent means none.
+  hiddenListingIds: z.array(id).max(500).optional(),
 });
 export const manualSubmissionSchema = z.strictObject({
   url: listingUrlSchema,
