@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import {
-  ListingCard,
-  ListingPhoto,
-} from '@/features/house-scanner/components/listing-card';
+import { ListingCard } from '@/features/house-scanner/components/listing-card';
+import { ListingPhoto } from '@/features/house-scanner/components/listing-photo';
 import {
   DEMO_USER_ID,
   STALE_LISTING_ID,

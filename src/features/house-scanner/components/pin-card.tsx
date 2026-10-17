@@ -1,7 +1,7 @@
 import { Button, CloseButton, Group, Text, Title } from '@mantine/core';
 
 import styles from '@/features/house-scanner/components/household-workspace.module.css';
-import { ListingPhoto } from '@/features/house-scanner/components/listing-card';
+import { ListingPhoto } from '@/features/house-scanner/components/listing-photo';
 import type { Listing } from '@/features/house-scanner/types/contracts';
 import { formatPrice } from '@/features/house-scanner/utils/format';
 
