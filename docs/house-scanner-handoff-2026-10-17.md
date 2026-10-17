@@ -14,10 +14,10 @@ Operational facts:
 
 ## Deviations from the private spec found on 17 October
 
-Decide each: change the app or update the spec.
-1. Cards show no reasons or caveats when collapsed (spec: up to three reasons plus caveats). See the chips idea below.
-2. Street-only geocoded positions are stored as precision `address` and look exact.
-3. Public Nominatim is used for batch geocoding, which the spec rules out. Needs a deliberate yes.
+Owner decisions on 17 October are marked. The rest still need a decision: change the app or update the spec.
+1. Cards show no reasons or caveats when collapsed (spec: up to three reasons plus caveats). Decided: fix with the reason chips in the backlog.
+2. Street-only geocoded positions are stored as precision `address` and look exact. Decided: a street address is precise enough; add an `estimated` boolean to the coordinate data (contract and database) so the UI can say so. Buyers will contact the broker for any listing worth a closer look.
+3. Public Nominatim is used for geocoding, which the spec cautions against. Decided: accepted. It is free, the volume is one lookup per new home (cached, 60 per run at 1.5 s apart), and that is within its usage policy (identify the client, one request a second, cache). Amend the spec; revisit if it blocks the reader.
 4. Esri satellite tiles were never checked for a free licensed use.
 5. Coverage gaps: houses, Mölndal, upcoming and unknown-price listings. Bjurfors reads Göteborg only.
 6. No backups. Supabase Free has none. Spec asks for weekly encrypted exports and a restore path. Highest priority gap.
@@ -36,7 +36,9 @@ Small known issues: the Sources tab shows one scan note for every source; filter
 5. Backups and the scheduler (deviations 6 and 7).
 6. Coverage: houses, Mölndal, unknown-price listings.
 
-## Suggested structure pass
+## Suggested structure pass (a suggestion, not a plan)
+
+The owner intends a senior architect or designer agent (Opus 5.5) to decide the real structure. Treat everything below as input to that agent, which should write a short plan and get the owner's approval before moving files. A mid-tier model (Sonnet 5.5) can then carry out the approved plan and the backlog features. Use the stronger model again for the scheduler design and a final review.
 
 The feature grew to about 25k lines, most of it tests. Goals: easier scaling, clearer ownership, less to read before changing anything. Candidates to examine, not decisions:
 - `household-workspace.tsx` mixes tab state, filtering, map points and favorites logic. Split view logic from state.
