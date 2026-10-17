@@ -120,6 +120,39 @@
 .pinCard .photo {
   aspect-ratio: 16 / 9;
 }
+/* On a phone the selected home is a sheet on the map's lower edge instead of a floating card. */
+@media (max-width: 36em) {
+  .pinCard {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 100%;
+    border-bottom: 0;
+    border-radius: var(--mantine-radius-md) var(--mantine-radius-md) 0 0;
+    animation: sheetUp 250ms ease-out;
+  }
+  .pinCard .photo {
+    aspect-ratio: auto;
+    height: 120px;
+    object-fit: cover;
+  }
+}
+@media (max-width: 36em) and (prefers-reduced-motion: reduce) {
+  .pinCard {
+    animation-name: sheetFade;
+  }
+}
+@keyframes sheetUp {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes sheetFade {
+  from {
+    opacity: 0;
+  }
+}
 /* Fingers need 44 px; the page root carries this class so the demo and sign-in controls count too. */
 @media (pointer: coarse) {
   .touch :global(.mantine-Button-root),

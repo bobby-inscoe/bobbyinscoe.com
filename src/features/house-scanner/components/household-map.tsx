@@ -134,6 +134,8 @@ export function HouseholdMap({
           maxZoom: 14,
         },
         attributionControl: { compact: false },
+        // On a touchscreen one finger scrolls the page past the map and two fingers pan it.
+        cooperativeGestures: window.matchMedia('(pointer: coarse)').matches,
       });
       map.current = instance;
       appliedSatellite.current = satelliteRef.current;

@@ -738,3 +738,40 @@ test('the basemap toggle sits in the map corner, clear of the map navigation con
   expect(toggleBox.x + toggleBox.width).toBeLessThanOrEqual(navBox.x);
   expect(toggleBox.y).toBeLessThan(mapBox.y + 40);
 });
+
+test('on a touch screen the map needs two fingers to pan, and a mouse keeps the plain map', async ({
+  page,
+}) => {
+  await seeDetachedHomeOnMap(page);
+  const map = page.locator('.maplibregl-canvas-container');
+  if (test.info().project.name === 'narrow')
+    await expect(map).toHaveClass(/maplibregl-cooperative-gestures/);
+  else await expect(map).not.toHaveClass(/maplibregl-cooperative-gestures/);
+});
+
+test('the selected home is a bottom sheet on a phone and a floating card on desktop', async ({
+  page,
+}) => {
+  await seeDetachedHomeOnMap(page);
+  const narrow = test.info().project.name === 'narrow';
+  const card = page.getByRole('article', {
+    name: 'Selected home: Example detached home',
+    exact: true,
+  });
+  // The sheet slides in, so poll until it has settled.
+  await expect
+    .poll(async () => {
+      const [mapBox, cardBox] = await Promise.all([
+        page.getByLabel('Listing map').boundingBox(),
+        card.boundingBox(),
+      ]);
+      if (!mapBox || !cardBox) return false;
+      const gap = mapBox.y + mapBox.height - (cardBox.y + cardBox.height);
+      return narrow
+        ? Math.abs(cardBox.width - mapBox.width) <= 2 &&
+            Math.abs(cardBox.x - mapBox.x) <= 2 &&
+            Math.abs(gap) <= 2
+        : cardBox.width <= 320 && gap >= 10;
+    })
+    .toBe(true);
+});

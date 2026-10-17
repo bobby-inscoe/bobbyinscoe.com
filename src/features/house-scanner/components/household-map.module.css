@@ -34,6 +34,12 @@
   font: 500 var(--mantine-font-size-xs) / 1.4 var(--mantine-font-family);
   cursor: pointer;
 }
+/* The bottom sheet takes about 330 px, so a phone map needs more height to leave the pin in sight. */
+@media (max-width: 36em) {
+  .map {
+    height: clamp(430px, 80svh, 680px);
+  }
+}
 @media (pointer: coarse) {
   .marker {
     min-width: 44px;
