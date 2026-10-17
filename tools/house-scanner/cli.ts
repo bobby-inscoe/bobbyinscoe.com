@@ -26,6 +26,7 @@ import {
   BJURFORS_SOURCE_ID,
   BONEO_SOURCE_ID,
   DEMO_SOURCE_ID,
+  ERIK_OLSSON_SOURCE_ID,
   sourceRegistry,
 } from '@house-scanner-tools/source-registry';
 import { z } from 'zod';
@@ -67,16 +68,22 @@ type Values = {
   force: boolean;
 };
 
-const LIVE_SOURCES = [BONEO_SOURCE_ID, BJURFORS_SOURCE_ID];
+const LIVE_SOURCES = [
+  BONEO_SOURCE_ID,
+  BJURFORS_SOURCE_ID,
+  ERIK_OLSSON_SOURCE_ID,
+];
 
-// Live reads need three explicit flags and cover Boneo and Bjurfors only. Sending adds
+// Live reads need three explicit flags and cover Boneo, Bjurfors and Erik Olsson only. Sending adds
 // --send --confirm-send. Output is counts, statuses and partition names;
 // observations are never printed or saved. A small run memory file keeps listing
 // ids and two facts, so listing pages read recently are not requested again and
 // two live reads cannot start close together.
 async function live(values: Values) {
   if (values.source === undefined || !LIVE_SOURCES.includes(values.source))
-    throw new Error('Live reading exists for boneo and bjurfors only.');
+    throw new Error(
+      'Live reading exists for boneo, bjurfors and erik-olsson only.',
+    );
   if (!values['confirm-personal-read'])
     throw new Error('Live reading needs --confirm-personal-read.');
   if (values.at !== undefined)
@@ -165,7 +172,7 @@ function printPolicySql(
 ) {
   if (source === undefined || !LIVE_SOURCES.includes(source))
     throw new Error(
-      '--print-policy-sql supports --source=boneo and --source=bjurfors only.',
+      '--print-policy-sql supports --source=boneo, --source=bjurfors and --source=erik-olsson only.',
     );
   if (!household || !z.uuid().safeParse(household).success)
     throw new Error('--print-policy-sql needs --household <household uuid>.');

@@ -11,6 +11,8 @@ export const BONEO_SOURCE_ID = 'boneo';
 export const BONEO_ORIGIN = 'https://www.boneo.se';
 export const BONEO_IMAGE_ORIGIN = 'https://files.boneo.se';
 export const BJURFORS_SOURCE_ID = 'bjurfors';
+export const ERIK_OLSSON_SOURCE_ID = 'erik-olsson';
+export const ERIK_OLSSON_ORIGIN = 'https://www.erikolsson.se';
 // Photos come from the same host as the listing pages.
 export const BJURFORS_ORIGIN = 'https://www.bjurfors.se';
 export const capabilitySchema = z.strictObject({
@@ -19,6 +21,7 @@ export const capabilitySchema = z.strictObject({
     'demo-only',
     'boneo-personal-read',
     'bjurfors-personal-read',
+    'erik-olsson-personal-read',
     'none',
   ]),
   nativeNumericFiltersVerified: z.boolean(),
@@ -42,7 +45,6 @@ const noCapabilities: SourcePolicy['capabilities'] = {
 };
 
 const candidates = [
-  ['erik-olsson', 'https://www.erikolsson.se', 'pending'],
   ['stadshem', 'https://stadshem.se', 'pending'],
   ['alvhem', 'https://www.alvhem.com', 'pending'],
   ['fastighetsbyran', 'https://www.fastighetsbyran.com', 'disabled'],
@@ -209,6 +211,62 @@ export function sourceRegistry(): SourceCapability[] {
         },
       },
       executor: 'bjurfors-personal-read',
+      nativeNumericFiltersVerified: false,
+      geographicPartitioning: 'unverified',
+    }),
+    capabilitySchema.parse({
+      policy: {
+        ...common,
+        sourceId: ERIK_OLSSON_SOURCE_ID,
+        // Pending is not approved: the operator sets approval in the database.
+        status: 'pending',
+        retentionDays: 14,
+        listingOrigins: [ERIK_OLSSON_ORIGIN],
+        // No photos: its terms limit copying and reproducing, and no image host was checked.
+        imageOrigins: [],
+        imageDisplay: false,
+        imageHotlink: false,
+        automatedCollection: false,
+        privateDisplay: false,
+        rightsBasis:
+          'Permission unresolved. The household owner chose to read public search pages for personal use at their own judgment. Its terms grant a personal, non-commercial licence and do not mention automated reading. Technical access is not a reuse license.',
+        allowedFactFields: [
+          'propertyType',
+          'tenure',
+          'purchase',
+          'livingAreaM2',
+          'secondaryAreaM2',
+          'rooms',
+          'askingPriceSek',
+          'municipality',
+          'baseFeeSek',
+          'status',
+          'outdoor',
+          'groundFloor',
+          'lift',
+        ],
+        capabilities: {
+          discovery: true,
+          knownListingRefresh: false,
+          unknownPrice: false,
+          upcoming: false,
+          pagination: false,
+          resultCap: null,
+          coverageGaps: [
+            'Permission is unresolved and the source is not approved.',
+            'Only the Goteborg municipality search is supported. Other municipalities are not covered.',
+            'Pre-market homes (Underhand) show no street and have no page of their own, so they are counted and skipped. They were most of the first result page and a minority of the second.',
+            'Result pages hold sixteen cards and carry a total, so a full read is detected, but only the default for-sale search was observed. Whether upcoming homes or homes without an asking price are all included is unproven.',
+            'Cards give type, area, rooms, fee and price. Balcony, patio, floor, lift, tenure, status and coordinates come from each kept home page, read up to the per-run cap.',
+            'Balcony and patio are facts only when ticked; an unticked box stays unknown. Lift is a fact only when the page says yes. Only floor 2 or higher (or floor 0) is a floor fact. Glazing is not collected.',
+            'Coordinates come from the broker and are used only when the address is not hidden. They are labelled address-level when the title has a house number; accuracy was not compared with an independent geocoder.',
+            'No photos are shown for this source.',
+            'Listing identity is the numeric id at the end of the page path and the episode never changes, so a relisting of the same home is not told apart.',
+            'Known listings cannot be refreshed outside discovery.',
+          ],
+        },
+      },
+      executor: 'erik-olsson-personal-read',
       nativeNumericFiltersVerified: false,
       geographicPartitioning: 'unverified',
     }),

@@ -231,7 +231,7 @@ it.each([
   [['--source=boneo', '--household=not-a-uuid']],
   [['--source=bjurfors']],
   [['--source=bjurfors', '--household=not-a-uuid']],
-  [['--source=erik-olsson', `--household=${HOUSEHOLD}`]],
+  [['--source=stadshem', `--household=${HOUSEHOLD}`]],
 ])('refuses to print policy SQL for %j', (args) => {
   const result = runPrinter(...args);
   expect(result.status).toBe(1);
@@ -294,7 +294,7 @@ it('refuses a live read of a source that has no executor', () => {
       noFetch,
       resolve('.house-scanner-build/collector.mjs'),
       '--live',
-      '--source=erik-olsson',
+      '--source=stadshem',
       '--confirm-personal-read',
       '--profiles',
       profilesPath,
