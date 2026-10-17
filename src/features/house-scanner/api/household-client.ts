@@ -13,7 +13,6 @@ import {
 import {
   NOTE_MAX_LENGTH,
   NoteConflictError,
-  noteSchema,
 } from '@/features/house-scanner/types/notes';
 
 const STORAGE_PREFIX = 'house-scanner.auth.';
@@ -176,6 +175,9 @@ export async function householdSnapshot(
     snapshot.hiddenListingIds?.some(
       (listingId) => !listingIds.has(listingId),
     ) ||
+    snapshot.notes?.some(
+      (note) => !listingIds.has(note.listingId) || !memberIds.has(note.userId),
+    ) ||
     listingIds.size !== snapshot.listings.length ||
     memberIds.size !== snapshot.members.length
   )
@@ -259,18 +261,6 @@ export function saveProfile(
       p_criteria: value.criteria,
     },
     revisionSchema,
-  );
-}
-export function listingNotes(
-  client: SupabaseClient,
-  householdId: string,
-  listingId: string,
-) {
-  return rpc(
-    client,
-    'hs_notes',
-    { p_household_id: householdId, p_listing_id: listingId },
-    z.array(noteSchema),
   );
 }
 export function saveNote(

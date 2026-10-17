@@ -11,6 +11,9 @@ const BEFORE = [
 ];
 const HIDE = '../migrations/202610170001_house_scanner_hidden.sql';
 const DOWN = '../rollbacks/202610170001_house_scanner_hidden_down.sql';
+const NOTES = '../migrations/202610170002_house_scanner_snapshot_notes.sql';
+const DOWN_NOTES =
+  '../rollbacks/202610170002_house_scanner_snapshot_notes_down.sql';
 
 async function create(paths: string[]) {
   const db = await PGlite.create();
@@ -73,6 +76,22 @@ describe('rollback of the personal-hide migration', () => {
     expect(rolledBack).toEqual(before);
     expect(rolledBack.join('\n')).not.toContain('hidden');
     expect(rolledBack.join('\n')).not.toContain('snapshot_base');
+  });
+
+  it('takes the notes out of the snapshot again, back to the hide migration’s definition', async () => {
+    const afterHide = await create([...BEFORE, HIDE]);
+    const expected = await describeObjects(afterHide);
+    await afterHide.close();
+    const db = await create([...BEFORE, HIDE, NOTES]);
+    try {
+      expect(await describeObjects(db)).not.toEqual(expected);
+      await db.exec(await read(DOWN_NOTES));
+      expect(await describeObjects(db)).toEqual(expected);
+      await db.exec(await read(NOTES));
+      expect(await describeObjects(db)).not.toEqual(expected);
+    } finally {
+      await db.close();
+    }
   });
 
   it('can be followed by applying the migration again', async () => {
